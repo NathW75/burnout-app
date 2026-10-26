@@ -1,0 +1,31 @@
+{
+  "name": "burnout-league",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Burnout League \u2014 season-long fantasy football with the burn mechanic",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=20.0.0",
+    "npm": ">=10.0.0"
+  },
+  "scripts": {
+    "dev:api": "npm -w packages/api run dev",
+    "dev:web": "npm -w apps/web run dev",
+    "build:api": "npm -w packages/api run build",
+    "build:web": "npm -w apps/web run build",
+    "db:migrate": "npm -w packages/db run migrate",
+    "db:generate": "npm -w packages/db run generate",
+    "test": "npm run test --workspaces --if-present",
+    "lint": "eslint . --ext .ts,.tsx,.js",
+    "typecheck": "tsc -p packages/db/tsconfig.json --noEmit && tsc -p packages/shared/tsconfig.json --noEmit && tsc -p packages/burn-engine/tsconfig.test.json"
+  },
+  "devDependencies": {
+    "@typescript-eslint/eslint-plugin": "^7.0.0",
+    "@typescript-eslint/parser": "^7.0.0",
+    "eslint": "^8.57.0",
+    "typescript": "^5.4.0"
+  }
+}

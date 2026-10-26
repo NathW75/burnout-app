@@ -1,0 +1,45 @@
+# ── Environment ──────────────────────────────────────────────
+.env
+.env.local
+.env.*.local
+*.env
+
+# ── Dependencies ─────────────────────────────────────────────
+node_modules/
+.pnp
+.pnp.js
+
+# ── Build outputs ────────────────────────────────────────────
+dist/
+build/
+.next/
+out/
+.expo/
+*.tsbuildinfo
+
+# ── Prisma ───────────────────────────────────────────────────
+# Generated client is gitignored — run `npm run db:generate` locally
+packages/db/src/generated/
+
+# ── Logs ─────────────────────────────────────────────────────
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ── OS ───────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ── Editor ───────────────────────────────────────────────────
+.vscode/settings.json
+.idea/
+*.swp
+
+# ── Test coverage ────────────────────────────────────────────
+coverage/
+.nyc_output/
+
+# ── Railway ──────────────────────────────────────────────────
+# railway.toml is committed; .railway/ local cache is not
+.railway/

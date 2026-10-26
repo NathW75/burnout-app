@@ -1,0 +1,22 @@
+{
+  "name": "@burnout/db",
+  "version": "0.1.0",
+  "private": true,
+  "main": "dist/index.js",
+  "scripts": {
+    "migrate": "prisma migrate deploy",
+    "migrate:dev": "prisma migrate dev",
+    "generate": "prisma generate",
+    "studio": "prisma studio",
+    "build": "tsc -p tsconfig.json && node -e \"require('fs').cpSync('src/generated','dist/generated',{recursive:true})\""
+  },
+  "dependencies": {
+    "@prisma/client": "^5.10.0"
+  },
+  "devDependencies": {
+    "prisma": "^5.10.0",
+    "@types/node": "^20.11.0",
+    "typescript": "^5.4.0"
+  },
+  "types": "dist/index.d.ts"
+}
