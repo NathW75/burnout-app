@@ -40,7 +40,8 @@ export interface BurnEvaluatorDependencies {
    *    void_reason IS NULL, and no burn_records row yet:
    *    - insert burn_records (write-once; burned_at = serverNow)
    *    - mark pool_entries burned (burned = true, burned_at = serverNow)
-   *    - queue a BURN notification (outbox; delivered after commit)
+   *    - queue one BURN notification per user listing every player burned
+   *      (outbox; delivered after commit)
    * weekly_submissions are never read (§3.3 burn isolation).
    */
   commitBurns: (gameWindowId: string, serverNow: Date) => Promise<BurnCommitOutcome>;

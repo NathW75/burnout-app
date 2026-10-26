@@ -34,8 +34,8 @@ export interface LockEngineDependencies {
    *    scheduled_et <= serverNow. If the claim fails, write nothing.
    * 2. Set season_submissions.locked_at = serverNow for every unlocked,
    *    non-voided submission in the window.
-   * 3. Queue one LOCK notification per locked submission (outbox; delivered
-   *    only after commit).
+   * 3. Queue one LOCK notification per affected user, listing all of their
+   *    players locked in this window (outbox; delivered only after commit).
    * 4. Insert the lock_events row.
    * weekly_submissions are not touched (§3.3 burn isolation).
    */

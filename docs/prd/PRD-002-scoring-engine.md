@@ -1,7 +1,7 @@
 # PRD-002 — Scoring Engine
 **Burnout League · packages/scoring-engine**
-Version 1.0 · 2026-10-26
-Status: DRAFT — decisions in §3, §7 and §9 locked 2026-10-26; full document pending review
+Version 1.1 · 2026-10-26
+Status: DRAFT — decisions in §3, §5.2, §7, §7.1 and §9 locked 2026-10-26; full document pending review
 
 ---
 
@@ -121,6 +121,8 @@ A slot scores only if a `season_submissions` row for that slot has `locked_at IS
 | Voided slot reassigned and locked in a later window | The reassigned player's score |
 | Game suspended, not yet resumed | Provisional points so far; final when the game reaches Final |
 | Game moved to a different week | Treated as canceled for the original week: 0.00 |
+| Player changed teams before his lock (PRD-001 §6.5) | Submission re-pointed to his new team's game; scores that game |
+| Player changed teams with no game this week (PRD-001 §6.5) | Submission voided: 0.00 unless reassigned |
 
 Scoring never waits for the whole game window. Each player's score goes final when **his own game** is Final, unlike burns, which commit per window (PRD-001 implementation note).
 
@@ -162,6 +164,14 @@ FINAL → FROZEN           week freezes (§7); terminal
 - A week with any game not yet Final (suspended, delayed) **does not freeze**; the 48-hour clock starts only when the last game is Final. Payouts for that week hold (PRD-001 §6.2).
 - Season-long payout (T&C §5.6: within 5 business days of the last regular-season game's Final) waits for Week 18 to freeze.
 - Freezing writes one `week_freezes` row and flips every score for that week to `frozen` in a single transaction.
+
+### 7.1 Correction notices (locked 2026-10-26)
+
+When an applied correction changes a user's week score, the user is told:
+- **In-app:** a notice on the week's score showing old score, new score, and the player and stat that changed
+- **Email:** the change is listed in the weekly recap email
+
+Correction notices are **not** sent as push notifications. Corrections can arrive hourly for up to two days, and pushes over small decimal changes would teach users to ignore lock pushes. Corrections that arrive after freeze change nothing and send nothing.
 
 ---
 
@@ -338,10 +348,21 @@ After any job changes scores, it emits a `SCORES_UPDATED {season, week}` event f
 ## 13. Open Questions
 
 1. **MSF field mapping.** Confirm against the live feed and record fixtures (§4.1), especially two-point conversion crediting and FG distance buckets.
-2. **Mid-week trades.** A player traded after a user locked him for his old team's game, who then plays for his new team in a different window: this PRD scores only the game in the submission's window, so he scores 0. Confirm that policy and state it in T&C.
-3. **Correction notifications.** Should users be told when a correction changes their week score or rank? Suggested: in-app only, no push.
-4. **Push provider.** PRD-001 names Expo push; the Tech Summary and stack list name OneSignal. The `notification_queue` outbox is provider-agnostic, but the dispatcher needs one answer.
+
+Resolved 2026-10-26:
+- **Mid-week trades:** submission and burn are bound to the player; see PRD-001 §6.5 and §5.2 above.
+- **Correction notifications:** in-app + weekly recap email, no push (§7.1).
+- **Push provider:** Expo Push, standard Web Push, SendGrid email (PRD-001 §8.4).
 
 ---
+
+---
+
+## Change log
+
+**v1.1 — 2026-10-26**
+- §5.2: player team changes (PRD-001 §6.5)
+- §7.1: new — correction notices
+- §13: trades, correction notices and push provider resolved
 
 *This PRD is authoritative once approved. Disputes between this document and earlier design docs: this document wins.*

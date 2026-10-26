@@ -1,7 +1,7 @@
 # PRD-001 — Burn Engine
 **Burnout League · packages/burn-engine**
-Version 1.0 · 2026-10-26
-Status: APPROVED — implement against this spec
+Version 1.1 · 2026-10-26
+Status: APPROVED — implement against this spec (v1.1 changes: see change log at end)
 
 ---
 
@@ -84,7 +84,7 @@ The lock cron fires every minute. For each game window where `NOW() >= scheduled
 1. Set `game_windows.status = 'locked'`
 2. For every `season_submissions` row where `player_game_window_id` matches this window AND `locked_at IS NULL`:
    - Set `locked_at = NOW()` (the server time of the cron fire, not `scheduled_et`)
-3. Dispatch push notification batch (see §8.1) — this is part of the same transaction; do not dispatch before commit
+3. Queue ONE lock notification per affected user, listing every player of theirs locked in this window (see §8.1). The notification_queue row is written in the same transaction; delivery happens only after commit
 4. Log to `lock_events` table
 
 **Critical**: The lock notification must fire as part of the same server event as the lock. It is not a follow-up. Users receive confirmation of the irrevocable lock at the same instant it occurs.
@@ -164,6 +164,20 @@ Treated as cancellation for original week. Player un-burned. Fresh burn decision
 ### 6.4 Game rescheduled within same week
 
 `game_windows.scheduled_et` is updated to new scheduled kickoff. Push notification immediately. User retains full swap rights until new lock time.
+
+### 6.5 Player changes teams mid-week (trade, release, signing)
+
+**Policy (locked 2026-10-26):** the submission and the burn are bound to the **player**, not the team. A player locks, scores and burns on the game he actually plays that week.
+
+**Mechanism:**
+1. A roster-change check runs every Tuesday at 11:59 PM ET, after the NFL trade deadline passes for that week. The same check also runs after every nightly roster sync (Tech Summary §5), because waiver claims and free-agent signings move players after Tuesday.
+2. For every `season_submissions` row in the current week with `locked_at IS NULL` and `void_reason IS NULL` whose player's team has changed since submission:
+   - **New team plays this week, window still pending:** re-point `game_window_id` to the new team's game window. The slot now locks at the new window's `scheduled_et`. If the new team plays in the same window, only the game changes and the lock time does not.
+   - **New team does not play this week, player is unsigned, or the new window has already locked:** void the submission (`void_reason = 'PLAYER_NO_GAME'`). The slot is editable, the player is not locked, scores 0 if not reassigned, and is not burned.
+   - Insert a `security_audit_log` row (`event_type = 'SUBMISSION_REPOINTED'` or `'SUBMISSION_VOIDED'`, performed by the system user) and queue an email + in-app notification to the user: player, old and new team, and the new lock time or the voided slot.
+3. Submissions already locked are never re-pointed. The lock stands, and the player scores and burns on the game he was locked to.
+
+`PLAYER_NO_GAME` is added to the `void_reason` domain by the roster-change migration.
 
 ---
 
@@ -274,21 +288,36 @@ CREATE TABLE weekly_submissions (
 
 ### 8.1 Lock notification
 
-- **Trigger**: fired as part of the same server transaction as the lock (not a deferred job)
-- **Channel**: push (Expo) + in-app badge
-- **Content**: "🔒 [Player Name] is locked in your lineup for [Game]. If [Team] wins, he's burned."
+- **Trigger**: queued inside the same server transaction as the lock (not a deferred job); delivered after commit
+- **Granularity**: one notification per user per game window, listing all of that user's players locked in the window
+- **Channel**: push (Expo Push on iOS/Android; standard Web Push in browsers) + in-app badge
+- **Content**: "🔒 [N] players locked for [Window]: [Player Name], [Player Name]. When their games go Final, they're burned." (v1.0 said "If [Team] wins, he's burned" — wrong: the burn fires on Final regardless of the result.)
 - **Timing**: simultaneous with lock — the user cannot beat this notification
 
 ### 8.2 Burn confirmation
 
 - **Trigger**: after `burned_at` is set and committed
+- **Granularity**: one notification per user per game window, listing every player burned
 - **Channel**: push + in-app + email summary (weekly)
-- **Content**: "[Player Name] is burned for the season. He's been removed from your available pool."
+- **Content**: "[Player Name], [Player Name] burned for the season. Removed from your available pool."
 
 ### 8.3 Proactive international / unusual time game alert
 
 - **Trigger**: 48 hours before any game window with `scheduled_et` before 12:00 PM ET or after 9:00 PM ET
 - **Content**: "Heads up: [Game] kicks off at [time] ET — your lineup locks then."
+
+### 8.4 Delivery providers (locked 2026-10-26)
+
+| Channel | Provider |
+|---------|----------|
+| Mobile push (iOS, Android) | Expo Push Service |
+| Browser push | Standard Web Push (VAPID), no vendor |
+| Email | SendGrid (existing account, burnoutfantasy.com sending domain) |
+| In-app | Platform API |
+
+OneSignal is not used at MVP: its free tier caps mobile push at 1,000 MAU as of Oct 1, 2026, below the Year 1 user target. The `notification_queue` outbox is provider-agnostic, so a provider change only replaces the dispatcher.
+
+Push delivery is best-effort with every provider. The evidentiary record of a lock is the committed lock transaction, its `lock_events` row and the emailed lineup receipt, never the push itself. T&C language must say so.
 
 ---
 
@@ -338,7 +367,7 @@ An implementation is correct when all of the following are true:
 
 6. **burn_records is immutable.** Verified by: attempt UPDATE or DELETE via application layer; confirm rejection. No application-layer test path should be able to modify a burn_record without a corresponding security_audit_log entry.
 
-7. **Lock notification fires in same transaction.** Verified by: confirm notification_queue entry is created inside the lock transaction; confirm no orphaned notifications if transaction rolls back.
+7. **Lock notification fires in same transaction.** Verified by: confirm exactly one notification_queue entry per affected user, listing all their locked players, is created inside the lock transaction; confirm no orphaned notifications if transaction rolls back.
 
 8. **Three-gate confirmation writes submission_receipts.** Verified by: complete a submission; confirm submission_receipts row exists with all three timestamps.
 
@@ -359,3 +388,14 @@ An implementation is correct when all of the following are true:
 *This PRD is authoritative. Implement against it exactly.*
 *Disputes between this document and any earlier design doc: this document wins.*
 *Last author: Burnout League engineering spec process, 2026-10-26*
+
+---
+
+## Change log
+
+**v1.1 — 2026-10-26**
+- §4.4, §8.1, §8.2: notifications batched to one per user per game window
+- §8.1: corrected burn wording (burn fires on Final, not on a win)
+- §6.5: new — player changes teams mid-week; submission and burn bound to the player
+- §8.4: new — delivery providers (Expo Push, Web Push, SendGrid); OneSignal not used at MVP
+- AC7: updated for per-user notifications

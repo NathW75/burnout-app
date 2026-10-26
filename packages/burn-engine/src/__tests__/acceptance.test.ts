@@ -216,6 +216,25 @@ describeDb('PRD-001 §11 acceptance (Postgres)', () => {
     });
   });
 
+  describe('AC2 notifications: one BURN notification per user per window', () => {
+    it('lists every burned player for that user in a single notification', async () => {
+      const clock = new TestClock(KICKOFF);
+      const u = await createUser(t);
+      const w = await createWindow(t, { scheduledEt: KICKOFF, msfGameIds: ['g1'] });
+      await submitSeason(t, { userId: u, windowId: w, playerId: 'p-qb', slotKey: 'qb' });
+      await submitSeason(t, { userId: u, windowId: w, playerId: 'p-te', slotKey: 'te' });
+      await engine(t, clock).lock();
+      await engine(t, clock).final(w, ['g1']);
+      const rows = await t.sql<{ payload: { players: Array<{ playerId: string; burnRecordId: string }> } }>(
+        `SELECT payload FROM notification_queue WHERE kind = 'BURN' AND user_id = $1`,
+        [u]
+      );
+      expect(rows).toHaveLength(1);
+      expect(rows[0].payload.players.map((p) => p.playerId).sort()).toEqual(['p-qb', 'p-te']);
+      expect(rows[0].payload.players.every((p) => typeof p.burnRecordId === 'string')).toBe(true);
+    });
+  });
+
   // ── AC3 ───────────────────────────────────────────────────────────────────
   describe('AC3: empty slot does not burn', () => {
     it('a user with nothing submitted in a window gets no burns and an unchanged pool', async () => {
@@ -421,7 +440,7 @@ describeDb('PRD-001 §11 acceptance (Postgres)', () => {
 
   // ── AC7 ───────────────────────────────────────────────────────────────────
   describe('AC7: lock notification is written in the lock transaction', () => {
-    it('queues one LOCK notification per locked submission, committed with the lock', async () => {
+    it('queues one LOCK notification per user per window, listing all their locked players, committed with the lock', async () => {
       const clock = new TestClock(KICKOFF);
       const users = [await createUser(t), await createUser(t)];
       const w = await createWindow(t, { scheduledEt: KICKOFF, label: 'Sunday Early' });
@@ -429,16 +448,20 @@ describeDb('PRD-001 §11 acceptance (Postgres)', () => {
       await submitSeason(t, { userId: users[0], windowId: w, playerId: 'p2', slotKey: 'wr1' });
       await submitSeason(t, { userId: users[1], windowId: w, playerId: 'p1', slotKey: 'flex' });
       const [res] = await engine(t, clock).lock();
-      expect(res).toMatchObject({ submissionsLocked: 3, notificationsQueued: 3 });
+      expect(res).toMatchObject({ submissionsLocked: 3, notificationsQueued: 2 });
 
-      const rows = await t.sql<{ user_id: string; payload: Record<string, unknown>; dispatched_at: Date | null }>(
-        `SELECT user_id, payload, dispatched_at FROM notification_queue WHERE kind = 'LOCK' ORDER BY payload->>'slotKey'`
+      type Payload = { gameWindowId: string; windowLabel: string; players: Array<{ playerId: string; slotKey: string }> };
+      const rows = await t.sql<{ user_id: string; payload: Payload; dispatched_at: Date | null }>(
+        `SELECT user_id, payload, dispatched_at FROM notification_queue WHERE kind = 'LOCK'`
       );
-      expect(rows).toHaveLength(3);
+      expect(rows).toHaveLength(2);
       expect(rows.every((r) => r.dispatched_at === null)).toBe(true);
-      expect(rows[0].payload).toMatchObject({ playerId: 'p1', slotKey: 'flex', gameWindowId: w, windowLabel: 'Sunday Early' });
+      const byUser = new Map(rows.map((r) => [r.user_id, r.payload]));
+      expect(byUser.get(users[0])).toMatchObject({ gameWindowId: w, windowLabel: 'Sunday Early' });
+      expect(byUser.get(users[0])!.players.map((p) => [p.playerId, p.slotKey])).toEqual([['p1', 'rb1'], ['p2', 'wr1']]);
+      expect(byUser.get(users[1])!.players.map((p) => [p.playerId, p.slotKey])).toEqual([['p1', 'flex']]);
       const [ev] = await t.sql<{ notifications_queued: number }>(`SELECT notifications_queued FROM lock_events`);
-      expect(ev.notifications_queued).toBe(3);
+      expect(ev.notifications_queued).toBe(2);
     });
 
     it('if the lock transaction fails, there are no orphaned notifications and nothing is locked', async () => {

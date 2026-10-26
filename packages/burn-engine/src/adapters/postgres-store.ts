@@ -108,7 +108,8 @@ export function createPostgresBurnStore(db: SqlDatabase): PostgresBurnStore {
         );
         if (!claimed) return { claimed: false };
 
-        // 2 + 3. Lock submissions and queue one LOCK notification each, in one statement.
+        // 2 + 3. Lock submissions and queue ONE LOCK notification per user listing
+        //        all of their players locked in this window (PRD-001 §8.1), in one statement.
         const [counts] = await tx.query<{ submissions_locked: number; notifications_queued: number }>(
           `WITH locked AS (
              UPDATE season_submissions
@@ -119,9 +120,13 @@ export function createPostgresBurnStore(db: SqlDatabase): PostgresBurnStore {
              INSERT INTO notification_queue (user_id, kind, game_window_id, payload)
              SELECT user_id, 'LOCK', $1::uuid,
                     jsonb_build_object(
-                      'submissionId', id, 'playerId', player_id, 'slotKey', slot_key, 'week', week,
-                      'gameWindowId', $1::uuid, 'windowLabel', $3::text, 'lockedAt', $2::timestamptz)
+                      'gameWindowId', $1::uuid, 'windowLabel', $3::text, 'lockedAt', $2::timestamptz,
+                      'week', min(week),
+                      'players', jsonb_agg(
+                        jsonb_build_object('submissionId', id, 'playerId', player_id, 'slotKey', slot_key)
+                        ORDER BY slot_key))
                FROM locked
+              GROUP BY user_id
           RETURNING 1
            )
            SELECT (SELECT count(*) FROM locked)::int AS submissions_locked,
@@ -169,7 +174,7 @@ export function createPostgresBurnStore(db: SqlDatabase): PostgresBurnStore {
           [gameWindowId, serverNow]
         );
 
-        // 3. Write-once burn records + BURN notifications. ON CONFLICT DO NOTHING keeps
+        // 3. Write-once burn records + one BURN notification per user (PRD-001 §8.2). ON CONFLICT DO NOTHING keeps
         //    burns one-per-player-per-season if a player was somehow locked twice.
         const [res] = await tx.query<{ eligible: number; burns_created: number; users_affected: string[] }>(
           `WITH eligible AS (
@@ -186,9 +191,12 @@ export function createPostgresBurnStore(db: SqlDatabase): PostgresBurnStore {
              INSERT INTO notification_queue (user_id, kind, game_window_id, payload)
              SELECT user_id, 'BURN', $1::uuid,
                     jsonb_build_object(
-                      'burnRecordId', id, 'submissionId', submission_id, 'playerId', player_id,
-                      'week', week, 'gameWindowId', $1::uuid, 'burnedAt', $2::timestamptz)
+                      'gameWindowId', $1::uuid, 'burnedAt', $2::timestamptz, 'week', min(week),
+                      'players', jsonb_agg(
+                        jsonb_build_object('burnRecordId', id, 'submissionId', submission_id, 'playerId', player_id)
+                        ORDER BY player_id))
                FROM inserted
+              GROUP BY user_id
           RETURNING 1
            )
            SELECT (SELECT count(*) FROM eligible)::int AS eligible,
