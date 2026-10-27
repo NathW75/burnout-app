@@ -6,6 +6,9 @@ import { createRuntime, jsonLog, requireEnv } from './runtime';
 
 async function main() {
   const rt = await createRuntime();
+  // Behind Cloudflare → Railway. Without the secret nothing from the edge is trusted (PRD-006 §10.4).
+  const edgeSecret = process.env.EDGE_SHARED_SECRET ?? '';
+  if (!edgeSecret) jsonLog('warn', 'EDGE_SHARED_SECRET not set: location headers are ignored, so paid checkout is blocked');
   const { app } = createApp({
     db: rt.db,
     redis: rt.redis,
@@ -15,6 +18,8 @@ async function main() {
     log: jsonLog,
     config: {
       cookieSecure: process.env.SESSION_COOKIE_SECURE !== 'false',
+      trustProxy: Number(process.env.TRUST_PROXY ?? 1), // Railway's edge
+      edgeSecret,
       corsOrigins: (process.env.CORS_ORIGINS ?? '').split(',').map((s) => s.trim()).filter(Boolean),
       appBaseUrl: process.env.APP_BASE_URL ?? 'https://burnoutfantasy.com',
       currentSeason: process.env.CURRENT_SEASON ?? '2026-2027-regular',

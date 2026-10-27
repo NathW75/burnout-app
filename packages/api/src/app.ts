@@ -12,7 +12,7 @@ import { SecretBox } from './auth/crypto';
 import { redisRateLimiter, type RateLimiter } from './auth/rate-limit';
 import { DEFAULT_API_CONFIG, type ApiConfig, type ApiContext, type Log } from './context';
 import { notFound } from './errors';
-import { ah, authResolver, csrf, errorHandler, ipRateLimit } from './http/middleware';
+import { ah, authResolver, csrf, edgeGuard, errorHandler, ipRateLimit } from './http/middleware';
 import { buildRouter } from './http/routes';
 import type { Mailer } from './mailer';
 import type { SqlDatabase } from './sql';
@@ -56,6 +56,7 @@ export function createApp(deps: CreateAppDeps): { app: Express; ctx: ApiContext 
   const app = express();
   app.disable('x-powered-by');
   app.set('trust proxy', ctx.config.trustProxy);
+  app.use(edgeGuard(ctx)); // first: decides which edge headers anything below may believe (§10.4)
   app.use(helmet());
   app.use(compression());
   app.use(cors({ origin: ctx.config.corsOrigins, credentials: true, allowedHeaders: ['content-type', 'authorization', 'x-burnout-csrf'] }));

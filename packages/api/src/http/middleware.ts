@@ -1,6 +1,8 @@
 /**
  * Auth resolution, CSRF, gates and error mapping — PRD-006 §4, §5, §6.5
  */
+import { createHash, timingSafeEqual } from 'node:crypto';
+import { isIP } from 'node:net';
 import type { NextFunction, Request, RequestHandler, Response } from 'express';
 import { ZodError, type ZodTypeAny, type z } from 'zod';
 import { EntryNotFoundError, HandleError, LeaderboardAccessError, PoolNotFoundError } from '@burnout/leaderboard';
@@ -57,6 +59,38 @@ export function authResolver(ctx: ApiContext): RequestHandler {
 const UNSAFE = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
 /** §5.7: cookie-authenticated state changes need X-Burnout-CSRF: 1 and an allowed Origin. Bearer requests are exempt. */
+/** Header Cloudflare's Transform Rule sets to the edge secret (§10.4). */
+export const EDGE_SECRET_HEADER = 'x-burnout-edge';
+const EDGE_CLIENT_IP_HEADER = 'cf-connecting-ip';
+
+/**
+ * Edge trust (§10.4). Railway's own address is reachable without Cloudflare,
+ * so the cf-* headers prove nothing unless the request also carries the edge
+ * secret. Verified: the client IP is cf-connecting-ip (rate limits and audit
+ * see the visitor, not a Cloudflare node) and the location headers stand.
+ * Not verified: the location and client-IP headers are deleted, so checkout
+ * treats the region as unknown and blocks it.
+ */
+export function edgeGuard(ctx: ApiContext): RequestHandler {
+  const secret = ctx.config.edgeSecret;
+  const digest = (v: string) => createHash('sha256').update(v).digest();
+  const expected = secret ? digest(secret) : null;
+  return (req, _res, next) => {
+    if (secret === null) return next(); // no edge in front (local and tests)
+    const presented = req.get(EDGE_SECRET_HEADER);
+    const verified = expected !== null && !!presented && timingSafeEqual(digest(presented), expected);
+    delete req.headers[EDGE_SECRET_HEADER]; // never visible past this point
+    const clientIp = req.get(EDGE_CLIENT_IP_HEADER);
+    if (verified && clientIp && isIP(clientIp)) {
+      Object.defineProperty(req, 'ip', { value: clientIp, configurable: true, enumerable: true });
+    }
+    if (!verified) {
+      for (const h of [ctx.config.geoCountryHeader, ctx.config.geoRegionHeader, EDGE_CLIENT_IP_HEADER]) delete req.headers[h.toLowerCase()];
+    }
+    next();
+  };
+}
+
 export function csrf(ctx: ApiContext): RequestHandler {
   return (req, _res, next) => {
     if (!UNSAFE.has(req.method) || req.authVia === 'bearer') return next();

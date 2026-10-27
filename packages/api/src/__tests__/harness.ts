@@ -10,7 +10,7 @@ import { createPaymentsService, FakeProcessor, type PaymentsService } from '@bur
 import { createTestDb, createTestRedis, SEASON, TestClock, type TestDb, type TestRedis } from '@burnout/test-support';
 import { createApp } from '../app';
 import { totp } from '../auth/totp';
-import type { ApiContext } from '../context';
+import type { ApiConfig, ApiContext } from '../context';
 import { MemoryMailer } from '../mailer';
 
 export const T0 = new Date('2026-10-28T12:00:00Z'); // Wednesday of Week 8
@@ -30,7 +30,7 @@ export interface World {
   close: () => Promise<void>;
 }
 
-export async function createWorld(): Promise<World> {
+export async function createWorld(config: Partial<ApiConfig> = {}): Promise<World> {
   const t = await createTestDb();
   const r = await createTestRedis();
   const clock = new TestClock(T0);
@@ -43,7 +43,7 @@ export async function createWorld(): Promise<World> {
     db: t.db, redis: r.redis, namespace: r.namespace, payments, mailer, log,
     totpEncryptionKey: randomBytes(32).toString('base64'),
     getServerTime: clock.get,
-    config: { bcryptCost: 4, cookieSecure: false, corsOrigins: [ORIGIN], appBaseUrl: ORIGIN, currentSeason: SEASON, trustProxy: 1 },
+    config: { bcryptCost: 4, cookieSecure: false, corsOrigins: [ORIGIN], appBaseUrl: ORIGIN, currentSeason: SEASON, trustProxy: 1, ...config },
   });
   return { t, r, clock, fake, payments, mailer, app, ctx, logs, close: async () => { await r.close(); await t.close(); } };
 }

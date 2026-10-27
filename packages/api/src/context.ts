@@ -29,6 +29,13 @@ export interface ApiConfig {
   geoCountryHeader: string;
   /** Number of proxies in front of the app (for req.ip). */
   trustProxy: number;
+  /**
+   * Shared secret Cloudflare adds to every proxied request (§10.4). Only a
+   * request that carries it may use the cf-* location and client-IP headers;
+   * otherwise they are dropped, so checkout sees an unknown region (blocked).
+   * '' = nothing is trusted. null = no edge in front (local and tests only).
+   */
+  edgeSecret: string | null;
   currentSeason: string;
 }
 
@@ -50,6 +57,7 @@ export const DEFAULT_API_CONFIG: ApiConfig = {
   geoRegionHeader: 'cf-region-code',
   geoCountryHeader: 'cf-ipcountry',
   trustProxy: 1,
+  edgeSecret: null,
   currentSeason: '2026-2027-regular',
 };
 

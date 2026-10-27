@@ -41,5 +41,6 @@ coverage/
 .nyc_output/
 
 # ── Railway ──────────────────────────────────────────────────
-# railway.toml is committed; .railway/ local cache is not
-.railway/
+# .railway/railway.ts (Infrastructure as Code) is committed; CLI state is not
+.railway/*
+!.railway/railway.ts

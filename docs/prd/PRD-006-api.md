@@ -1,6 +1,6 @@
 # PRD-006 — API, Accounts and Lineup Submission
 **Burnout League · packages/api**
-Version 1.2 · 2026-10-27
+Version 1.3 · 2026-10-27
 Status: APPROVED 2026-10-27 — scope and auth decisions locked by Nath (§3); rules calls Q1, Q2, Q4 resolved in v1.1
 
 ---
@@ -373,6 +373,14 @@ The user can recompute it from their email.
 
 **Checkout location:** the IP region comes from the trusted edge header (`cf-region-code` with `cf-ipcountry = US`, from Cloudflare's visitor-location headers). If the header is missing, or the country isn't US, the region is treated as unknown, which PRD-004 §11.2 blocks by default.
 
+**Edge trust.** Railway's own address can be reached without Cloudflare, so the cf-* headers count only on a request that carries the edge secret. Cloudflare adds it on every proxied request (Transform Rule, header `X-Burnout-Edge`, value `EDGE_SHARED_SECRET`). The first middleware (`edgeGuard`) compares it in constant time and removes it from the request:
+
+- **Verified:** the location headers stand, and the client IP is `cf-connecting-ip` when that is a valid IP, so rate limits and the audit log see the visitor rather than a Cloudflare node.
+- **Not verified:** `cf-ipcountry`, `cf-region-code` and `cf-connecting-ip` are deleted. Checkout then sees an unknown region and blocks it, and the client IP is the address Railway's edge saw (`TRUST_PROXY=1`).
+- **Secret unset in production:** nothing is trusted, and a warning is logged at startup. Only local and test setups run with no edge check at all.
+
+Setup: `docs/deploy/RAILWAY.md`.
+
 ### 10.5 Admin (admin role + step-up)
 
 | Route |
@@ -516,6 +524,7 @@ Every critical rule also gets a mutation check, as with PRD-001 to PRD-004.
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.3 | 2026-10-27 | Railway deploy: §10.4 edge trust. The cf-* location and client-IP headers count only with the Cloudflare edge secret; otherwise they're dropped (checkout blocked, proxy IP used). |
 | 1.2 | 2026-10-27 | Real MSF samples: `players.json` without a season parameter; `INJURY_LIST` → IR; separate 15-minute injuries job on the light `injuries.json` feed; Q5 resolved. |
 | 1.1 | 2026-10-27 | Rules calls: Out/IR unselectable and voided before lock; FB at RB/FLEX; free play through the Week 4 cutoff (§9.0); injury-report sync cadence; `players` feed 403 fallback. |
 | 1.0 | 2026-10-27 | First version, built against decisions D1–D5. From the build: signup returns 202 without a session (§6.1); the sign-in second factor counts as step-up (§6.2); PRD-001's validator gained a `fixedSlots` option for partial re-saves; the scoring job burns only windows whose games are all Final. |

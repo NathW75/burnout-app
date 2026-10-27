@@ -2,13 +2,13 @@
   "name": "burnout-league",
   "private": true,
   "version": "0.1.0",
-  "description": "Burnout League \u2014 season-long fantasy football with the burn mechanic",
+  "description": "Burnout League — season-long fantasy football with the burn mechanic",
   "workspaces": [
     "apps/*",
     "packages/*"
   ],
   "engines": {
-    "node": ">=20.0.0",
+    "node": "22.x",
     "npm": ">=10.0.0"
   },
   "scripts": {
@@ -16,6 +16,9 @@
     "dev:web": "npm -w apps/web run dev",
     "build:api": "npm -w packages/api run build",
     "build:web": "npm -w apps/web run build",
+    "build:server": "npm run db:generate && npm -w packages/shared run build && npm -w packages/db run build && npm -w packages/burn-engine run build && npm -w packages/scoring-engine run build && npm -w packages/leaderboard run build && npm -w packages/payments run build && npm -w packages/api run build",
+    "start:api": "node packages/api/dist/index.js",
+    "start:worker": "node packages/api/dist/worker.js",
     "db:migrate": "npm -w packages/db run migrate",
     "db:generate": "npm -w packages/db run generate",
     "test": "npm run test --workspaces --if-present",
@@ -26,6 +29,7 @@
     "@typescript-eslint/eslint-plugin": "^7.0.0",
     "@typescript-eslint/parser": "^7.0.0",
     "eslint": "^8.57.0",
+    "railway": "^3.16.0",
     "typescript": "^5.4.0"
   }
 }

@@ -352,3 +352,65 @@ describeDbRedis('PRD-006 auth (HTTP, Postgres + Redis)', () => {
     expect((await u.client.post(route, { billingRegion: 'GA', successUrl: 'https://evil.example/x' }).set('cf-ipcountry', 'US').set('cf-region-code', 'GA')).body.error).toBe('VALIDATION');
   });
 });
+
+describeDbRedis('PRD-006 §10.4 edge trust (HTTP, Postgres + Redis)', () => {
+  const EDGE = 'edge-secret-for-tests';
+  let w: World;
+  beforeEach(async () => {
+    w = await createWorld({ edgeSecret: EDGE });
+  });
+  afterEach(async () => {
+    await w.close();
+  });
+
+  const loginIp = async (userId: string) =>
+    (await w.t.sql<{ ip: string }>(`SELECT metadata->>'ip' AS ip FROM security_audit_log WHERE event_type = 'LOGIN' AND user_id = $1::uuid ORDER BY performed_at DESC, id DESC LIMIT 1`, [userId]))[0].ip;
+
+  it('AC16a: location headers count only with the edge secret; forged or unsigned ones leave checkout blocked', async () => {
+    const admin = await account(w, { totp: true, admin: true });
+    await stepUp(w, admin);
+    const [{ id: pool }] = await w.t.sql<{ id: string }>(
+      `INSERT INTO contest_pools (season, kind, buy_in_cents, name, entry_closes_at) VALUES ($1, 'season_open', 2500, '$25 Open', '2026-11-30T00:00:00Z') RETURNING id::text AS id`,
+      [SEASON]
+    );
+    expect((await admin.client.post(`/v1/admin/pools/${pool}/publish`, { capacity: 10, minEntries: 2 })).status).toBe(200);
+    const u = await account(w, { totp: true });
+    expect((await admin.client.post('/v1/admin/identity-verifications', { userId: u.userId, providerRef: 'manual-2', providerPersonId: 'person-2', birthDate: '1990-01-01', region: 'GA' })).status).toBe(201);
+    await stepUp(w, u);
+    const route = `/v1/pools/${pool}/checkout`;
+    const us = (r: ReturnType<Client['post']>) => r.set('cf-ipcountry', 'US').set('cf-region-code', 'GA');
+    expect((await us(u.client.post(route, { billingRegion: 'GA' }))).body.error).toBe('JURISDICTION_BLOCKED'); // straight to Railway
+    expect((await us(u.client.post(route, { billingRegion: 'GA' })).set('x-burnout-edge', 'guess')).body.error).toBe('JURISDICTION_BLOCKED');
+    expect((await us(u.client.post(route, { billingRegion: 'GA' })).set('x-burnout-edge', `${EDGE}x`)).body.error).toBe('JURISDICTION_BLOCKED');
+    const ok = await us(u.client.post(route, { billingRegion: 'GA' })).set('x-burnout-edge', EDGE);
+    expect(ok.status).toBe(201);
+  });
+
+  it('AC16b: the client IP is cf-connecting-ip only through the edge; otherwise the proxy address stands', async () => {
+    const a = await account(w);
+    const c = new Client(w);
+    w.clock.advanceMs(1000);
+    expect((await c.post('/v1/auth/login', { email: a.email, password: PASSWORD, client: 'web' }).set('cf-connecting-ip', '203.0.113.7')).status).toBe(200);
+    expect(await loginIp(a.userId)).toBe(c.ip); // forged header ignored
+    w.clock.advanceMs(1000);
+    expect((await c.post('/v1/auth/login', { email: a.email, password: PASSWORD, client: 'web' }).set('cf-connecting-ip', '203.0.113.7').set('x-burnout-edge', EDGE)).status).toBe(200);
+    expect(await loginIp(a.userId)).toBe('203.0.113.7');
+    w.clock.advanceMs(1000);
+    expect((await c.post('/v1/auth/login', { email: a.email, password: PASSWORD, client: 'web' }).set('cf-connecting-ip', 'not-an-ip').set('x-burnout-edge', EDGE)).status).toBe(200);
+    expect(await loginIp(a.userId)).toBe(c.ip); // malformed value never becomes the IP
+  });
+
+  it('a server with an empty edge secret trusts nothing', async () => {
+    const strict = await createWorld({ edgeSecret: '' });
+    try {
+      const a = await account(strict);
+      const c = new Client(strict);
+      strict.clock.advanceMs(1000);
+      await c.post('/v1/auth/login', { email: a.email, password: PASSWORD, client: 'web' }).set('cf-connecting-ip', '203.0.113.9').set('x-burnout-edge', '');
+      const [{ ip }] = await strict.t.sql<{ ip: string }>(`SELECT metadata->>'ip' AS ip FROM security_audit_log WHERE event_type = 'LOGIN' AND user_id = $1::uuid ORDER BY performed_at DESC, id DESC LIMIT 1`, [a.userId]);
+      expect(ip).toBe(c.ip);
+    } finally {
+      await strict.close();
+    }
+  });
+});

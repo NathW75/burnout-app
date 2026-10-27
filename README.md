@@ -21,7 +21,7 @@ burnout/
 ├── docs/
 │   └── prd/          Product Requirements Documents
 │       └── PRD-001-burn-engine.md   ← START HERE
-└── infrastructure/   Railway config, deployment scripts
+└── .railway/         Railway Infrastructure as Code (docs/deploy/RAILWAY.md)
 ```
 
 ## Getting Started
