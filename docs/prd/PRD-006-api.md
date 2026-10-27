@@ -1,6 +1,6 @@
 # PRD-006 — API, Accounts and Lineup Submission
 **Burnout League · packages/api**
-Version 1.4 · 2026-10-27
+Version 1.5 · 2026-10-27
 Status: APPROVED 2026-10-27 — scope and auth decisions locked by Nath (§3); rules calls Q1, Q2, Q4 resolved in v1.1
 
 ---
@@ -415,11 +415,46 @@ Setup: `docs/deploy/RAILWAY.md`.
 | Scoring cycle (PRD-002): fetch the current week's games and gamelogs, ingest, evaluate burns for windows whose games are all Final, freeze due weeks with the leaderboard `afterFreeze` hook | Every 15 minutes during active windows, otherwise hourly |
 | Roster sync and re-resolve (§7.3) | 3:00 AM ET nightly and Tuesday 11:59 PM ET |
 | Injury reports and re-resolve (§7.3) | Every 15 minutes Wednesday–Sunday (Tech Summary §5) |
+| Season schedule import and re-resolve (§11.6) | At worker startup, then hourly at :30 |
 
 Each job:
 - runs under a Postgres advisory lock, so two workers never run it at once;
 - logs a JSON line;
 - survives the failure of any other job.
+
+### 11.6 Season schedule import
+
+The `schedule` job builds `game_windows` and `nfl_games` from the MySportsFeeds season schedule (`{season}/games.json`). If the subscription doesn't include it (`403`), the job uses the 18 weekly `games.json` feeds instead, skipping any week that returns `404`. An empty feed changes nothing.
+
+**One window per exact scheduled kickoff, per week.** Each window locks at precisely its games' scheduled time (hard constraint 4), so a Sunday with 4:05 and 4:25 games has two late windows. Labels give the day, the block and the kickoff in Eastern Time, e.g. "Sunday Late · 4:25 PM" or "Sunday Morning · 9:30 AM" (international games).
+
+**Frozen windows never change.** A window is frozen once it is no longer `pending`, or once its kickoff has arrived. The import never moves, refills or deletes a frozen window. The database enforces this: a trigger rejects any change to the kickoff, week or games of a non-pending window, and any deletion of one (`WINDOW_SCHEDULE_FIXED`). Status changes still work.
+
+**Pending windows follow the feed:**
+
+- A game whose kickoff moves goes into the window for its new kickoff, which is created if needed. A window's own kickoff never changes, so a lock time can't silently move.
+- A postponed or canceled game (`scheduleStatus` POSTPONED / CANCELED) leaves its window, so its players have no game that week.
+- A DELAYED game keeps its window: a delay is a late kickoff, not a new scheduled time.
+- A game moving onto a frozen window's kickoff never joins it. It stays in its current window and is reported.
+- A game the feed no longer lists stays where it is and is reported, so a partial feed can't empty the schedule.
+
+**Picks follow their games.** After any change, the import runs the §7.3 re-resolve for the current week. Picks on a moved game are re-pointed to its new window, or voided `PLAYER_NO_GAME` if the game left the week or its new window has closed. The user is notified either way (PRD-001 §6.4/§6.5).
+
+**Emptied windows** are deleted when nothing references them. They are set to `postponed` (never locks) when only voided picks do, and reported if live picks still point at them.
+
+**Review, not action:** the import logs a `schedule imported` warning listing anything it won't decide on its own:
+
+- `LOCKED_GAME_MOVED`: the feed moved a game whose window is frozen.
+- `LOCKED_GAME_OFF_SCHEDULE`: the feed postponed or canceled a frozen game. Cancelling a locked game is an admin action (PRD-001 §6.1).
+- `GAME_MISSING_FROM_FEED`: a game we hold is no longer in the feed.
+- `UNKNOWN_SCHEDULE_STATUS`: the game is kept in its window; check what the status means.
+- `EMPTY_WINDOW_HAS_LIVE_PICKS`: every game left a window that still has unlocked picks.
+
+**Canceled windows are history.** Once an admin cancels a locked game, the feed can place that game again in the week it moved to (PRD-001 §6.3). Scoring maps a game to its live window in preference to a canceled one.
+
+**Backfill.** On a first import mid-season, past weeks' windows arrive as `pending` with kickoffs in the past. The ordinary lock job claims them, the scoring job pulls their games and gamelogs, and the burn step finalizes them. Earlier weeks' history fills in with no separate code path.
+
+**Late entry close (PRD-004 D7).** Publishing a pool sets its `entry_closes_at` to the first live Week 3 window's kickoff once the schedule is imported, whatever the draft said. A pool can't be published after that point (`409 ENTRY_CUTOFF_PASSED`). Free play (§9.0) ends at the same moment.
 
 ---
 
@@ -524,6 +559,7 @@ Every critical rule also gets a mutation check, as with PRD-001 to PRD-004.
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.5 | 2026-10-27 | §11.6: season schedule import. One window per exact kickoff; frozen windows fixed (enforced by a trigger); picks re-resolved after changes; review list for decisions the import won't make; backfill through the normal jobs; pools close at the Week 3 lock at publish. |
 | 1.4 | 2026-10-27 | Free play is two weeks: the paid-entry cutoff moves from the Week 4 lock to the Week 3 lock (§9.0, Q4; PRD-003 §3, PRD-004 D7). |
 | 1.3 | 2026-10-27 | Railway deploy: §10.4 edge trust. The cf-* location and client-IP headers count only with the Cloudflare edge secret; otherwise they're dropped (checkout blocked, proxy IP used). |
 | 1.2 | 2026-10-27 | Real MSF samples: `players.json` without a season parameter; `INJURY_LIST` → IR; separate 15-minute injuries job on the light `injuries.json` feed; Q5 resolved. |

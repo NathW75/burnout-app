@@ -137,7 +137,8 @@ export function createScoringStore(db: SqlDatabase, options: ScoringStoreOptions
           `INSERT INTO nfl_games (msf_game_id, season, week, game_window_id, scheduled_start, played_status,
                                   schedule_status, is_final, final_observed_at, updated_at, home_team, away_team)
            VALUES ($1::text, $2::text, $3,
-                   (SELECT id FROM game_windows WHERE season = $2::text AND $1::text = ANY (msf_game_ids) LIMIT 1),
+                   (SELECT id FROM game_windows WHERE season = $2::text AND $1::text = ANY (msf_game_ids)
+                     ORDER BY (status = 'canceled'), scheduled_et DESC LIMIT 1),
                    $4::timestamptz, $5, $6, $7::boolean,
                    CASE WHEN $7::boolean THEN $8::timestamptz END, $8::timestamptz, $9::text, $10::text)
            ON CONFLICT (msf_game_id) DO UPDATE SET

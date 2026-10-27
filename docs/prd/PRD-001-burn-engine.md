@@ -1,7 +1,7 @@
 # PRD-001 — Burn Engine
 **Burnout League · packages/burn-engine**
-Version 1.2 · 2026-10-27
-Status: APPROVED — implement against this spec (v1.2 changes: see change log at end)
+Version 1.3 · 2026-10-27
+Status: APPROVED — implement against this spec (v1.3 changes: see change log at end)
 
 ---
 
@@ -82,6 +82,8 @@ A lock fires at exactly `scheduled_et` for each game window, regardless of actua
 | Sunday Late | Sunday 4:05 PM or 4:25 PM (varies by week) |
 | Sunday Night Football | Sunday 8:20 PM |
 | Monday Night Football | Monday 8:15 PM |
+
+**One window per exact scheduled kickoff.** The table names the usual blocks, but a window is the set of games with the *same* scheduled kickoff, and it locks at exactly that time. A Sunday with 4:05 and 4:25 games has two late windows, and an international morning game has its own. Windows are built from the MySportsFeeds schedule (PRD-006 §11.6). Once a window leaves `pending`, its kickoff, week and games are fixed by the database.
 
 ### 4.4 Lock implementation
 
@@ -398,6 +400,9 @@ An implementation is correct when all of the following are true:
 ---
 
 ## Change log
+
+**v1.3 — 2026-10-27**
+- §4.3: a window is one exact scheduled kickoff (4:05 and 4:25 are separate windows); windows come from the schedule import (PRD-006 §11.6) and are fixed once they leave `pending`
 
 **v1.2 — 2026-10-27**
 - §3.1, §3.1.1: FB eligible at RB/FLEX; Out and IR players unselectable (greyed, not burned); an Out/IR pick is voided before its lock

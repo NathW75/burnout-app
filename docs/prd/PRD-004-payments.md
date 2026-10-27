@@ -1,7 +1,7 @@
 # PRD-004 — Payments
 **Burnout League · packages/payments**
-Version 1.3 · 2026-10-27
-Status: APPROVED — implement against this spec (v1.3 changes: see change log)
+Version 1.4 · 2026-10-27
+Status: APPROVED — implement against this spec (v1.4 changes: see change log)
 
 ---
 
@@ -46,7 +46,7 @@ This PRD is the single source of truth for entry payment, prize tables, settleme
 | D4 | Web checkout is the main payment path. Mobile opens web checkout (§8.4). | Build constraints |
 | D5 | The prize pool is never mixed with operating money, and processing fees come out of rake, never the prize pool. | Exec summary §4.1; T&C §5.2 |
 | D6 | A contest entry is created only after its payment is captured. | PRD-003 §3 |
-| D7 | One entry per verified person per pool. Entry closes at the **Week 3 lock**; a late entry's prize standings count only from the week it was paid. | PRD-003 §3 (v1.4) |
+| D7 | One entry per verified person per pool. Entry closes at the **Week 3 lock**; a late entry's prize standings count only from the week it was paid. Once the schedule is imported, publishing sets `entry_closes_at` to that lock and refuses after it (`ENTRY_CUTOFF_PASSED`; PRD-006 §11.6). | PRD-003 §3 (v1.4) |
 | D8 | Settlement uses only the OFFICIAL Week 18 leaderboard snapshot. | PRD-003 §4 |
 | D9 | Tied entries split the combined prizes of the places they occupy, evenly. | PRD-002 §9 |
 | D10 | A W-9 is required before the first payout. | T&C §5.5 |
@@ -564,6 +564,7 @@ As with PRD-001 to PRD-003, every critical rule gets a mutation check: break the
 | Version | Date | Changes |
 |---------|------|---------|
 | 1.0 | 2026-10-26 | First draft |
+| 1.4 | 2026-10-27 | D7: `publishPool` sets `entry_closes_at` to the first live Week 3 window's kickoff and refuses to publish after it (`ENTRY_CUTOFF_PASSED`). |
 | 1.3 | 2026-10-27 | D7: entry closes at the Week 3 lock (was Week 4), so the minimum-field / overlay decision moves with it. Free play is two weeks. |
 | 1.2 | 2026-10-27 | D7: entry (and therefore the minimum-field / overlay decision at close) moves to the Week 4 lock; late entries score from `scoring_from_week`. |
 | 1.1 | 2026-10-26 | Approved. From the build: clearing split into prize and operating accounts so check 5 is exact; posting rules for rejected captures and ops transfers; `instantPayoutFeeCents` and `accountRef` added to the adapter; `refunds` table; payout attempts wait for an account update after a failure; day-0 payout notice; Louisiana blocked and age placeholders pending counsel; default-deny jurisdictions; entry insert blocked after close; AC4 uses 3 seats so the race test can actually oversell without the lock. |

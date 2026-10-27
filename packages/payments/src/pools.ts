@@ -7,6 +7,12 @@ import { computePrizeTable, defaultRakeBps, type PrizeBand, type PrizeTable } fr
 import { refundCapturedIntent } from './refunds';
 import type { SqlRunner } from './sql';
 
+/**
+ * Late entry and free play close at this week's first lock (PRD-004 D7,
+ * decision 2026-10-27: free play is Weeks 1–2).
+ */
+export const PAID_ENTRY_CUTOFF_WEEK = 3;
+
 export interface PublishTerms {
   capacity: number;
   minEntries: number;
@@ -41,6 +47,20 @@ export async function publishPool(ctx: PaymentsContext, poolId: string, terms: P
        SELECT $1::uuid, f, t, c FROM unnest($2::int[], $3::int[], $4::bigint[]) AS u(f, t, c)`,
       [poolId, table.bands.map((b) => b.fromPlace), table.bands.map((b) => b.toPlace), table.bands.map((b) => String(b.prizeCents))]
     );
+    // D7: entry closes at the Week 3 lock. Once the schedule is imported the
+    // close time comes from it, whatever the draft said; a pool can't open
+    // after the cutoff has passed.
+    const [cutoff] = await tx.query<{ t: Date | null }>(
+      `SELECT min(scheduled_et) AS t FROM game_windows
+        WHERE season = $1 AND week = $2 AND status IN ('pending', 'locked', 'final') AND cardinality(msf_game_ids) > 0`,
+      [pool.season, PAID_ENTRY_CUTOFF_WEEK]
+    );
+    if (cutoff?.t) {
+      if (ctx.now() >= new Date(cutoff.t)) {
+        throw new PaymentsError('ENTRY_CUTOFF_PASSED', `entry for ${pool.season} closed at the Week ${PAID_ENTRY_CUTOFF_WEEK} lock`);
+      }
+      await tx.query(`UPDATE contest_pools SET entry_closes_at = $2 WHERE id = $1::uuid`, [poolId, cutoff.t]);
+    }
     await tx.query(`UPDATE contest_pools SET status = 'open', published_at = $2 WHERE id = $1::uuid`, [poolId, ctx.now()]);
     return table;
   });

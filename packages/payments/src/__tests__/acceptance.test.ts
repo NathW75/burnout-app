@@ -4,7 +4,7 @@
  */
 import { randomUUID } from 'node:crypto';
 import { computeBoard, writeSnapshots } from '@burnout/leaderboard';
-import { count, createTestDb, createUser, describeDb, SEASON, TestClock, type TestDb } from '@burnout/test-support';
+import { count, createTestDb, createUser, createWindow, describeDb, SEASON, TestClock, type TestDb } from '@burnout/test-support';
 import { acct, owed, balance, post, debit, credit } from '../ledger';
 import { FakeProcessor, WebhookSignatureError, type ProcessorEventInput } from '../processor';
 import { createPaymentsService, type PaymentsService } from '../service';
@@ -172,6 +172,29 @@ describeDb('PRD-004 §14 acceptance (Postgres)', () => {
     expect(await reason(t.sql(`UPDATE contest_pools SET status = 'draft' WHERE id = $1`, [poolId]))).toMatch(/POOL_STATUS/);
     const [sum] = await t.sql<{ s: string }>(`SELECT SUM(prize_cents * (to_place - from_place + 1))::text AS s FROM prize_table_bands WHERE pool_id = $1`, [poolId]);
     expect(Number(sum.s)).toBe(2125000);
+  });
+
+  it('D7: publishing sets entry to close at the Week 3 lock once the schedule is imported, and refuses after it', async () => {
+    // No schedule yet: the draft's close time stands.
+    const a = await draftPool(2500, new Date('2026-10-01T17:00:00Z'));
+    await pay.publishPool(a, { capacity: 10, minEntries: 2 });
+    const closes = async (id: string) => new Date((await t.sql<{ c: Date }>(`SELECT entry_closes_at AS c FROM contest_pools WHERE id = $1`, [id]))[0].c).toISOString();
+    expect(await closes(a)).toBe('2026-10-01T17:00:00.000Z');
+
+    // Week 3's first window (canceled and empty ones don't count) sets it.
+    await createWindow(t, { week: 3, scheduledEt: new Date('2026-09-24T17:00:00Z'), status: 'canceled' });
+    await createWindow(t, { week: 3, scheduledEt: new Date('2026-09-24T18:00:00Z'), msfGameIds: [] });
+    await createWindow(t, { week: 3, scheduledEt: new Date('2026-09-25T00:15:00Z') });
+    await createWindow(t, { week: 3, scheduledEt: new Date('2026-09-27T17:00:00Z') });
+    const b = await draftPool(5000, new Date('2026-12-01T00:00:00Z'));
+    await pay.publishPool(b, { capacity: 10, minEntries: 2 });
+    expect(await closes(b)).toBe('2026-09-25T00:15:00.000Z');
+
+    clock.set(new Date('2026-09-25T00:15:00Z'));
+    const c = await draftPool(10000);
+    expect(await reason(pay.publishPool(c, { capacity: 10, minEntries: 2 }))).toMatch(/ENTRY_CUTOFF_PASSED/);
+    const [{ status }] = await t.sql<{ status: string }>(`SELECT status FROM contest_pools WHERE id = $1`, [c]);
+    expect(status).toBe('draft');
   });
 
   it('AC2: publishing requires a consistent table and a minimum field between paid places and capacity', async () => {

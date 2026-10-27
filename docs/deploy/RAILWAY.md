@@ -147,8 +147,12 @@ governance rule that code soaks in staging before production.
 
    It should return `{"ok":true}`. In Railway, the api deploy log should show
    the migrations applying and `api listening`, and **no**
-   `EDGE_SHARED_SECRET not set` warning. The worker log should show
-   `worker started` and a `job locks` line every minute.
+   `EDGE_SHARED_SECRET not set` warning. The worker log should show a
+   `job schedule` line first (the season schedule import; `windowsCreated` is
+   about 120 on a fresh database, `review: 0` ideally), then `worker started`
+   and a `job locks` line every minute. On a first import mid-season, the
+   first lock check also claims every past window (the backfill), so expect
+   one large `windowsLocked` count.
 
 ## Why the edge secret (PRD-006 §10.4)
 

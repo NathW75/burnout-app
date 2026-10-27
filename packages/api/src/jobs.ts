@@ -7,11 +7,12 @@
 import { createPostgresBurnStore, evaluateAndCommitBurns, evaluateAndFireLocks } from '@burnout/burn-engine';
 import { createLeaderboardService, leaderboardHooks } from '@burnout/leaderboard';
 import type { PaymentsService } from '@burnout/payments';
-import { createScoringStore, parseGamelogs, parseGames } from '@burnout/scoring-engine';
+import { createScoringStore, parseGamelogs, parseGames, type GameStatus } from '@burnout/scoring-engine';
 import type { Redis } from 'ioredis';
 import type { ApiContext, Log } from './context';
 import { parsePlayers } from './players/msf-players';
 import { reresolveSubmissions, syncInjuries, syncPlayers } from './players/roster';
+import { importSchedule } from './schedule/import';
 import type { SqlDatabase } from './sql';
 
 /** MSF v2.1 pull API. Only the worker calls it (§7.4). */
@@ -51,7 +52,10 @@ export interface JobsDeps {
   apiContext: ApiContext;
 }
 
-export type JobName = 'locks' | 'payments' | 'scoring' | 'roster' | 'injuries';
+export type JobName = 'locks' | 'payments' | 'scoring' | 'roster' | 'injuries' | 'schedule';
+
+/** Regular-season weeks, for the week-by-week schedule fallback. */
+export const REGULAR_SEASON_WEEKS = 18;
 
 export function createJobs(deps: JobsDeps) {
   const { db, season, now, log } = deps;
@@ -88,6 +92,28 @@ export function createJobs(deps: JobsDeps) {
       [season]
     );
     return r?.week ?? null;
+  }
+
+  /**
+   * The season schedule (§11.6). Without the season-wide games feed (403),
+   * falls back to the 18 weekly feeds; a week the feed doesn't have (404) is
+   * skipped.
+   */
+  async function fetchSchedule(): Promise<{ source: string; games: GameStatus[] }> {
+    try {
+      return { source: 'season', games: parseGames(await deps.msf.get(`${season}/games.json`)).games };
+    } catch (err) {
+      if (!(err instanceof MsfHttpError && err.status === 403)) throw err;
+    }
+    const games: GameStatus[] = [];
+    for (let week = 1; week <= REGULAR_SEASON_WEEKS; week++) {
+      try {
+        games.push(...parseGames(await deps.msf.get(`${season}/week/${week}/games.json`)).games);
+      } catch (err) {
+        if (!(err instanceof MsfHttpError && err.status === 404)) throw err;
+      }
+    }
+    return { source: 'weekly', games };
   }
 
   const jobs: Record<JobName, () => Promise<object>> = {
@@ -155,6 +181,14 @@ export function createJobs(deps: JobsDeps) {
       const reresolve = week ? await reresolveSubmissions(deps.apiContext, season, week) : null;
       return { ...sync, week, reresolve };
     },
+
+    async schedule() {
+      const { source, games } = await fetchSchedule();
+      if (games.length === 0) return { source, skipped: 'EMPTY_FEED' }; // never act on an empty feed
+      const r = await importSchedule(deps.apiContext, season, games);
+      if (r.windowsCreated || r.windowsRemoved || r.windowsPostponed) await rebuildBoards();
+      return { source, ...r, review: r.review.length };
+    },
   };
 
   /** Runs one job under its advisory lock. Returns null if another worker holds it. */
@@ -192,5 +226,6 @@ export function dueJobs(at: Date, opts: { windowsActive: boolean }): JobName[] {
   if (opts.windowsActive ? et.minute % 15 === 0 : et.minute === 0) due.push('scoring');
   if ((et.hour === 3 && et.minute === 0) || (et.weekday === 'Tue' && et.hour === 23 && et.minute === 59)) due.push('roster');
   if (['Wed', 'Thu', 'Fri', 'Sat', 'Sun'].includes(et.weekday) && et.minute % 15 === 0) due.push('injuries'); // Tech Summary §5
+  if (et.minute === 30) due.push('schedule'); // hourly: flexes and same-week moves (§11.6); the worker also runs it at startup
   return due;
 }

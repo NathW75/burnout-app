@@ -17,6 +17,9 @@ async function main() {
     msf: msfFetcher(process.env.MSF_BASE_URL ?? 'https://api.mysportsfeeds.com/v2.1/pull/nfl', requireEnv('MSF_API_KEY')),
   });
 
+  // The schedule first, so a fresh database has windows before the first lock check (§11.6).
+  await jobs.run('schedule');
+
   let running = false;
   const tick = async () => {
     if (running) return; // a slow tick never overlaps the next
