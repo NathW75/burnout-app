@@ -97,7 +97,14 @@ interface AppliedCorrection {
   afterX100: number;
 }
 
-export function createScoringStore(db: SqlDatabase) {
+/** Runs inside the freeze transaction after scores are frozen (e.g. leaderboard official snapshots, PRD-003 §8). */
+export type AfterFreezeHook = (tx: SqlRunner, ctx: { season: string; week: number; serverNow: Date }) => Promise<void>;
+
+export interface ScoringStoreOptions {
+  afterFreeze?: AfterFreezeHook;
+}
+
+export function createScoringStore(db: SqlDatabase, options: ScoringStoreOptions = {}) {
   async function ingestOneWeek(
     input: IngestInput,
     week: number,
@@ -405,6 +412,7 @@ export function createScoringStore(db: SqlDatabase) {
              VALUES ($1, $2, $3::timestamptz, $4::timestamptz, $5::int)`,
             [season, week, chk.last_final_at, serverNow, scores.length]
           );
+          if (options.afterFreeze) await options.afterFreeze(tx, { season, week, serverNow });
           return { week, scoresFrozen: scores.length, lastFinalAt: chk.last_final_at };
         });
         if (done) frozen.push(done);

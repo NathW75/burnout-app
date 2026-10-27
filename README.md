@@ -13,7 +13,8 @@ burnout/
 │   ├── api/          Node.js/Express backend (Railway)
 │   ├── burn-engine/  Core burn mechanic (PRD-001)
 │   ├── scoring-engine/ Fantasy scoring, MSF ingestion, corrections (PRD-002)
-│   ├── test-support/ Test-only Postgres harness (never imported at runtime)
+│   ├── leaderboard/  Pool rankings, projected movement, reveal, handles (PRD-003)
+│   ├── test-support/ Test-only Postgres + Redis harness (never imported at runtime)
 │   ├── db/           Prisma schema + migrations (PostgreSQL)
 │   └── shared/       Types, constants, utilities
 ├── docs/
@@ -48,7 +49,8 @@ npm run dev:web
 
 ```bash
 npm run typecheck
-TEST_DATABASE_URL=postgresql://postgres:postgres@localhost:5432/postgres npm test
+TEST_DATABASE_URL=postgresql://postgres:postgres@localhost:5432/postgres \
+TEST_REDIS_URL=redis://localhost:6379 npm test
 ```
 
 `TEST_DATABASE_URL` points at any Postgres 16 server; the suite only uses it to
@@ -89,7 +91,7 @@ before implementing any feature.
 |-----|-----------|--------|
 | PRD-001 | Burn Engine | APPROVED |
 | PRD-002 | Scoring Engine | APPROVED |
-| PRD-003 | Leaderboard | DRAFT |
+| PRD-003 | Leaderboard | APPROVED |
 | PRD-004 | Payment Processing (Stripe) | TODO |
 | PRD-005 | Pri/Alt Insurance (P2) | TODO |
 

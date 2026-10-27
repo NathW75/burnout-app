@@ -19,6 +19,7 @@ model User {
   email           String    @unique
   passwordHash    String    @map("password_hash")
   displayName     String    @map("display_name")
+  handle          String?   @db.VarChar(20)     // public identity (PRD-003 §7); unique case-insensitively via migration
   createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz
   updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz
 
@@ -28,6 +29,9 @@ model User {
   burnRecords         BurnRecord[]
   submissionReceipts  SubmissionReceipt[]
   weekScores          UserWeekScore[]
+  contestEntries      ContestEntry[]
+  handleHistory       UserHandleHistory[]
+  leaderboardRows     LeaderboardSnapshot[]
 
   @@map("users")
 }
@@ -350,4 +354,72 @@ model WeekFreeze {
 
   @@id([season, week])
   @@map("week_freezes")
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// PRD-003 — Leaderboard
+// ═════════════════════════════════════════════════════════════════════════════
+
+model ContestPool {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  season         String   @db.VarChar(20)
+  kind           String   @db.VarChar(20)   // season_open | season_closed (P3)
+  buyInCents     Int      @map("buy_in_cents")
+  name           String   @db.VarChar(80)
+  entryClosesAt  DateTime @map("entry_closes_at") @db.Timestamptz
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  entries   ContestEntry[]
+  snapshots LeaderboardSnapshot[]
+
+  @@unique([season, kind, buyInCents])
+  @@map("contest_pools")
+}
+
+model ContestEntry {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  poolId     String   @map("pool_id") @db.Uuid
+  userId     String   @map("user_id") @db.Uuid
+  enteredAt  DateTime @map("entered_at") @db.Timestamptz
+
+  pool ContestPool @relation(fields: [poolId], references: [id])
+  user User        @relation(fields: [userId], references: [id])
+
+  @@unique([poolId, userId])
+  @@index([userId], name: "idx_contest_entries_user")
+  @@map("contest_entries")
+}
+
+// Append-only. week_start: written in the week's first lock transaction.
+// official: written in the week's freeze transaction.
+model LeaderboardSnapshot {
+  poolId      String   @map("pool_id") @db.Uuid
+  week        Int      @db.SmallInt
+  kind        String   @db.VarChar(12)   // week_start | official
+  userId      String   @map("user_id") @db.Uuid
+  handle      String   @db.VarChar(20)
+  rank        Int
+  pointsX100  BigInt   @map("points_x100")
+  takenAt     DateTime @map("taken_at") @db.Timestamptz
+
+  pool ContestPool @relation(fields: [poolId], references: [id])
+  user User        @relation(fields: [userId], references: [id])
+
+  @@id([poolId, week, kind, userId])
+  @@map("leaderboard_snapshots")
+}
+
+model UserHandleHistory {
+  userId     String    @map("user_id") @db.Uuid
+  handle     String    @db.VarChar(20)
+  season     String    @db.VarChar(20)
+  isChange   Boolean   @map("is_change")    // false for the handle set at signup
+  validFrom  DateTime  @map("valid_from") @db.Timestamptz
+  validTo    DateTime? @map("valid_to") @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@id([userId, validFrom])
+  @@index([season, userId], name: "idx_handle_history_season_user")
+  @@map("user_handle_history")
 }

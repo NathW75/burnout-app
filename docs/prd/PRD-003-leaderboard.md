@@ -1,7 +1,7 @@
 # PRD-003 — Leaderboard
 **Burnout League · packages/leaderboard**
-Version 1.1 · 2026-10-26
-Status: DRAFT — all open questions resolved 2026-10-26 (v1.1); pending approval to build
+Version 1.2 · 2026-10-26
+Status: APPROVED 2026-10-26 — implement against this spec (v1.2 changes: see change log)
 
 ---
 
@@ -53,7 +53,7 @@ This PRD is the single source of truth for ranking and reveal behavior. Code tha
 
 | Status | Condition |
 |--------|-----------|
-| LIVE | Any game in the current week is in progress |
+| LIVE | The current week still has game windows in progress or still to be played |
 | PROVISIONAL | Current week's games all Final, but the week has not frozen (stat corrections still possible) |
 | OFFICIAL | Every week counted so far is frozen (PRD-002 §7) |
 
@@ -63,7 +63,7 @@ This PRD is the single source of truth for ranking and reveal behavior. Code tha
 
 Modeled on the PGA Tour's FedEx Cup projected standings: every row shows where the entry started the week and where it is projected to finish it.
 
-- **Baseline** is captured once per week per pool, in the transaction that fires the week's first lock (PRD-001 §4.4), as a `week_start` snapshot.
+- **Baseline** is captured once per week per pool, in the transaction that fires the week's first lock (PRD-001 §4.4), as a `week_start` snapshot. The snapshot runs inside a savepoint: if it fails, only the snapshot rolls back, the lock still commits on time, the failure is reported to the alerting logger, and the next lock that week writes the baseline. A leaderboard fault must never delay or block a lock.
 - **Projected** is the live rank from the current standings.
 - **Arrow:** green ▲ with places gained when movement > 0, red ▼ with places lost when movement < 0, a dash when unchanged. New entries have no arrow in their first week.
 - While the standing status is LIVE or PROVISIONAL, the column is labeled **Projected**. When the week goes OFFICIAL, the arrow becomes that week's final movement and stays visible until the next week's first lock sets a new baseline.
@@ -73,12 +73,18 @@ Modeled on the PGA Tour's FedEx Cup projected standings: every row shows where t
 
 ## 5. Freshness and Caching
 
-- **Source of truth:** `user_week_scores` and the `user_season_totals` view (PRD-002), joined to `contest_entries`.
-- **Cache:** one Redis sorted set per pool (`lb:{poolId}`), member = user ID, score = season total in centipoints. A competition rank is `1 + ZCOUNT(lb:{poolId}, (score, +inf)`.
-- **Refresh:** on every `SCORES_UPDATED {season, week}` event (PRD-002 §10), the cache for every pool in that season is rebuilt from Postgres. Rebuild is a full replace, written to a temporary key and renamed atomically, so readers never see a half-built board.
-- **Bound:** a committed score change is visible on the leaderboard within 60 seconds (Tech Summary §3). Clients poll every 60 seconds with the board's `version`; an unchanged version returns 304.
-- **Redis is never authoritative.** If Redis is empty or unavailable, the API computes the board from Postgres. PRD-004 settles pools from Postgres snapshots only, never from Redis.
+- **Source of truth:** `user_week_scores` and the `user_season_totals` view (PRD-002), joined to `contest_entries`. Ranks are computed in Postgres with `RANK()` on integer centipoints.
+- **Cache (v1.2):** Redis holds a copy of each pool's ranked board exactly as Postgres computed it:
+  - `lb:{poolId}:order`: list of entry IDs in display order
+  - `lb:{poolId}:rows`: hash of entry ID → row (rank, baseline rank, points, week points, handle)
+  - `lb:{poolId}:info`: board header (version, status, current week, field size, as-of)
 
+  Ranks are never computed in Redis, so the cache cannot disagree with Postgres on rank or tie order. (v1.1 sketched a sorted set ranked at read time; Redis orders tied scores by member ID, which breaks the handle-order rule in §4.3 when paginating through a tie.)
+- **Refresh:** on every `SCORES_UPDATED {season, week}` event (PRD-002 §10), every pool in that season is rebuilt from Postgres into temporary keys, then all three keys are swapped in one `MULTI/EXEC`.
+- **Reads** run as one Lua script (header, page and rows together), so a concurrent swap can never split a read across two boards.
+- **Version** is a hash of the board's visible content: it changes exactly when something on the board changes.
+- **Bound:** a committed score change is visible on the leaderboard within 60 seconds (Tech Summary §3). Clients poll every 60 seconds with the board's `version`; an unchanged version returns 304.
+- **Redis is never authoritative.** If Redis is empty, unreachable or errors, the API computes the board from Postgres. PRD-004 settles pools from Postgres snapshots only, never from Redis.
 ---
 
 ## 6. Post-Lock Reveal (LOCKED)
@@ -105,7 +111,7 @@ Modeled on the PGA Tour's FedEx Cup projected standings: every row shows where t
 **Decision 2026-10-26:** users appear only by a user-chosen **handle**. Real names are never shown to other users (T&C §9.3).
 
 - `users.handle`: 3–20 characters, letters, digits and underscore, unique case-insensitively.
-- Set at signup. Reserved words (e.g. `burnout`, `admin`, `official`, `support`, `corewright`) and a profanity list are rejected.
+- Set at signup. Handles containing reserved words (`burnout`, `admin`, `official`, `support`, `corewright`, `moderator`, `staff`) or a word on the profanity/impersonation blocklist are rejected. The blocklist is supplied by configuration, not hard-coded.
 - **Changes (LOCKED 2026-10-26):** a user may change their handle at most **2 times per season**. Every handle a user has held is kept in `user_handle_history`.
 - A released handle is reserved for 30 days before anyone else can claim it, so nobody can take the name of the current leader the moment they rename.
 - Links and API paths identify entries by entry ID, never by handle, so renames break nothing.
@@ -162,12 +168,14 @@ CREATE TABLE user_handle_history (
   user_id      UUID NOT NULL REFERENCES users(id),
   handle       VARCHAR(20) NOT NULL,
   season       VARCHAR(20) NOT NULL,
+  is_change    BOOLEAN NOT NULL,                    -- false for the handle set at signup
   valid_from   TIMESTAMPTZ NOT NULL,
   valid_to     TIMESTAMPTZ,                         -- NULL = current
   PRIMARY KEY (user_id, valid_from)
 );
--- DB trigger: reject a change when the user already has 2 changes in the season;
--- reject claiming a handle another user released less than 30 days ago.
+-- DB triggers: reject a change when the user already has 2 changes in the season;
+-- reject claiming a handle another user holds or released less than 30 days ago;
+-- reject any users.handle value without an open history row (changes cannot bypass history).
 ```
 
 - `week_start` snapshots are written in the transaction that fires each week's first lock (§4.1).
@@ -204,7 +212,7 @@ All endpoints require a signed-in user with an entry in the pool.
 3. **Zero scorers ranked.** An entry with no scores appears, tied at 0.00 at the bottom.
 4. **Freshness.** After a `SCORES_UPDATED` event, the cached board equals the board computed from Postgres, and its `version` changes.
 5. **Cache is not authority.** With the cache empty or unavailable, the API returns the same standings computed from Postgres.
-6. **Atomic rebuild.** A reader during a rebuild sees either the complete old board or the complete new board, never a mix.
+6. **Atomic rebuild.** A reader during a rebuild sees either the complete old board or the complete new board, never a mix. Verified with concurrent readers across repeated rebuilds between two known boards: only those two boards are ever observed.
 7. **Reveal.** Another manager's unlocked slots are never returned (player, window, or filled/empty state); locked slots are returned after their lock; a viewer outside the pool gets 403.
 8. **Identity.** No leaderboard or reveal response contains email or real name.
 9. **Snapshots.** The week's first lock writes a `week_start` snapshot, and freezing a week writes an `official` snapshot, each for every entry in every pool of that season, inside the lock and freeze transactions respectively. Snapshot rows record the handle shown at the time.
@@ -227,7 +235,9 @@ All endpoints require a signed-in user with an entry in the pool.
 
 ## 13. Open Questions
 
-None. Resolved 2026-10-26:
+1. **Handle blocklist.** The profanity/impersonation list needs an owner and a source before launch (§7).
+
+Resolved 2026-10-26:
 - **Handle changes:** allowed, at most 2 per season (§7).
 - **Public visibility:** entrants only (§7.1).
 - **Milestones:** replaced by FedEx Cup–style projected movement arrows (§4.1); no rank pushes (§10).
@@ -237,6 +247,14 @@ None. Resolved 2026-10-26:
 ---
 
 ## Change log
+
+**v1.2 — 2026-10-26**
+- Status: APPROVED
+- §4.1: baseline snapshot isolated in a savepoint; a snapshot failure never blocks a lock
+- §4.5: LIVE covers windows still to be played this week, not only games in progress
+- §5: cache stores Postgres-ranked boards (list + hash + header), atomic swap and atomic Lua reads; replaces the sorted-set sketch
+- §7, §8: blocklist via configuration; `user_handle_history.is_change`; history-only handle changes enforced by trigger
+- AC6: verification method stated; §13: handle blocklist added
 
 **v1.1 — 2026-10-26**
 - §4.1: new — projected movement arrows (baseline at the week's first lock vs. live projected rank)

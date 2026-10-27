@@ -22,7 +22,7 @@
  * weekly_submissions is never read or written here (§3.3 burn isolation).
  */
 
-import type { SqlDatabase } from '../sql';
+import type { SqlDatabase, SqlRunner } from '../sql';
 import type { GameWindow, GameWindowStatus } from '../types';
 import type { LockCommitOutcome } from '../lock-engine';
 import type { BurnCommitOutcome } from '../burn-evaluator';
@@ -74,7 +74,24 @@ export interface PostgresBurnStore {
   }): Promise<CancellationOutcome>;
 }
 
-export function createPostgresBurnStore(db: SqlDatabase): PostgresBurnStore {
+/** Runs inside the lock transaction after the lock is written (e.g. leaderboard week_start snapshots, PRD-003 §4.1). */
+export type AfterLockHook = (
+  tx: SqlRunner,
+  ctx: { gameWindowId: string; season: string; week: number; serverNow: Date }
+) => Promise<void>;
+
+export interface PostgresBurnStoreOptions {
+  /**
+   * Runs inside the lock transaction, within a SAVEPOINT. If it throws, only
+   * its own writes roll back: the lock still commits on time. A downstream
+   * feature (e.g. leaderboard snapshots) must never delay or block a lock.
+   */
+  afterLock?: AfterLockHook;
+  /** Called when afterLock fails. Wire to an alerting logger. */
+  onAfterLockError?: (err: unknown, ctx: { gameWindowId: string }) => void;
+}
+
+export function createPostgresBurnStore(db: SqlDatabase, options: PostgresBurnStoreOptions = {}): PostgresBurnStore {
   return {
     async getPendingWindowsToLock(serverNow) {
       const rows = await db.query<GameWindowRow>(
@@ -99,11 +116,11 @@ export function createPostgresBurnStore(db: SqlDatabase): PostgresBurnStore {
       return db.transaction(async (tx): Promise<LockCommitOutcome> => {
         // 1. Claim pending → locked. Re-checks scheduled_et so a window moved
         //    later (§6.4) between the read and now does not lock early.
-        const [claimed] = await tx.query<{ label: string }>(
+        const [claimed] = await tx.query<{ label: string; season: string; week: number }>(
           `UPDATE game_windows
               SET status = 'locked'
             WHERE id = $1::uuid AND status = 'pending' AND scheduled_et <= $2::timestamptz
-        RETURNING label`,
+        RETURNING label, season, week`,
           [gameWindowId, serverNow]
         );
         if (!claimed) return { claimed: false };
@@ -140,6 +157,19 @@ export function createPostgresBurnStore(db: SqlDatabase): PostgresBurnStore {
            VALUES ($1::uuid, $2::timestamptz, $3::int, $4::int)`,
           [gameWindowId, serverNow, counts.submissions_locked, counts.notifications_queued]
         );
+
+        // Same transaction, isolated by a savepoint: commits with the lock when it
+        // succeeds, rolls back alone when it fails. The lock is never held hostage.
+        if (options.afterLock) {
+          await tx.query(`SAVEPOINT after_lock_hook`);
+          try {
+            await options.afterLock(tx, { gameWindowId, season: claimed.season, week: Number(claimed.week), serverNow });
+            await tx.query(`RELEASE SAVEPOINT after_lock_hook`);
+          } catch (err) {
+            await tx.query(`ROLLBACK TO SAVEPOINT after_lock_hook`);
+            options.onAfterLockError?.(err, { gameWindowId });
+          }
+        }
 
         return {
           claimed: true,
