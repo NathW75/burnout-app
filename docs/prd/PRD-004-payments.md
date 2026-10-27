@@ -1,7 +1,7 @@
 # PRD-004 — Payments
 **Burnout League · packages/payments**
-Version 1.0 · 2026-10-26
-Status: DRAFT — for review
+Version 1.1 · 2026-10-26
+Status: APPROVED 2026-10-26 — implement against this spec (v1.1 changes: see change log)
 
 ---
 
@@ -180,7 +180,8 @@ Two rules are enforced in Postgres, not in application code:
 
 | Account | Kind | Scope | Meaning |
 |---------|------|-------|---------|
-| `processor_clearing` | asset | global | Captured funds still held at the processor |
+| `processor_clearing:prize` | asset | global | Prize share of captured funds still held at the processor |
+| `processor_clearing:operating` | asset | global | Rake share (less fees) still held at the processor |
 | `prize_bank` | asset | global | The segregated prize-fund account (§6.5) |
 | `operating_bank` | asset | global | Platform operating account |
 | `prize_liability:{pool}` | liability | per pool | Owed to that pool's winners |
@@ -197,16 +198,18 @@ Example: one $25 entry at 15% rake, with a processor fee of $1.03.
 
 | Event | Debit | Credit |
 |-------|-------|--------|
-| Payment captured | `processor_clearing` 2500 | `prize_liability:{pool}` 2125, `rake_revenue` 375 |
-| Processor fee reported | `processing_fees` 103 | `processor_clearing` 103 |
-| Processor settles funds to the banks | `prize_bank` (prize share), `operating_bank` (rest) | `processor_clearing` |
+| Payment captured | `processor_clearing:prize` 2125, `processor_clearing:operating` 375 | `prize_liability:{pool}` 2125, `rake_revenue` 375 |
+| Capture rejected (never entered, §8.3) | `processor_clearing:operating` 2500 | `refund_payable:{user}` 2500 |
+| Processor fee reported | `processing_fees` 103 | `processor_clearing:operating` 103 |
+| Processor settles funds to the banks | `prize_bank` (prize share), `operating_bank` (rest) | `processor_clearing:prize`, `processor_clearing:operating` |
+| Ops transfer (e.g. funding an overlay) | `prize_bank` | `operating_bank` |
 | Entry close, field below capacity | `overlay_expense` (P − collected) | `prize_liability:{pool}` |
 | Settlement approved | `prize_liability:{pool}` P | `payable:{user}` per award |
 | Payout paid | `payable:{user}` | `prize_bank` |
 | Payout failed or returned | `prize_bank` | `payable:{user}` (reverses the payout) |
 | Refund issued (full) | `prize_liability:{pool}` 2125, `rake_revenue` 375 | `refund_payable:{user}` 2500 |
-| Refund confirmed | `refund_payable:{user}` 2500 | `processor_clearing` 2500 |
-| Chargeback lost | `chargeback_loss` (amount + fee) | `processor_clearing` |
+| Refund confirmed | `refund_payable:{user}` 2500 | `processor_clearing:prize` 2125, `processor_clearing:operating` 375 (all operating for a rejected capture) |
+| Chargeback lost | `chargeback_loss` (amount + fee) | `processor_clearing:operating` |
 
 The table names only accounts. Every transaction also records `ref_type` and `ref_id` (an entry intent, payout, settlement or dispute) and an idempotency key, which is unique.
 
@@ -220,7 +223,7 @@ The check runs weekly, before settlement approval, and on demand. It fails loudl
 2. For each open pool: `prize_liability:{pool}` = Σ prize contributions of captured, non-refunded entries + posted overlay.
 3. For each open pool: number of contest entries = number of captured, non-refunded entry intents.
 4. For each settled pool: `prize_liability:{pool}` = 0, and Σ awards = P.
-5. Σ `payable:*` + Σ `prize_liability:*` ≤ `prize_bank` + the prize share still in `processor_clearing`.
+5. Σ `payable:*` + Σ `prize_liability:*` ≤ `prize_bank` + `processor_clearing:prize`. An overlay posted at close but not yet funded by an ops transfer fails this check, which blocks settlement until the prize fund is topped up.
 
 Check 5 compares the ledger to itself. Reconciliation against the real bank statement is an ops task: ops enters statement balances in `bank_reconciliations`, and the check compares them to `prize_bank`.
 
@@ -249,6 +252,9 @@ interface PaymentProcessor {
   createPayoutOnboardingLink(req: { userId: string; returnUrl: string }): Promise<{ url: string }>;
   getPayoutAccount(userId: string): Promise<PayoutAccountStatus | null>;
 
+  /** Fee for an instant payout of this amount, shown before the user confirms. */
+  instantPayoutFeeCents(amountCents: number): number;
+
   sendPayout(req: {
     payoutId: string; userId: string; amountCents: number;
     speed: 'standard' | 'instant'; idempotencyKey: string;
@@ -268,7 +274,7 @@ type ProcessorEvent =
   | { type: 'dispute_closed';   eventId: string; paymentRef: string; outcome: 'won' | 'lost'; feeCents: number; occurredAt: Date }
   | { type: 'payout_paid';      eventId: string; payoutRef: string; occurredAt: Date }
   | { type: 'payout_failed';    eventId: string; payoutRef: string; reason: string; occurredAt: Date }
-  | { type: 'account_updated';  eventId: string; userId: string; status: PayoutAccountStatus; occurredAt: Date };
+  | { type: 'account_updated';  eventId: string; userId: string; accountRef: string; status: PayoutAccountStatus; occurredAt: Date };
 
 interface PayoutAccountStatus {
   payoutsEnabled: boolean;     // KYC done and a bank account attached
@@ -373,7 +379,7 @@ Take a group of `n` entries that share rank `r`. It occupies places r through r+
 
 A payout is created only if the user's payout account has `payoutsEnabled` **and** `tinVerified`. Otherwise:
 - The award stays in `payable:{user}`.
-- The user is told to add a bank account and W-9, by email and in the app. Reminders go out on day 1, 7 and 30.
+- The user is told to add a bank account and W-9, by email and in the app, at approval (day 0) and again on day 1, 7 and 30.
 - An `account_updated` event that turns both flags true releases the payout automatically.
 
 ### 10.2 Timing and speed
@@ -382,7 +388,7 @@ A payout is created only if the user's payout account has `payoutsEnabled` **and
 - `standard` (ACH) is the default and free.
 - `instant` can be requested by the user with step-up. Its fee is deducted from the payout and shown before the user confirms.
 - Each award produces one payout, with idempotency key `payout:{settlement}:{user}`.
-- A failed or returned payout reverses to `payable` and notifies the user (AC13).
+- A failed or returned payout reverses to `payable` and notifies the user (AC13). The next attempt waits until the user updates their payout account, so a bad bank account is not retried in a loop.
 
 ### 10.3 Refunds
 
@@ -427,7 +433,11 @@ Checks:
 - At registration and at checkout, the IP-derived state and the billing state must both be allowed.
 - At payout onboarding, the verified address state must be allowed.
 
-The seed data is the exec summary list (HI, ID, MT, WA, NV, plus the restricted Louisiana parishes), pending counsel's final list.
+The seed data is the exec summary list (HI, ID, MT, WA, NV), pending counsel's final list. Two conservative placeholders until counsel answers:
+- **Louisiana is blocked as a whole** until counsel supplies the list of parishes where paid fantasy contests are allowed. Parish rows then go in as sub-regions.
+- **Minimum ages:** 18 by default, 19 in AL and NE (age of majority), and 21 in MA, AZ and IA.
+
+A region with no allowed row in force is blocked (default deny).
 
 ### 11.3 Tax reporting
 
@@ -448,7 +458,8 @@ The new tables live in migration `2026102800xxxx_payments`, with a companion `_p
 |-------|-------------|--------|
 | `contest_pools` (add columns) | `capacity`, `min_entries`, `rake_bps`, `status` (draft/open/closed/cancelled/settled), `prize_pool_cents` | `min_entries ≥ paid places`. Money columns are frozen once status leaves `draft`. |
 | `prize_table_bands` | `pool_id`, `from_place`, `to_place`, `prize_cents` | Immutable once the pool is published. Bands must be contiguous from 1, and their sum must equal `prize_pool_cents`. |
-| `entry_intents` | `id`, `user_id`, `pool_id`, `amount_cents`, `rake_cents`, `status`, `hold_expires_at`, `checkout_ref`, `payment_ref`, `ip_state`, `billing_state` | Status moves only along allowed transitions. At most one live intent per (user, pool). |
+| `entry_intents` | `id`, `user_id`, `pool_id`, `amount_cents`, `rake_cents`, `status` (pending/expired/failed/captured/refunded), `hold_expires_at`, `checkout_ref`, `payment_ref`, `ip_region`, `billing_region`, `captured_at` | Status moves only along allowed transitions. At most one pending intent per (user, pool). |
+| `refunds` | `id`, `user_id`, `intent_id`, `payment_ref`, `amount_cents`, `prize_share_cents`, `reason`, `status`, `refund_ref` | One per payment. Terms immutable; status only pending → succeeded. |
 | `contest_entry_voids` | `entry_id`, `reason`, `voided_at`, `voided_by` | Append-only. Only before close, or for a cancelled pool. |
 | `processor_events` | `processor`, `event_id`, `type`, `payload`, `received_at`, `processed_at` | Unique on (processor, event_id). |
 | `processor_approvals` | `processor`, `approved_at`, `document_ref`, `recorded_by` | Append-only |
@@ -458,12 +469,14 @@ The new tables live in migration `2026102800xxxx_payments`, with a companion `_p
 | `settlements` | `pool_id`, `snapshot_week`, `status`, `computed_at`, `approved_by`, `approved_at` | One per pool |
 | `settlement_awards` | `pool_id`, `entry_id`, `user_id`, `rank`, `tie_size`, `amount_cents` | Immutable. Sum must equal `prize_pool_cents` at approval. |
 | `payout_accounts` | `user_id`, `processor`, `account_ref`, `payouts_enabled`, `tin_verified`, `instant_eligible` | — |
-| `payouts` | `id`, `user_id`, `settlement_id`, `amount_cents`, `fee_cents`, `speed`, `status`, `payout_ref`, `idempotency_key` | Status moves only along allowed transitions |
+| `payouts` | `id`, `user_id`, `pool_id`, `attempt`, `amount_cents`, `fee_cents`, `speed`, `status`, `payout_ref`, `idempotency_key` | Status moves only along allowed transitions. At most one live (pending/sent/paid) payout per award. Speed changes only while pending. |
 | `account_holds` | `user_id`, `reason`, `opened_at`, `closed_at` | — |
 | `identity_verifications` | `user_id`, `provider`, `provider_ref`, `person_hash`, `status`, `verified_state`, `dob_verified_at` | `person_hash` unique among verified rows |
 | `jurisdictions` | `country`, `region`, `sub_region?`, `status`, `min_age`, `effective_from`, `effective_to` | — |
 | `tax_thresholds` | `tax_year`, `form`, `threshold_cents` | — |
 | `bank_reconciliations` | `account`, `statement_date`, `balance_cents`, `entered_by` | Append-only |
+
+`contest_entries` also gains a guard: no entry can be inserted into a pool that is closed, cancelled or settled, whatever `entered_at` claims.
 
 **No sensitive financial data:** no table stores a card number, bank account number, SSN or TIN. Only processor and provider references are kept. This is checked by a schema test (AC19).
 
@@ -492,7 +505,7 @@ The new tables live in migration `2026102800xxxx_payments`, with a companion `_p
 | AC1 | Prize table: across a sweep of capacities from 1 to 100,000, buy-ins of $25, $50 and $100, and every rake, every table sums to P, never increases, has every prize ≥ M and has K = min(⌊C/5⌋, ⌊P/M⌋) with a minimum of 1. The §5.3 fixtures match exactly. |
 | AC2 | A published prize table and pool money columns reject UPDATE and DELETE at the database level. |
 | AC3 | The gate returns the right reason code for each of the eight checks in §8.1. |
-| AC4 | 50 concurrent checkouts for 5 remaining seats produce exactly 5 holds. |
+| AC4 | 50 concurrent checkouts for 3 remaining seats produce exactly 3 holds (fewer seats than concurrent transactions, so a missing lock would oversell). |
 | AC5 | Delivering the same `payment_captured` event twice produces one entry and one ledger transaction. |
 | AC6 | A capture after close, or into a full pool, produces no entry and a full refund, and the user's ledger nets to zero. |
 | AC7 | An unbalanced ledger transaction is rejected at commit. Ledger UPDATE and DELETE are rejected. |
@@ -551,3 +564,4 @@ As with PRD-001 to PRD-003, every critical rule gets a mutation check: break the
 | Version | Date | Changes |
 |---------|------|---------|
 | 1.0 | 2026-10-26 | First draft |
+| 1.1 | 2026-10-26 | Approved. From the build: clearing split into prize and operating accounts so check 5 is exact; posting rules for rejected captures and ops transfers; `instantPayoutFeeCents` and `accountRef` added to the adapter; `refunds` table; payout attempts wait for an account update after a failure; day-0 payout notice; Louisiana blocked and age placeholders pending counsel; default-deny jurisdictions; entry insert blocked after close; AC4 uses 3 seats so the race test can actually oversell without the lock. |

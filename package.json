@@ -20,7 +20,7 @@
     "db:generate": "npm -w packages/db run generate",
     "test": "npm run test --workspaces --if-present",
     "lint": "eslint . --ext .ts,.tsx,.js",
-    "typecheck": "tsc -p packages/db/tsconfig.json --noEmit && tsc -p packages/shared/tsconfig.json --noEmit && tsc -p packages/burn-engine/tsconfig.test.json && tsc -p packages/scoring-engine/tsconfig.test.json && tsc -p packages/leaderboard/tsconfig.test.json"
+    "typecheck": "tsc -p packages/db/tsconfig.json --noEmit && tsc -p packages/shared/tsconfig.json --noEmit && tsc -p packages/burn-engine/tsconfig.test.json && tsc -p packages/scoring-engine/tsconfig.test.json && tsc -p packages/leaderboard/tsconfig.test.json && tsc -p packages/payments/tsconfig.test.json"
   },
   "devDependencies": {
     "@typescript-eslint/eslint-plugin": "^7.0.0",

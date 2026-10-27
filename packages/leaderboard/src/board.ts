@@ -2,7 +2,7 @@
  * Leaderboard computation from Postgres — PRD-003 §4, §4.1, §8
  *
  * Postgres is the only authority for ranks. Everything here is plain SQL over
- * contest_entries + user_week_scores (PRD-002), ranked with RANK() on integer
+ * contest_entries (minus PRD-004 voids) + user_week_scores (PRD-002), ranked with RANK() on integer
  * centipoints. The Redis cache (cache.ts) only stores copies of these results.
  */
 
@@ -78,6 +78,7 @@ export async function computeBoard(q: SqlRunner, poolId: string): Promise<Board>
        SELECT ce.id AS entry_id, ce.user_id, COALESCE(u.handle, '') AS handle
          FROM contest_entries ce JOIN users u ON u.id = ce.user_id
         WHERE ce.pool_id = $1::uuid
+          AND NOT EXISTS (SELECT 1 FROM contest_entry_voids v WHERE v.entry_id = ce.id)  -- refunded entries leave the field (PRD-004 §10.3)
      ), t AS (
        SELECT e.*,
               COALESCE((SELECT SUM(w.points_x100) FROM user_week_scores w WHERE w.user_id = e.user_id AND w.season = $2), 0)::bigint AS pts,
@@ -137,7 +138,7 @@ export async function writeSnapshots(
            FROM contest_entries ce
            JOIN contest_pools p ON p.id = ce.pool_id
            JOIN users u ON u.id = ce.user_id
-          WHERE p.season = $1::text
+          WHERE p.season = $1::text AND NOT EXISTS (SELECT 1 FROM contest_entry_voids v WHERE v.entry_id = ce.id)
        ) r
       WHERE NOT EXISTS (SELECT 1 FROM leaderboard_snapshots s
                          WHERE s.pool_id = r.pool_id AND s.week = $2::int AND s.kind = $3::text)

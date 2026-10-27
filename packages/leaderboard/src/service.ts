@@ -103,7 +103,8 @@ export function createLeaderboardService(deps: LeaderboardServiceDeps) {
 
   async function viewerEntry(q: SqlRunner, viewerUserId: string, poolId: string): Promise<string> {
     const [e] = await q.query<{ id: string }>(
-      `SELECT id::text AS id FROM contest_entries WHERE pool_id = $1::uuid AND user_id = $2::uuid`,
+      `SELECT ce.id::text AS id FROM contest_entries ce WHERE ce.pool_id = $1::uuid AND ce.user_id = $2::uuid
+          AND NOT EXISTS (SELECT 1 FROM contest_entry_voids v WHERE v.entry_id = ce.id)`,
       [poolId, viewerUserId]
     );
     if (!e) throw new LeaderboardAccessError();
@@ -205,7 +206,7 @@ export function createLeaderboardService(deps: LeaderboardServiceDeps) {
                   COALESCE((SELECT w.points_x100 FROM user_week_scores w
                              WHERE w.user_id = ce.user_id AND w.season = p.season AND w.week = $2), 0)::int AS wk
              FROM contest_entries ce JOIN contest_pools p ON p.id = ce.pool_id JOIN users u ON u.id = ce.user_id
-            WHERE ce.pool_id = $1::uuid)
+            WHERE ce.pool_id = $1::uuid AND NOT EXISTS (SELECT 1 FROM contest_entry_voids v WHERE v.entry_id = ce.id))
          SELECT entry_id::text AS entry_id, handle, wk, RANK() OVER (ORDER BY wk DESC) AS rnk
            FROM t ORDER BY wk DESC, lower(handle), entry_id`,
         [poolId, week]
@@ -222,7 +223,7 @@ export function createLeaderboardService(deps: LeaderboardServiceDeps) {
       const me = await viewerEntry(deps.db, viewerUserId, poolId);
       const [target] = await deps.db.query<{ user_id: string; season: string }>(
         `SELECT ce.user_id::text AS user_id, p.season FROM contest_entries ce JOIN contest_pools p ON p.id = ce.pool_id
-          WHERE ce.id = $1::uuid AND ce.pool_id = $2::uuid`,
+          WHERE ce.id = $1::uuid AND ce.pool_id = $2::uuid AND NOT EXISTS (SELECT 1 FROM contest_entry_voids v WHERE v.entry_id = ce.id)`,
         [entryId, poolId]
       );
       if (!target) throw new EntryNotFoundError();

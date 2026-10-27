@@ -14,6 +14,7 @@ burnout/
 │   ├── burn-engine/  Core burn mechanic (PRD-001)
 │   ├── scoring-engine/ Fantasy scoring, MSF ingestion, corrections (PRD-002)
 │   ├── leaderboard/  Pool rankings, projected movement, reveal, handles (PRD-003)
+│   ├── payments/     Prize tables, checkout, ledger, settlement, payouts (PRD-004)
 │   ├── test-support/ Test-only Postgres + Redis harness (never imported at runtime)
 │   ├── db/           Prisma schema + migrations (PostgreSQL)
 │   └── shared/       Types, constants, utilities
@@ -75,6 +76,22 @@ Enforced twice, in the application and in the database:
 
 Always build the Prisma client with `createDbClient()` from `@burnout/db`.
 
+## Payments guarantees (PRD-004)
+
+| Guarantee | Application | Database |
+|---|---|---|
+| No live money without written approval | `createPaymentsService` refuses a live adapter unless `PAYMENTS_LIVE=true` and a `processor_approvals` row exists | `processor_approvals` append-only |
+| Prizes fixed before entry opens | `publishPool` computes `banded-top20-v1` once | bands and money terms frozen once the pool leaves `draft`; publish requires bands summing to the prize pool |
+| Every ledger transaction balances | `post()` builds debit/credit pairs | deferred constraint trigger; ledger append-only |
+| Fees and losses never touch the prize pool | posting rules | only `refund_entry` / `settlement_approve` may debit `prize_liability:*` |
+| One entry per seat, no overselling | gate + hold under the pool row lock | one pending intent per user per pool |
+| Webhooks post once | `processor_events` row lock + conditional claims | idempotency keys unique |
+| Settlement only from the official Week 18 snapshot | `computeSettlement` reads `leaderboard_snapshots` only | awards immutable; approval requires Σ awards = prize pool |
+| No payout without bank + W-9, or during a dispute | `payoutEligible` | one live payout per award |
+| No card, bank, SSN or TIN storage | processor/provider references only | schema test (AC19) |
+
+`FakeProcessor` is the only adapter until a processor approves the contest use case in writing.
+
 ## Environment Variables
 
 See `.env.example` for all required variables.
@@ -92,7 +109,7 @@ before implementing any feature.
 | PRD-001 | Burn Engine | APPROVED |
 | PRD-002 | Scoring Engine | APPROVED |
 | PRD-003 | Leaderboard | APPROVED |
-| PRD-004 | Payments (processor-agnostic) | DRAFT |
+| PRD-004 | Payments (processor-agnostic) | APPROVED |
 | PRD-005 | Pri/Alt Insurance (P2) | TODO |
 
 ## Stack

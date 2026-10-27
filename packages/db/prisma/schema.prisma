@@ -32,6 +32,12 @@ model User {
   contestEntries      ContestEntry[]
   handleHistory       UserHandleHistory[]
   leaderboardRows     LeaderboardSnapshot[]
+  entryIntents        EntryIntent[]
+  refunds             Refund[]
+  payouts             Payout[]
+  payoutAccount       PayoutAccount?
+  accountHolds        AccountHold[]
+  identityChecks      IdentityVerification[]
 
   @@map("users")
 }
@@ -368,9 +374,22 @@ model ContestPool {
   name           String   @db.VarChar(80)
   entryClosesAt  DateTime @map("entry_closes_at") @db.Timestamptz
   createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+  // PRD-004 §5: money terms. Frozen once status leaves 'draft' (trigger).
+  status         String    @default("draft") @db.VarChar(12)   // draft | open | closed | cancelled | settled
+  capacity       Int?
+  minEntries     Int?      @map("min_entries")
+  rakeBps        Int?      @map("rake_bps")
+  prizePoolCents BigInt?   @map("prize_pool_cents")
+  paidPlaces     Int?      @map("paid_places")
+  minCashCents   BigInt?   @map("min_cash_cents")
+  prizeAlgorithm String?   @map("prize_algorithm") @db.VarChar(40)
+  publishedAt    DateTime? @map("published_at") @db.Timestamptz
 
-  entries   ContestEntry[]
-  snapshots LeaderboardSnapshot[]
+  entries      ContestEntry[]
+  snapshots    LeaderboardSnapshot[]
+  prizeBands   PrizeTableBand[]
+  entryIntents EntryIntent[]
+  settlement   Settlement?
 
   @@unique([season, kind, buyInCents])
   @@map("contest_pools")
@@ -384,6 +403,7 @@ model ContestEntry {
 
   pool ContestPool @relation(fields: [poolId], references: [id])
   user User        @relation(fields: [userId], references: [id])
+  void ContestEntryVoid?
 
   @@unique([poolId, userId])
   @@index([userId], name: "idx_contest_entries_user")
@@ -422,4 +442,276 @@ model UserHandleHistory {
   @@id([userId, validFrom])
   @@index([season, userId], name: "idx_handle_history_season_user")
   @@map("user_handle_history")
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// PRD-004 — Payments
+// All money is integer cents. No table stores a card number, bank account
+// number, SSN or TIN: only processor / provider references (AC19).
+// ═════════════════════════════════════════════════════════════════════════════
+
+// Published prize table. Immutable once the pool leaves 'draft' (trigger).
+model PrizeTableBand {
+  poolId      String @map("pool_id") @db.Uuid
+  fromPlace   Int    @map("from_place")
+  toPlace     Int    @map("to_place")
+  prizeCents  BigInt @map("prize_cents")
+
+  pool ContestPool @relation(fields: [poolId], references: [id])
+
+  @@id([poolId, fromPlace])
+  @@map("prize_table_bands")
+}
+
+// A checkout attempt. A pending intent with an unexpired hold reserves a seat.
+model EntryIntent {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId         String    @map("user_id") @db.Uuid
+  poolId         String    @map("pool_id") @db.Uuid
+  amountCents    Int       @map("amount_cents")
+  rakeCents      Int       @map("rake_cents")
+  status         String    @db.VarChar(12)   // pending | expired | failed | captured | refunded
+  holdExpiresAt  DateTime  @map("hold_expires_at") @db.Timestamptz
+  processor      String    @db.VarChar(20)
+  checkoutRef    String?   @map("checkout_ref") @db.VarChar(255)
+  paymentRef     String?   @unique @map("payment_ref") @db.VarChar(255)
+  ipRegion       String    @map("ip_region") @db.VarChar(10)
+  billingRegion  String    @map("billing_region") @db.VarChar(10)
+  createdAt      DateTime  @map("created_at") @db.Timestamptz
+  capturedAt     DateTime? @map("captured_at") @db.Timestamptz
+
+  user User        @relation(fields: [userId], references: [id])
+  pool ContestPool @relation(fields: [poolId], references: [id])
+
+  @@index([poolId, status], name: "idx_entry_intents_pool_status")
+  @@index([userId], name: "idx_entry_intents_user")
+  @@map("entry_intents")
+}
+
+// Append-only. A voided entry is excluded from boards and snapshots (PRD-003).
+model ContestEntryVoid {
+  entryId   String   @id @map("entry_id") @db.Uuid
+  reason    String   @db.VarChar(30)
+  voidedAt  DateTime @map("voided_at") @db.Timestamptz
+  voidedBy  String?  @map("voided_by") @db.Uuid
+
+  entry ContestEntry @relation(fields: [entryId], references: [id])
+
+  @@map("contest_entry_voids")
+}
+
+model Refund {
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId       String    @map("user_id") @db.Uuid
+  intentId     String?   @map("intent_id") @db.Uuid
+  paymentRef   String    @unique @map("payment_ref") @db.VarChar(255)
+  amountCents  Int       @map("amount_cents")
+  prizeShareCents Int    @default(0) @map("prize_share_cents") // part returned from processor_clearing:prize
+  reason       String    @db.VarChar(30)
+  status       String    @db.VarChar(12)   // pending | succeeded
+  refundRef    String?   @unique @map("refund_ref") @db.VarChar(255)
+  createdAt    DateTime  @map("created_at") @db.Timestamptz
+  succeededAt  DateTime? @map("succeeded_at") @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("refunds")
+}
+
+model ProcessorEvent {
+  processor    String    @db.VarChar(20)
+  eventId      String    @map("event_id") @db.VarChar(255)
+  type         String    @db.VarChar(30)
+  payload      Json
+  receivedAt   DateTime  @map("received_at") @db.Timestamptz
+  processedAt  DateTime? @map("processed_at") @db.Timestamptz
+
+  @@id([processor, eventId])
+  @@index([processedAt, receivedAt], name: "idx_processor_events_pending")
+  @@map("processor_events")
+}
+
+// Written approval for a processor to move live money (§7.3). Append-only.
+model ProcessorApproval {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  processor    String   @db.VarChar(20)
+  approvedAt   DateTime @map("approved_at") @db.Timestamptz
+  documentRef  String   @map("document_ref") @db.VarChar(255)
+  recordedBy   String   @map("recorded_by") @db.Uuid
+
+  @@map("processor_approvals")
+}
+
+model LedgerAccount {
+  code    String  @id @db.VarChar(80)
+  kind    String  @db.VarChar(12)   // asset | liability | revenue | expense
+  poolId  String? @map("pool_id") @db.Uuid
+  userId  String? @map("user_id") @db.Uuid
+
+  entries LedgerEntry[]
+
+  @@map("ledger_accounts")
+}
+
+// Append-only. Each transaction's entries sum to zero (deferred trigger).
+model LedgerTransaction {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  kind            String   @db.VarChar(30)
+  refType         String   @map("ref_type") @db.VarChar(30)
+  refId           String   @map("ref_id") @db.VarChar(255)
+  idempotencyKey  String   @unique @map("idempotency_key") @db.VarChar(255)
+  occurredAt      DateTime @map("occurred_at") @db.Timestamptz
+  postedAt        DateTime @default(now()) @map("posted_at") @db.Timestamptz
+
+  entries LedgerEntry[]
+
+  @@index([refType, refId], name: "idx_ledger_txn_ref")
+  @@map("ledger_transactions")
+}
+
+model LedgerEntry {
+  id           BigInt @id @default(autoincrement())
+  txnId        String @map("txn_id") @db.Uuid
+  account      String @db.VarChar(80)
+  amountCents  BigInt @map("amount_cents")   // debit positive, credit negative
+
+  txn         LedgerTransaction @relation(fields: [txnId], references: [id])
+  accountRef  LedgerAccount     @relation(fields: [account], references: [code])
+
+  @@index([account], name: "idx_ledger_entries_account")
+  @@index([txnId], name: "idx_ledger_entries_txn")
+  @@map("ledger_entries")
+}
+
+model Settlement {
+  poolId        String    @id @map("pool_id") @db.Uuid
+  snapshotWeek  Int       @map("snapshot_week") @db.SmallInt
+  status        String    @db.VarChar(12)   // computed | approved
+  computedAt    DateTime  @map("computed_at") @db.Timestamptz
+  approvedBy    String?   @map("approved_by") @db.Uuid
+  approvedAt    DateTime? @map("approved_at") @db.Timestamptz
+
+  pool   ContestPool       @relation(fields: [poolId], references: [id])
+  awards SettlementAward[]
+
+  @@map("settlements")
+}
+
+// Immutable once written.
+model SettlementAward {
+  poolId       String @map("pool_id") @db.Uuid
+  entryId      String @map("entry_id") @db.Uuid
+  userId       String @map("user_id") @db.Uuid
+  rank         Int
+  tieSize      Int    @map("tie_size")
+  amountCents  BigInt @map("amount_cents")
+
+  settlement Settlement @relation(fields: [poolId], references: [poolId])
+
+  @@id([poolId, entryId])
+  @@index([userId], name: "idx_settlement_awards_user")
+  @@map("settlement_awards")
+}
+
+model PayoutAccount {
+  userId           String   @id @map("user_id") @db.Uuid
+  processor        String   @db.VarChar(20)
+  accountRef       String   @map("account_ref") @db.VarChar(255)
+  payoutsEnabled   Boolean  @map("payouts_enabled")
+  tinVerified      Boolean  @map("tin_verified")
+  instantEligible  Boolean  @map("instant_eligible")
+  updatedAt        DateTime @map("updated_at") @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("payout_accounts")
+}
+
+model Payout {
+  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId          String    @map("user_id") @db.Uuid
+  poolId          String    @map("pool_id") @db.Uuid
+  attempt         Int
+  amountCents     BigInt    @map("amount_cents")
+  feeCents        BigInt    @default(0) @map("fee_cents")
+  speed           String    @db.VarChar(10)   // standard | instant
+  status          String    @db.VarChar(10)   // pending | sent | paid | failed
+  payoutRef       String?   @unique @map("payout_ref") @db.VarChar(255)
+  idempotencyKey  String    @unique @map("idempotency_key") @db.VarChar(255)
+  failureReason   String?   @map("failure_reason") @db.VarChar(255)
+  createdAt       DateTime  @map("created_at") @db.Timestamptz
+  sentAt          DateTime? @map("sent_at") @db.Timestamptz
+  paidAt          DateTime? @map("paid_at") @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@unique([poolId, userId, attempt])
+  @@index([status], name: "idx_payouts_status")
+  @@map("payouts")
+}
+
+model AccountHold {
+  id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  reason    String    @db.VarChar(30)   // DISPUTE | ADMIN
+  refId     String?   @map("ref_id") @db.VarChar(255)
+  openedAt  DateTime  @map("opened_at") @db.Timestamptz
+  closedAt  DateTime? @map("closed_at") @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId, closedAt], name: "idx_account_holds_user_open")
+  @@map("account_holds")
+}
+
+// Status and references only: never ID numbers or images (§11.1).
+model IdentityVerification {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId         String   @map("user_id") @db.Uuid
+  provider       String   @db.VarChar(30)
+  providerRef    String   @map("provider_ref") @db.VarChar(255)
+  personHash     String   @map("person_hash") @db.Char(64)
+  status         String   @db.VarChar(12)   // verified | rejected | revoked
+  verifiedRegion String   @map("verified_region") @db.VarChar(10)
+  birthDate      DateTime @map("birth_date") @db.Date
+  verifiedAt     DateTime @map("verified_at") @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId], name: "idx_identity_verifications_user")
+  @@map("identity_verifications")
+}
+
+model Jurisdiction {
+  country        String    @db.VarChar(2)
+  region         String    @db.VarChar(10)
+  subRegion      String    @default("") @map("sub_region") @db.VarChar(60)
+  status         String    @db.VarChar(10)   // allowed | blocked
+  minAge         Int       @map("min_age") @db.SmallInt
+  effectiveFrom  DateTime  @map("effective_from") @db.Timestamptz
+  effectiveTo    DateTime? @map("effective_to") @db.Timestamptz
+  sourceNote     String    @map("source_note")
+
+  @@id([country, region, subRegion, effectiveFrom])
+  @@map("jurisdictions")
+}
+
+model TaxThreshold {
+  taxYear         Int    @map("tax_year") @db.SmallInt
+  form            String @db.VarChar(20)
+  thresholdCents  BigInt @map("threshold_cents")
+
+  @@id([taxYear, form])
+  @@map("tax_thresholds")
+}
+
+model BankReconciliation {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  account        String   @db.VarChar(80)
+  statementDate  DateTime @map("statement_date") @db.Date
+  balanceCents   BigInt   @map("balance_cents")
+  enteredBy      String   @map("entered_by") @db.Uuid
+  enteredAt      DateTime @map("entered_at") @db.Timestamptz
+
+  @@map("bank_reconciliations")
 }
