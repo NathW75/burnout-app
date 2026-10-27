@@ -8,7 +8,8 @@ Railway-managed Postgres and Redis:
 | `api` | `node packages/api/dist/index.js` | Health check `GET /healthz` (Postgres + Redis). Custom domain `api.burnoutfantasy.com` (production) or `api-staging.burnoutfantasy.com` (staging), port 8080, added in the dashboard (Railway's config can't register domains). |
 | `worker` | `node packages/api/dist/worker.js` | One replica. Locks, payments, scoring, roster and injury jobs (PRD-006 §11). The only process that calls MySportsFeeds. |
 
-Both services build with `npm run build:server`, which builds every workspace
+Both services run in **us-east4** (Virginia), the same region as Postgres and Redis.
+Both build with `npm run build:server`, which builds every workspace
 package in dependency order. Before each deploy, both run
 `npm run db:migrate` (`prisma migrate deploy`). Prisma takes an advisory lock,
 so whichever service starts first applies the migrations, and neither process

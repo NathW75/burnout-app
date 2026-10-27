@@ -21,6 +21,8 @@
 import { defineRailway, github, postgres, redis, service } from 'railway/iac';
 
 const REPO = 'NathW75/burnout-app';
+// Same region as Postgres and Redis (Virginia): every request makes several DB round trips.
+const REGION = 'us-east4-eqdc4a';
 
 export default defineRailway((ctx, project) => {
   const production = ctx.isEnvironment('production');
@@ -61,6 +63,7 @@ export default defineRailway((ctx, project) => {
     preDeploy: migrate,
     healthcheck: '/healthz', // checks Postgres and Redis
     healthcheckTimeout: 60,
+    replicas: { [REGION]: 1 },
     deploy: { restartPolicyType: 'ON_FAILURE', restartPolicyMaxRetries: 10 },
     env: {
       ...common,
@@ -77,7 +80,7 @@ export default defineRailway((ctx, project) => {
     build,
     start: 'node packages/api/dist/worker.js',
     preDeploy: migrate,
-    replicas: 1,
+    replicas: { [REGION]: 1 },
     deploy: { restartPolicyType: 'ALWAYS' },
     env: {
       ...common,
