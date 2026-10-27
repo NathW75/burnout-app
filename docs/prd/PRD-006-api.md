@@ -1,6 +1,6 @@
 # PRD-006 — API, Accounts and Lineup Submission
 **Burnout League · packages/api**
-Version 1.5 · 2026-10-27
+Version 1.6 · 2026-10-27
 Status: APPROVED 2026-10-27 — scope and auth decisions locked by Nath (§3); rules calls Q1, Q2, Q4 resolved in v1.1
 
 ---
@@ -38,7 +38,7 @@ It computes no points, ranks or prizes. Those come from PRD-002, PRD-003 and PRD
 |---|----------|--------|
 | D1 | **Revocable server-side sessions**, not JWTs. Idle timeout 24 h, hard limit 30 days. Logout, password change and suspension take effect at once. | Decision 2026-10-27 (supersedes Tech Summary §6.1 "JWT 24-hour") |
 | D2 | Web sends the token as an httpOnly cookie. Mobile sends it as a bearer token. It is the same session either way. | Decision 2026-10-27 |
-| D3 | Signing up doesn't require two-factor. **A second factor must be enrolled before the first money action**, because step-up needs one. | Decision 2026-10-27 |
+| D3 | ~~Signing up doesn't require two-factor.~~ **Amended by PRD-007 §8.6 (v1.6): every account needs a confirmed second factor to use the API.** Enrolment is part of sign-up; until it's done the session is enrollment-only (§6.9). | Decision 2026-10-27 |
 | D4 | This build has TOTP plus backup codes. Twilio SMS and WebAuthn passkeys are specified behind the same factor interface and built later. | Decision 2026-10-27 |
 | D5 | Scope is auth, the player table and roster sync, the player pool, the three-gate lineup flow, and leaderboard, payments and admin routes. | Decision 2026-10-27 |
 | D6 | Passwords are hashed with bcrypt, cost 12. | Tech Summary §6.1 |
@@ -92,7 +92,8 @@ It computes no points, ranks or prizes. Those come from PRD-002, PRD-003 and PRD
 
 ### 6.1 Signup and email
 
-- **`POST /v1/auth/signup { email, password, handle }`:**
+- **`POST /v1/auth/signup { email, password, handle, turnstileToken }`:**
+  - With `TURNSTILE_SECRET_KEY` set, the Cloudflare Turnstile token is verified server-side first. A missing or failed token returns `400 TURNSTILE_FAILED` before anything is created; Cloudflare being unreachable also fails (closed). No secret means no check (local and tests). PRD-007 §8.4.
   - The email is stored lower-cased, and the password must be 12 to 128 characters.
   - The handle follows PRD-003 §7 and is recorded in handle history as the signup handle. A taken handle returns `409` (handles are public, so this reveals nothing about emails).
   - The response is **`202` whether or not the email already exists**, and it does not sign the user in. A new account gets a verification email; an existing one gets an "you already have an account" email. The client calls `/auth/login` next, and sign-in works before the email is verified. This is the only way the "same response" rule (§4) can hold, because a signed-in session can't be faked for an existing email.
@@ -105,7 +106,7 @@ It computes no points, ranks or prizes. Those come from PRD-002, PRD-003 and PRD
 
 - **`POST /v1/auth/login { email, password, client }`:**
   - Wrong email and wrong password give the same `401 INVALID_CREDENTIALS`.
-  - With no factor enrolled, the session is issued straight away.
+  - With no factor enrolled, an **enrollment-only** session is issued and the response says `{ mfaEnrollmentRequired: true }` (§6.9).
   - With a factor enrolled, a *pending* session is issued and the response says `{ mfaRequired: true }`.
 - **`POST /v1/auth/login/mfa { code }`** turns a pending session into a full one. Five wrong codes revoke the pending session. A correct code is a fresh second-factor check, so it also sets `step_up_at` (§6.5).
 - **Rate limits** (Redis counters, all returning a generic `429`):
@@ -120,7 +121,8 @@ It computes no points, ranks or prizes. Those come from PRD-002, PRD-003 and PRD
 - **Confirm:** `POST /v1/auth/mfa/totp/confirm { code }` activates the factor and returns **10 backup codes, shown once**. Only their hashes are stored, and each works once.
 - **Encryption at rest:** secrets are encrypted with AES-256-GCM using `TOTP_ENCRYPTION_KEY` (a Railway env var).
 - **Replay protection:** the last accepted time step is stored, so a code can't be used twice, not even once for sign-in and again for step-up.
-- **Changes:** replacing the factor or regenerating backup codes requires step-up. Removing the only factor isn't self-service in v1; it goes through support.
+- **Setup needs a verified email** (`EMAIL_UNVERIFIED`), so sign-up runs: account → verify → authenticator → backup codes.
+- **Changes:** replacing the factor or regenerating backup codes requires step-up. Removing the only factor isn't self-service; it is an admin reset (§6.7) after an identity check.
 
 ### 6.4 Later factors (specified, not built)
 
@@ -148,6 +150,7 @@ It computes no points, ranks or prizes. Those come from PRD-002, PRD-003 and PRD
 
 - `users.role` is `user` or `admin`. Admin routes require the admin role **and** step-up.
 - `users.status` is `active` or `suspended`. A suspended user's sessions are refused.
+- **Factor reset** (`POST /v1/admin/users/:id/factors/reset { reason }`, PRD-007 §8.6): disables the user's factors, revokes their backup codes and sessions, writes `MFA_RESET` with the admin's reason, and emails the user. Their next sign-in is enrollment-only. An admin can't reset their own factors (`409 SELF_RESET`).
 
 ### 6.8 Audit
 
@@ -170,8 +173,17 @@ It computes no points, ranks or prizes. Those come from PRD-002, PRD-003 and PRD
 | `SUBMISSION_REPOINTED` |
 | `SUBMISSION_VOIDED` |
 | `ADMIN_ACTION` |
+| `MFA_RESET` |
 
 Events with no known user are recorded under the system user (all-zero UUID).
+
+### 6.9 A second factor for all use (PRD-007 §8.6)
+
+- A signed-in session without a confirmed factor is **enrollment-only**. A router-level gate runs before every handler and answers it `403 MFA_ENROLLMENT_REQUIRED` (or `EMAIL_UNVERIFIED` first, while the email is unverified), except on the sign-up steps:
+  - `POST /auth/signup`, `/auth/verify-email`, `/auth/verify-email/resend`, `/auth/login`, `/auth/login/mfa`, `/auth/logout`, `/auth/logout-all`, `/auth/password/reset-request`, `/auth/password/reset`, `/auth/mfa/totp/setup`, `/auth/mfa/totp/confirm`
+  - `GET /me` (reports `mfaEnrolled: false`), `GET /time`, `POST /feedback`
+- Confirming the factor unlocks the same session at once.
+- The test suite enumerates every route from the router, so a new route can't skip the gate.
 
 ---
 
@@ -337,6 +349,7 @@ The user can recompute it from their email.
 | `GET /v1/me/sessions` | |
 | `DELETE /v1/me/sessions/:id` | |
 | `PUT /v1/me/handle` | |
+| `POST /v1/feedback { body }` | 1–2,000 characters; screen from `X-Current-Screen`; 10 per user per hour; allowed for enrollment-only sessions. Returns `201 { id }` (PRD-007 §10) |
 
 ### 10.2 Players and lineups
 
@@ -348,6 +361,21 @@ The user can recompute it from their email.
 | `POST /v1/lineup-confirmations/:id/acknowledge` |
 | `POST /v1/lineup-confirmations/:id/confirm` |
 | `GET /v1/receipts/:id` |
+
+### 10.2.1 Web app reads (PRD-007 §8)
+
+| Route | Notes |
+|-------|-------|
+| `GET /v1/time` | `{ serverTime }`. Public, `Cache-Control: no-store`: the official clock |
+| `GET /v1/seasons/current` | `{ season, currentWeek, weeks: [{ week, firstLock, lastLock, status }] }`. The current week is the next week with a window still to lock; status is `upcoming`, `live` or `complete` |
+| `GET /v1/seasons/:season/weeks/:week/windows` | `{ windows: [{ id, label, scheduledEt, status, games: [{ away, home }] }] }` in kickoff order |
+| `GET /v1/seasons/:season/leaderboard?offset&limit` | Season field board: everyone with a confirmed lineup, ranked on season centipoints with `RANK()` (ties share a rank, display order by handle), my row pinned as `me`. Handles only. Cached in Redis for 30 s; `ETag` / `304` |
+| `GET /v1/seasons/:season/leaderboard/me` | My field row (or `null`) and the field size |
+| `GET /v1/seasons/:season/weeks/:week/managers/:handle/lineup` | Post-lock reveal: another manager's **locked, non-voided** slots only, filtered in SQL; the rest come back `HIDDEN` with no player. My own lineup in full (`SUBMITTED`, `LOCKED`, `VOIDED`, `EMPTY`) |
+| `GET /v1/me/burns?season=` | Every burned player: week, slot, name, position, team, points, window, burned time |
+| `GET /v1/me/notifications?before&limit` | Inbox, newest first, with `unread` and `nextBefore` |
+| `POST /v1/me/notifications/read` | `{ ids }` or `{ all: true }`; my items only. Read state (`read_at`) is separate from delivery (`dispatched_at`) |
+| `GET /v1/me/receipts?season=` | Receipt summaries `{ id, week, confirmedAt, sha256 }`, newest first |
 
 ### 10.3 Leaderboard
 
@@ -392,6 +420,9 @@ Setup: `docs/deploy/RAILWAY.md`.
 | `POST /v1/admin/transfers` |
 | `POST /v1/admin/identity-verifications` (manual verification until an identity provider is chosen) |
 | `POST /v1/admin/users/:id/suspend` |
+| `POST /v1/admin/users/:id/factors/reset` (§6.7) |
+| `GET /v1/admin/feedback?reviewed&category&severity&before&limit` |
+| `POST /v1/admin/feedback/:id/review { reviewed }` |
 
 ### 10.6 Ops
 
@@ -416,6 +447,7 @@ Setup: `docs/deploy/RAILWAY.md`.
 | Roster sync and re-resolve (§7.3) | 3:00 AM ET nightly and Tuesday 11:59 PM ET |
 | Injury reports and re-resolve (§7.3) | Every 15 minutes Wednesday–Sunday (Tech Summary §5) |
 | Season schedule import and re-resolve (§11.6) | At worker startup, then hourly at :30 |
+| Feedback tagging (PRD-007 §10): up to 10 untagged items per run through the Anthropic Messages API (`FEEDBACK_MODEL`); the reply is validated against the spec's schema; the feedback text is fenced as untrusted input and never logged; 3 attempts per item | Every 15 seconds, only when `ANTHROPIC_API_KEY` is set (quiet when idle) |
 
 Each job:
 - runs under a Postgres advisory lock, so two workers never run it at once;
@@ -469,6 +501,9 @@ The `schedule` job builds `game_windows` and `nfl_games` from the MySportsFeeds 
 | `submission_receipts` | Adds `lineup_sha256`, and becomes append-only |
 | `security_audit_log` | Becomes append-only (the PRD-001 reopen check reads it, and nothing ever changes it) |
 | `notification_queue.kind` | Gains `LINEUP_RECEIPT`, `SUBMISSION_REPOINTED`, `SUBMISSION_VOIDED` and `SECURITY_ALERT` |
+| `notification_queue` (v1.6) | Adds `read_at` and an index on `(user_id, created_at DESC)` for the inbox |
+| `feedback` (v1.6) | New: user, screen, body (CHECK 1–2,000 chars), `tags` (JSONB, GIN index), `classified_at`, `classify_attempts`, review fields |
+| `season_submissions` (v1.6) | Index on `(season, user_id)` for the field board |
 
 ---
 
@@ -487,6 +522,9 @@ The `schedule` job builds `game_windows` and `nfl_games` from the MySportsFeeds 
 | `SENDGRID_API_KEY` | Mailer; the dispatcher comes later |
 | `PAYMENTS_LIVE` | |
 | `PORT` | |
+| `TURNSTILE_SECRET_KEY` | api. Sign-up bot check (§6.1); unset = no check, with a warning |
+| `ANTHROPIC_API_KEY` | worker, optional. Feedback tagging; unset = stored untagged |
+| `FEEDBACK_MODEL` | worker. Default `claude-haiku-5-5` |
 
 ---
 
@@ -559,6 +597,7 @@ Every critical rule also gets a mutation check, as with PRD-001 to PRD-004.
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.6 | 2026-10-27 | PRD-007 §8: D3 amended (a second factor for all use, §6.9; admin factor reset §6.7); Turnstile on sign-up; web app reads (§10.2.1); feedback and its worker tagging; `read_at`, `feedback`. |
 | 1.5 | 2026-10-27 | §11.6: season schedule import. One window per exact kickoff; frozen windows fixed (enforced by a trigger); picks re-resolved after changes; review list for decisions the import won't make; backfill through the normal jobs; pools close at the Week 3 lock at publish. |
 | 1.4 | 2026-10-27 | Free play is two weeks: the paid-entry cutoff moves from the Week 4 lock to the Week 3 lock (§9.0, Q4; PRD-003 §3, PRD-004 D7). |
 | 1.3 | 2026-10-27 | Railway deploy: §10.4 edge trust. The cf-* location and client-IP headers count only with the Cloudflare edge secret; otherwise they're dropped (checkout blocked, proxy IP used). |

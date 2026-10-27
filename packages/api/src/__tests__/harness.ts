@@ -8,7 +8,7 @@ import request from 'supertest';
 import type { Express } from 'express';
 import { createPaymentsService, FakeProcessor, type PaymentsService } from '@burnout/payments';
 import { createTestDb, createTestRedis, SEASON, TestClock, type TestDb, type TestRedis } from '@burnout/test-support';
-import { createApp } from '../app';
+import { createApp, type CreateAppDeps } from '../app';
 import { totp } from '../auth/totp';
 import type { ApiConfig, ApiContext } from '../context';
 import { MemoryMailer } from '../mailer';
@@ -30,7 +30,7 @@ export interface World {
   close: () => Promise<void>;
 }
 
-export async function createWorld(config: Partial<ApiConfig> = {}): Promise<World> {
+export async function createWorld(config: Partial<ApiConfig> = {}, deps: Pick<CreateAppDeps, 'verifyTurnstile'> = {}): Promise<World> {
   const t = await createTestDb();
   const r = await createTestRedis();
   const clock = new TestClock(T0);
@@ -40,6 +40,7 @@ export async function createWorld(config: Partial<ApiConfig> = {}): Promise<Worl
   const payments = await createPaymentsService({ db: t.db, processor: fake, getServerTime: clock.get, env: {}, log });
   const mailer = new MemoryMailer();
   const { app, ctx } = createApp({
+    ...deps,
     db: t.db, redis: r.redis, namespace: r.namespace, payments, mailer, log,
     totpEncryptionKey: randomBytes(32).toString('base64'),
     getServerTime: clock.get,
@@ -89,7 +90,11 @@ export function tokenFromLink(link: string): string {
   return new URL(link).searchParams.get('token')!;
 }
 
-/** Signs up, verifies the email, signs in; optionally enrolls TOTP. */
+/**
+ * Signs up, verifies the email, signs in and enrolls TOTP, which every
+ * account needs to use the API (PRD-007 §8.6). `totp: false` stops after
+ * sign-in, leaving an enrollment-only session.
+ */
 export async function account(
   w: World,
   o: { handle?: string; verify?: boolean; totp?: boolean; kind?: 'web' | 'mobile'; admin?: boolean } = {}
@@ -107,7 +112,7 @@ export async function account(
   if (o.admin) await w.t.sql(`UPDATE users SET role = 'admin' WHERE id = $1`, [id]);
   await login(c, email);
   const acc: Account = { client: c, userId: id, email, handle };
-  if (o.totp) {
+  if (o.totp !== false && o.verify !== false) {
     const setup = await c.post('/v1/auth/mfa/totp/setup', { password: PASSWORD });
     if (setup.status !== 200) throw new Error(`totp setup ${setup.status} ${JSON.stringify(setup.body)}`);
     acc.totpSecret = setup.body.secret;
@@ -121,7 +126,22 @@ export async function account(
 /** Sign in again after a test jumps the clock past the 24 h idle timeout (D1 working as designed). */
 export async function relogin(a: Account) {
   const res = await login(a.client, a.email);
-  if (res.status !== 200 || res.body.mfaRequired) throw new Error(`relogin ${res.status}`);
+  if (res.status !== 200) throw new Error(`relogin ${res.status}`);
+  if (res.body.mfaRequired) {
+    const mfa = await a.client.post('/v1/auth/login/mfa', { code: nextCode(a.client.w, a) });
+    if (mfa.status !== 200) throw new Error(`relogin mfa ${mfa.status} ${JSON.stringify(mfa.body)}`);
+  }
+}
+
+/** Full sign-in for another device of an enrolled account: password, then a fresh code. */
+export async function signIn(c: Client, a: Account) {
+  const res = await login(c, a.email);
+  if (res.status !== 200) throw new Error(`sign-in ${res.status}`);
+  if (res.body.mfaRequired) {
+    const mfa = await c.post('/v1/auth/login/mfa', { code: nextCode(c.w, a) });
+    if (mfa.status !== 200) throw new Error(`sign-in mfa ${mfa.status} ${JSON.stringify(mfa.body)}`);
+  }
+  return res;
 }
 
 export async function login(c: Client, email: string, password = PASSWORD) {

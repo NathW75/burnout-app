@@ -1,6 +1,6 @@
 # PRD-003 — Leaderboard
 **Burnout League · packages/leaderboard**
-Version 1.4 · 2026-10-27
+Version 1.5 · 2026-10-27
 Status: APPROVED — implement against this spec (v1.4 changes: see change log)
 
 ---
@@ -105,6 +105,12 @@ Modeled on the PGA Tour's FedEx Cup projected standings: every row shows where t
 - The rule is enforced in the server query (`locked_at IS NOT NULL` for any lineup that is not the viewer's own), never by the client hiding data. T&C §11.2 makes pre-lock anonymity a legal commitment.
 - Text only, no headshots or logos (NIL).
 - Weekly contest lineups are not part of this reveal.
+
+### 6.1 The season field board (PRD-007 §8.1)
+
+Free play has no pools, so PRD-007 adds a **season field board**: everyone with at least one confirmed lineup this season, ranked on season points with the §4 rules (`RANK()` on exact centipoints, ties share a rank, display order by handle). It is not prize standings; prizes come only from pool boards.
+
+The same reveal rule extends to the field (`GET /v1/seasons/:season/weeks/:week/managers/:handle/lineup`), with one difference: any signed-in manager may look, and **only locked, non-voided** slots are shown. A voided slot comes back "Hidden" like an unlocked one, so nothing about a reopened slot leaks. The filter is in the SQL; a manager's own lineup is shown in full.
 
 ---
 
@@ -249,6 +255,9 @@ Resolved 2026-10-26:
 ---
 
 ## Change log
+
+**v1.5 — 2026-10-27**
+- §6.1: the season field board and its reveal (PRD-007 §8.1): locked, non-voided slots only, for any signed-in manager
 
 **v1.4 — 2026-10-27**
 - §3: free play shortened to two weeks; late entry closes at the **Week 3 lock** (was Week 4)

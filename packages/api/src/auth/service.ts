@@ -249,6 +249,7 @@ export function hasFreshStepUp(ctx: ApiContext, s: SessionInfo): boolean {
 /** Starts TOTP enrolment. Replacing an active factor needs step-up. */
 export async function totpSetup(ctx: ApiContext, s: SessionInfo, password: string): Promise<{ secret: string; otpauthUrl: string }> {
   await verifyPasswordFor(ctx, s.userId, password);
+  if (!s.emailVerified) throw forbidden('EMAIL_UNVERIFIED', 'Verify your email first');
   if (s.hasFactor && !hasFreshStepUp(ctx, s)) throw forbidden('STEP_UP_REQUIRED', 'Confirm with your current second factor first');
   const secret = newTotpSecret();
   const now = ctx.now();
@@ -385,6 +386,29 @@ export async function revokeOwnSession(ctx: ApiContext, s: SessionInfo, sessionI
     if (n) await audit(tx, { event: 'SESSIONS_REVOKED', userId: s.userId, at: ctx.now(), metadata: { sessionId } });
     return n > 0;
   });
+}
+
+/**
+ * Admin factor reset (PRD-007 §8.6): for a user who lost both their
+ * authenticator and their backup codes, after an identity check. Disables
+ * every factor and backup code, revokes every session, audits the admin's
+ * reason and emails the user. Their next sign-in is enrollment-only.
+ */
+export async function resetFactors(ctx: ApiContext, admin: SessionInfo, userId: string, reason: string): Promise<{ factorsDisabled: number; sessionsRevoked: number }> {
+  const out = await ctx.db.transaction(async (tx) => {
+    const now = ctx.now();
+    const [u] = await tx.query<{ email: string }>(`SELECT email FROM users WHERE id = $1::uuid FOR UPDATE`, [userId]);
+    if (!u) throw new HttpError(404, 'NOT_FOUND', 'No such user');
+    if (userId === admin.userId) throw new HttpError(409, 'SELF_RESET', 'Another admin must reset your factors');
+    const factors = await tx.query(`UPDATE auth_factors SET disabled_at = $2 WHERE user_id = $1::uuid AND disabled_at IS NULL RETURNING 1`, [userId, now]);
+    await tx.query(`UPDATE backup_codes SET revoked_at = $2 WHERE user_id = $1::uuid AND used_at IS NULL AND revoked_at IS NULL`, [userId, now]);
+    await invalidateUserSessions(ctx, tx, userId);
+    const n = await revokeSessions(ctx, tx, { userId });
+    await audit(tx, { event: 'MFA_RESET', userId, performedBy: admin.userId, at: now, metadata: { reason, factorsDisabled: factors.length, sessionsRevoked: n } });
+    return { email: u.email, factorsDisabled: factors.length, sessionsRevoked: n };
+  });
+  await ctx.mailer.send({ to: out.email, template: 'mfa_reset', data: { link: `${ctx.config.appBaseUrl}/login` } });
+  return { factorsDisabled: out.factorsDisabled, sessionsRevoked: out.sessionsRevoked };
 }
 
 export async function suspendUser(ctx: ApiContext, admin: SessionInfo, userId: string, reason: string): Promise<void> {

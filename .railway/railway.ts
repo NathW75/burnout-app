@@ -30,13 +30,15 @@ export default defineRailway((ctx, project) => {
   const cache = redis('Redis');
   const secret = (name: string) => ctx.shared[name];
   const source = github(REPO, { branch: 'main', checkSuites: production });
+  // The web app (PRD-007 §4): email links and checkout returns land here.
+  const appOrigin = production ? 'https://app.burnoutfantasy.com' : 'https://app-staging.burnoutfantasy.com';
 
   // Both processes load the same runtime (packages/api/src/runtime.ts).
   const common = {
     DATABASE_URL: db.env.DATABASE_URL,
     REDIS_URL: cache.env.REDIS_URL,
     CURRENT_SEASON: '2026-2027-regular',
-    APP_BASE_URL: 'https://burnoutfantasy.com',
+    APP_BASE_URL: appOrigin,
     MAIL_FROM: 'no-reply@burnoutfantasy.com',
     PAYMENTS_LIVE: 'false', // no live processor until written approval (PRD-004 §7.3)
     TOTP_ENCRYPTION_KEY: secret('TOTP_ENCRYPTION_KEY'),
@@ -68,9 +70,10 @@ export default defineRailway((ctx, project) => {
     env: {
       ...common,
       PORT: '8080', // the custom domain (added in the dashboard) targets this port
-      CORS_ORIGINS: 'https://burnoutfantasy.com,https://www.burnoutfantasy.com',
+      CORS_ORIGINS: `${appOrigin},https://burnoutfantasy.com,https://www.burnoutfantasy.com`,
       TRUST_PROXY: '1', // Railway's edge; Cloudflare is verified by EDGE_SHARED_SECRET instead
       EDGE_SHARED_SECRET: secret('EDGE_SHARED_SECRET'), // PRD-006 §10.4; must match the Cloudflare rule
+      TURNSTILE_SECRET_KEY: secret('TURNSTILE_SECRET_KEY'), // PRD-007 §8.4: sign-up bot check
     },
   });
 
@@ -86,6 +89,8 @@ export default defineRailway((ctx, project) => {
       ...common,
       MSF_API_KEY: secret('MSF_API_KEY'), // MySportsFeeds: only the worker calls it
       MSF_BASE_URL: 'https://api.mysportsfeeds.com/v2.1/pull/nfl',
+      ANTHROPIC_API_KEY: secret('ANTHROPIC_API_KEY'), // feedback tagging (PRD-007 §10); empty = stored untagged
+      FEEDBACK_MODEL: 'claude-haiku-5-5',
     },
   });
 

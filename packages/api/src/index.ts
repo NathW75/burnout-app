@@ -9,6 +9,7 @@ async function main() {
   // Behind Cloudflare → Railway. Without the secret nothing from the edge is trusted (PRD-006 §10.4).
   const edgeSecret = process.env.EDGE_SHARED_SECRET ?? '';
   if (!edgeSecret) jsonLog('warn', 'EDGE_SHARED_SECRET not set: location headers are ignored, so paid checkout is blocked');
+  if (!process.env.TURNSTILE_SECRET_KEY) jsonLog('warn', 'TURNSTILE_SECRET_KEY not set: sign-up has no bot check');
   const { app } = createApp({
     db: rt.db,
     redis: rt.redis,
@@ -23,6 +24,7 @@ async function main() {
       corsOrigins: (process.env.CORS_ORIGINS ?? '').split(',').map((s) => s.trim()).filter(Boolean),
       appBaseUrl: process.env.APP_BASE_URL ?? 'https://burnoutfantasy.com',
       currentSeason: process.env.CURRENT_SEASON ?? '2026-2027-regular',
+      turnstileSecret: process.env.TURNSTILE_SECRET_KEY || null,
     },
   });
   const port = Number(process.env.PORT ?? 3000);

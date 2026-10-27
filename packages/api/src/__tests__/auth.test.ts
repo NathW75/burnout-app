@@ -6,7 +6,9 @@
 import { totp } from '../auth/totp';
 import { sha256Hex } from '../auth/crypto';
 import { describeDbRedis, SEASON } from '@burnout/test-support';
-import { account, Client, createWorld, login, nextCode, ORIGIN, PASSWORD, stepUp, tokenFromLink, type World } from './harness';
+import { ENROLLMENT_ROUTES } from '../http/middleware';
+import { buildRouter } from '../http/routes';
+import { account, buildWeek, Client, createWorld, login, nextCode, ORIGIN, PASSWORD, signIn, stepUp, tokenFromLink, type World } from './harness';
 
 const MIN = 60_000;
 const HOUR = 60 * MIN;
@@ -95,9 +97,9 @@ describeDbRedis('PRD-006 auth (HTTP, Postgres + Redis)', () => {
   it('AC3: logout-all, password change and password reset revoke the right sessions', async () => {
     const a = await account(w, { kind: 'mobile' });
     const second = new Client(w, 'mobile');
-    await login(second, a.email);
+    await signIn(second, a);
     const third = new Client(w, 'web');
-    await login(third, a.email);
+    await signIn(third, a);
     for (const c of [a.client, second, third]) expect((await c.get('/v1/me')).status).toBe(200);
 
     // Password change: every other session dies, this one lives.
@@ -149,7 +151,7 @@ describeDbRedis('PRD-006 auth (HTTP, Postgres + Redis)', () => {
 
     const c = await account(w);
     const other = new Client(w);
-    await login(other, c.email);
+    await signIn(other, c);
     const list = await c.client.get('/v1/me/sessions');
     expect(list.body.sessions).toHaveLength(2);
     const target = list.body.sessions.find((s: { current: boolean }) => !s.current);
@@ -160,7 +162,7 @@ describeDbRedis('PRD-006 auth (HTTP, Postgres + Redis)', () => {
 
   // ── AC4 ───────────────────────────────────────────────────────────────────
   it('AC4: TOTP enrolment needs the password, returns 10 backup codes, then sign-in needs the second factor', async () => {
-    const a = await account(w, { handle: 'twofa' });
+    const a = await account(w, { handle: 'twofa', totp: false });
     expect((await a.client.post('/v1/auth/mfa/totp/setup', { password: 'wrong password!!' })).status).toBe(401);
     const setup = await a.client.post('/v1/auth/mfa/totp/setup', { password: PASSWORD });
     expect(setup.body.otpauthUrl).toContain(`secret=${setup.body.secret}`);
@@ -228,7 +230,7 @@ describeDbRedis('PRD-006 auth (HTTP, Postgres + Redis)', () => {
     const unverified = await account(w, { verify: false });
     expect((await unverified.client.post(route, req)).body.error).toBe('EMAIL_UNVERIFIED');
 
-    const noFactor = await account(w);
+    const noFactor = await account(w, { totp: false });
     expect((await noFactor.client.post(route, req)).body.error).toBe('MFA_ENROLLMENT_REQUIRED');
     expect((await noFactor.client.post('/v1/auth/step-up', { code: '123456' })).body.error).toBe('MFA_ENROLLMENT_REQUIRED');
 
@@ -279,7 +281,7 @@ describeDbRedis('PRD-006 auth (HTTP, Postgres + Redis)', () => {
     expect(cookie).toMatch(/bl_session=/);
     expect(cookie).toMatch(/HttpOnly/);
     expect(cookie).toMatch(/SameSite=Lax/);
-    expect(res.body).toEqual({ mfaRequired: false });
+    expect(res.body).toEqual({ mfaRequired: false, mfaEnrollmentRequired: true });
   });
 
   // ── AC13 ──────────────────────────────────────────────────────────────────
@@ -412,5 +414,94 @@ describeDbRedis('PRD-006 §10.4 edge trust (HTTP, Postgres + Redis)', () => {
     } finally {
       await strict.close();
     }
+  });
+});
+
+describeDbRedis('PRD-007 §8.6: a second factor for all use (HTTP, Postgres + Redis)', () => {
+  let w: World;
+  beforeEach(async () => {
+    w = await createWorld();
+  });
+  afterEach(async () => {
+    await w.close();
+  });
+
+  // Every route in the router, with placeholder params.
+  const routes = () =>
+    (buildRouter(w.ctx).stack as Array<{ route?: { path: string; methods: Record<string, boolean> } }>)
+      .filter((l) => l.route)
+      .flatMap((l) => Object.keys(l.route!.methods).map((m) => ({ method: m.toUpperCase(), path: l.route!.path })));
+  const fill = (path: string) => path.replace(/:season/g, SEASON).replace(/:week/g, '8').replace(/:handle/g, 'someone').replace(/:[a-zA-Z]+/g, '00000000-0000-4000-8000-000000000000');
+  const call = (c: Client, method: string, path: string) => {
+    const url = `/v1${fill(path)}`;
+    if (method === 'GET') return c.get(url);
+    if (method === 'PUT') return c.put(url, {});
+    if (method === 'DELETE') return c.del(url);
+    return c.post(url, {});
+  };
+
+  it('an enrollment-only session is refused by every route except the sign-up steps (enumerated from the router)', async () => {
+    const a = await account(w, { totp: false });
+    const all = routes();
+    expect(all.length).toBeGreaterThan(40);
+    const gated = all.filter((r) => !ENROLLMENT_ROUTES.has(`${r.method} ${r.path}`));
+    expect(gated.length).toBeGreaterThan(30);
+    for (const r of gated) {
+      const res = await call(a.client, r.method, r.path);
+      expect([`${r.method} ${r.path}`, res.status, res.body.error]).toEqual([`${r.method} ${r.path}`, 403, 'MFA_ENROLLMENT_REQUIRED']);
+    }
+    // The allowed steps still answer it.
+    expect((await a.client.get('/v1/me')).body).toMatchObject({ mfaEnrolled: false, emailVerified: true });
+  });
+
+  it('enrolling unlocks the same session at once (cache dropped); an unverified user is told to verify first and cannot enroll', async () => {
+    await buildWeek(w);
+    const a = await account(w, { totp: false });
+    const lineup = `/v1/seasons/${SEASON}/weeks/8/lineup`;
+    expect((await a.client.get(lineup)).body.error).toBe('MFA_ENROLLMENT_REQUIRED'); // also warms the session cache
+    const setup = await a.client.post('/v1/auth/mfa/totp/setup', { password: PASSWORD });
+    expect((await a.client.post('/v1/auth/mfa/totp/confirm', { code: totp(setup.body.secret, w.clock.get()) })).status).toBe(200);
+    expect((await a.client.get(lineup)).status).toBe(200);
+
+    const u = await account(w, { verify: false });
+    expect((await u.client.get(lineup)).body.error).toBe('EMAIL_UNVERIFIED');
+    expect((await u.client.post('/v1/auth/mfa/totp/setup', { password: PASSWORD })).body.error).toBe('EMAIL_UNVERIFIED');
+    expect((await u.client.post('/v1/auth/verify-email/resend')).status).toBe(202);
+  });
+
+  it('sign-in tells the client which step is next', async () => {
+    const enrolled = await account(w);
+    const pending = await account(w, { totp: false });
+    expect((await login(new Client(w), enrolled.email)).body).toEqual({ mfaRequired: true, mfaEnrollmentRequired: false });
+    expect((await login(new Client(w), pending.email)).body).toEqual({ mfaRequired: false, mfaEnrollmentRequired: true });
+  });
+
+  it('admin factor reset: needs admin + step-up, not self; disables factors and codes, revokes sessions, audits, emails; next sign-in is enrollment-only', async () => {
+    await buildWeek(w);
+    const admin = await account(w, { admin: true });
+    const user = await account(w);
+    const route = `/v1/admin/users/${user.userId}/factors/reset`;
+    expect((await user.client.post(route, { reason: 'lost phone and codes' })).status).toBe(403);
+    expect((await admin.client.post(route, { reason: 'lost phone and codes' })).body.error).toBe('STEP_UP_REQUIRED');
+    await stepUp(w, admin);
+    expect((await admin.client.post(`/v1/admin/users/${admin.userId}/factors/reset`, { reason: 'myself' })).body.error).toBe('SELF_RESET');
+
+    const res = await admin.client.post(route, { reason: 'ID checked on video call' });
+    expect(res.body).toEqual({ factorsDisabled: 1, sessionsRevoked: 1 });
+    expect((await user.client.get('/v1/me')).status).toBe(401);
+    const [{ live }] = await w.t.sql<{ live: number }>(
+      `SELECT (SELECT count(*) FROM auth_factors WHERE user_id = $1 AND disabled_at IS NULL) + (SELECT count(*) FROM backup_codes WHERE user_id = $1 AND used_at IS NULL AND revoked_at IS NULL) AS live`, [user.userId]);
+    expect(Number(live)).toBe(0);
+    const [audit] = await w.t.sql<{ performed_by: string; reason: string }>(
+      `SELECT performed_by::text, metadata->>'reason' AS reason FROM security_audit_log WHERE event_type = 'MFA_RESET' AND user_id = $1`, [user.userId]);
+    expect(audit).toEqual({ performed_by: admin.userId, reason: 'ID checked on video call' });
+    expect(w.mailer.last('mfa_reset', user.email)).toBeDefined();
+
+    const again = new Client(w);
+    expect((await login(again, user.email)).body).toEqual({ mfaRequired: false, mfaEnrollmentRequired: true });
+    expect((await again.get(`/v1/seasons/${SEASON}/weeks/8/lineup`)).body.error).toBe('MFA_ENROLLMENT_REQUIRED');
+    const setup = await again.post('/v1/auth/mfa/totp/setup', { password: PASSWORD });
+    expect((await again.post('/v1/auth/mfa/totp/confirm', { code: totp(setup.body.secret, w.clock.get()) })).status).toBe(200);
+    expect((await again.get(`/v1/seasons/${SEASON}/weeks/8/lineup`)).status).toBe(200);
   });
 });

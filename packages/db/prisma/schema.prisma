@@ -49,6 +49,8 @@ model User {
   backupCodes         BackupCode[]
   authTokens          AuthToken[]
   lineupConfirmations LineupConfirmation[]
+  feedback            Feedback[] @relation("FeedbackAuthor")
+  feedbackReviewed    Feedback[] @relation("FeedbackReviewer")
 
   @@map("users")
 }
@@ -118,6 +120,7 @@ model SeasonSubmission {
 
   @@unique([userId, week, season, slotKey])
   @@index([gameWindowId, lockedAt], name: "idx_season_submissions_window")
+  @@index([season, userId], name: "idx_season_submissions_season_user")
   @@map("season_submissions")
 }
 
@@ -235,9 +238,34 @@ model NotificationQueue {
   payload       Json
   createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz
   dispatchedAt  DateTime? @map("dispatched_at") @db.Timestamptz
+  readAt        DateTime? @map("read_at") @db.Timestamptz   // PRD-007 §8.3 in-app inbox
 
   @@index([dispatchedAt, createdAt], name: "idx_notification_queue_pending")
+  @@index([userId, createdAt(sort: Desc)], name: "idx_notification_queue_user_created")
   @@map("notification_queue")
+}
+
+/// PRD-007 §8.5 / SPEC-feedback-system.md. Body length 1–2000 is a CHECK in the
+/// migration; the partial index on unclassified rows and the GIN index on tags are raw SQL.
+model Feedback {
+  id               String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId           String    @map("user_id") @db.Uuid
+  screen           String    @db.VarChar(100)
+  body             String
+  submittedAt      DateTime  @default(now()) @map("submitted_at") @db.Timestamptz
+  tags             Json?
+  classifiedAt     DateTime? @map("classified_at") @db.Timestamptz
+  classifyAttempts Int       @default(0) @map("classify_attempts") @db.SmallInt
+  reviewed         Boolean   @default(false)
+  reviewedAt       DateTime? @map("reviewed_at") @db.Timestamptz
+  reviewedBy       String?   @map("reviewed_by") @db.Uuid
+
+  user     User  @relation("FeedbackAuthor", fields: [userId], references: [id])
+  reviewer User? @relation("FeedbackReviewer", fields: [reviewedBy], references: [id], onDelete: SetNull)
+
+  @@index([submittedAt(sort: Desc)], name: "idx_feedback_submitted")
+  @@index([reviewed], name: "idx_feedback_reviewed")
+  @@map("feedback")
 }
 
 // ═════════════════════════════════════════════════════════════════════════════

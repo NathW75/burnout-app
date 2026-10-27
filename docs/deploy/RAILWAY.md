@@ -47,6 +47,8 @@ in the repo, in chat or in project docs.
 | `EDGE_SHARED_SECRET` | api | Random. Must match the Cloudflare rule below. Unset means paid checkout is blocked. |
 | `MSF_API_KEY` | worker | Your (rotated) MySportsFeeds key. |
 | `SENDGRID_API_KEY` | both | SendGrid key. Unset means emails aren't sent; a warning is logged. |
+| `TURNSTILE_SECRET_KEY` | api | Cloudflare Turnstile **secret key** for the sign-up widget (Cloudflare → Turnstile → the `burnoutfantasy.com` widget). Unset means sign-up has no bot check; a warning is logged. |
+| `ANTHROPIC_API_KEY` | worker | Optional. Tags feedback (PRD-007 §10). Empty means feedback is stored untagged. |
 
 Generate a random value in cmd (once per variable, per environment):
 

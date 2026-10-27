@@ -6,6 +6,7 @@ import type { createLeaderboardService } from '@burnout/leaderboard';
 import type { PaymentsService } from '@burnout/payments';
 import type { SecretBox } from './auth/crypto';
 import type { RateLimiter } from './auth/rate-limit';
+import type { TurnstileVerifier } from './auth/turnstile';
 import type { Mailer } from './mailer';
 import type { SqlDatabase } from './sql';
 
@@ -37,6 +38,8 @@ export interface ApiConfig {
    */
   edgeSecret: string | null;
   currentSeason: string;
+  /** Cloudflare Turnstile secret for sign-up (PRD-007 §8.4). null = not checked (local and tests only). */
+  turnstileSecret: string | null;
 }
 
 export const DEFAULT_API_CONFIG: ApiConfig = {
@@ -59,6 +62,7 @@ export const DEFAULT_API_CONFIG: ApiConfig = {
   trustProxy: 1,
   edgeSecret: null,
   currentSeason: '2026-2027-regular',
+  turnstileSecret: null,
 };
 
 export type Log = (level: 'info' | 'warn' | 'error', message: string, meta?: object) => void;
@@ -78,6 +82,8 @@ export interface ApiContext {
   mailer: Mailer;
   leaderboard: LeaderboardService;
   payments: PaymentsService;
+  /** Set when turnstileSecret is configured; sign-up then requires a passing token. */
+  verifyTurnstile: TurnstileVerifier | null;
 }
 
 /** The all-zero UUID records system actions in security_audit_log (§6.8). */

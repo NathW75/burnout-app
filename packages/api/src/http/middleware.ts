@@ -111,7 +111,52 @@ export function ipRateLimit(ctx: ApiContext, bucket: string, limit: number, wind
 
 // ── gates ───────────────────────────────────────────────────────────────────
 
+/**
+ * A signed-in session with a confirmed second factor (PRD-006 D3 as amended
+ * by PRD-007 §8.6: 2FA is required for all use). Every authenticated route
+ * goes through this gate, so a session without a factor can't reach any of
+ * them; only the routes that finish enrollment use enrollmentSession().
+ */
 export function session(req: Request): SessionInfo {
+  const s = enrollmentSession(req);
+  if (!s.hasFactor) {
+    // Sign-up order: verify the email, then set up the authenticator (setup requires a verified email).
+    if (!s.emailVerified) throw forbidden('EMAIL_UNVERIFIED', 'Verify your email first');
+    throw forbidden('MFA_ENROLLMENT_REQUIRED', 'Set up two-factor authentication to continue');
+  }
+  return s;
+}
+
+/**
+ * Routes a signed-in user without a confirmed second factor may call: the
+ * public auth routes and the steps that finish sign-up (PRD-007 §8.6).
+ * Everything else answers 403 before its handler runs.
+ */
+export const ENROLLMENT_ROUTES: ReadonlySet<string> = new Set([
+  'POST /auth/signup', 'POST /auth/verify-email', 'POST /auth/verify-email/resend',
+  'POST /auth/login', 'POST /auth/login/mfa', 'POST /auth/logout', 'POST /auth/logout-all',
+  'POST /auth/password/reset-request', 'POST /auth/password/reset',
+  'POST /auth/mfa/totp/setup', 'POST /auth/mfa/totp/confirm',
+  'GET /me', 'GET /time', 'POST /feedback',
+]);
+
+/** Router-level 2FA gate: runs before any handler, so no route can answer an enrollment-only session. */
+export function enrollmentGate(): RequestHandler {
+  return (req, _res, next) => {
+    const s = req.session;
+    if (!s || s.mfaPending || s.hasFactor) return next();
+    if (ENROLLMENT_ROUTES.has(`${req.method} ${req.path}`)) return next();
+    if (!s.emailVerified) return next(forbidden('EMAIL_UNVERIFIED', 'Verify your email first'));
+    next(forbidden('MFA_ENROLLMENT_REQUIRED', 'Set up two-factor authentication to continue'));
+  };
+}
+
+/**
+ * A signed-in session that may still lack a second factor. ONLY for the
+ * routes a new user needs to finish sign-up: GET /me, resend verification,
+ * TOTP setup and confirm, sign-out everywhere.
+ */
+export function enrollmentSession(req: Request): SessionInfo {
   const s = req.session;
   if (!s || s.mfaPending) throw unauthorized();
   return s;

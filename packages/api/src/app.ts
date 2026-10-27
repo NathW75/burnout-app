@@ -10,6 +10,7 @@ import { createLeaderboardService } from '@burnout/leaderboard';
 import type { PaymentsService } from '@burnout/payments';
 import { SecretBox } from './auth/crypto';
 import { redisRateLimiter, type RateLimiter } from './auth/rate-limit';
+import { cloudflareTurnstile, type TurnstileVerifier } from './auth/turnstile';
 import { DEFAULT_API_CONFIG, type ApiConfig, type ApiContext, type Log } from './context';
 import { notFound } from './errors';
 import { ah, authResolver, csrf, edgeGuard, errorHandler, ipRateLimit } from './http/middleware';
@@ -29,6 +30,8 @@ export interface CreateAppDeps {
   config?: Partial<ApiConfig>;
   limiter?: RateLimiter;
   handleBlocklist?: ReadonlyArray<string>;
+  /** Replaces the Cloudflare siteverify call (tests). Used only when config.turnstileSecret is set. */
+  verifyTurnstile?: TurnstileVerifier;
 }
 
 const noopLimiter: RateLimiter = { hit: async () => true, blocked: async () => false, reset: async () => {} };
@@ -36,18 +39,20 @@ const noopLimiter: RateLimiter = { hit: async () => true, blocked: async () => f
 export function createContext(deps: CreateAppDeps): ApiContext {
   const log: Log = deps.log ?? (() => {});
   const ns = deps.namespace ?? '';
+  const config = { ...DEFAULT_API_CONFIG, ...deps.config };
   return {
     db: deps.db,
     redis: deps.redis,
     ns,
     now: deps.getServerTime ?? (() => new Date()),
     log,
-    config: { ...DEFAULT_API_CONFIG, ...deps.config },
+    config,
     secretBox: new SecretBox(deps.totpEncryptionKey),
     limiter: deps.limiter ?? (deps.redis ? redisRateLimiter(deps.redis, ns, (m) => log('warn', m)) : noopLimiter),
     mailer: deps.mailer,
     leaderboard: createLeaderboardService({ db: deps.db, redis: deps.redis, namespace: ns, handleBlocklist: deps.handleBlocklist, log }),
     payments: deps.payments,
+    verifyTurnstile: config.turnstileSecret ? (deps.verifyTurnstile ?? cloudflareTurnstile(config.turnstileSecret, log)) : null,
   };
 }
 
@@ -59,7 +64,7 @@ export function createApp(deps: CreateAppDeps): { app: Express; ctx: ApiContext 
   app.use(edgeGuard(ctx)); // first: decides which edge headers anything below may believe (§10.4)
   app.use(helmet());
   app.use(compression());
-  app.use(cors({ origin: ctx.config.corsOrigins, credentials: true, allowedHeaders: ['content-type', 'authorization', 'x-burnout-csrf'] }));
+  app.use(cors({ origin: ctx.config.corsOrigins, credentials: true, allowedHeaders: ['content-type', 'authorization', 'x-burnout-csrf', 'x-current-screen'] }));
 
   app.get('/healthz', ah(async (_req, res) => {
     await ctx.db.query('SELECT 1');

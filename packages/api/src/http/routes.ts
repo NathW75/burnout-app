@@ -7,9 +7,11 @@ import * as auth from '../auth/service';
 import type { SessionInfo } from '../auth/sessions';
 import type { ApiContext } from '../context';
 import { HttpError, notFound } from '../errors';
+import * as feedback from '../feedback/service';
 import * as lineups from '../lineups/service';
 import { getPool } from '../players/pool';
-import { adminSession, ah, body, financialSession, ipRateLimit, pendingSession, session } from './middleware';
+import * as views from '../season/views';
+import { adminSession, ah, body, enrollmentGate, enrollmentSession, financialSession, ipRateLimit, pendingSession, session } from './middleware';
 
 const email = z.string().trim().email().max(254);
 const uuid = z.string().uuid();
@@ -19,10 +21,13 @@ const slotPlayer = z.string().trim().min(1).max(50).nullable().optional();
 const slotsSchema = z.object({
   qb: slotPlayer, rb1: slotPlayer, rb2: slotPlayer, wr1: slotPlayer, wr2: slotPlayer, wr3: slotPlayer, te: slotPlayer, flex: slotPlayer, k: slotPlayer,
 }).strict();
+const seasonSchema = z.string().regex(/^\d{4}-\d{4}-(regular|playoff)$/);
 const seasonWeek = (req: Request) => ({
-  season: z.string().regex(/^\d{4}-\d{4}-(regular|playoff)$/).parse(req.params.season),
+  season: seasonSchema.parse(req.params.season),
   week: z.coerce.number().int().min(1).max(18).parse(req.params.week),
 });
+const paging = (req: Request, max = 100) =>
+  z.object({ offset: z.coerce.number().int().min(0).max(100_000).default(0), limit: z.coerce.number().int().min(1).max(max).default(50) }).parse(req.query);
 
 function clientInfo(req: Request) {
   return { ip: req.ip ?? 'unknown', userAgent: req.get('user-agent') ?? '' };
@@ -42,6 +47,7 @@ function meView(ctx: ApiContext, s: SessionInfo) {
 
 export function buildRouter(ctx: ApiContext): Router {
   const r = Router();
+  r.use(enrollmentGate()); // 2FA for all use (PRD-007 §8.6): before every route below
   const cookieOpts = () => ({
     httpOnly: true,
     secure: ctx.config.cookieSecure,
@@ -60,7 +66,11 @@ export function buildRouter(ctx: ApiContext): Router {
 
   // ── auth ────────────────────────────────────────────────────────────────
   r.post('/auth/signup', ipRateLimit(ctx, 'signup', 10, 60), ah(async (req, res) => {
-    const b = body(z.object({ email, password: z.string(), handle: z.string() }), req);
+    const { turnstileToken, ...b } = body(z.object({ email, password: z.string(), handle: z.string(), turnstileToken: z.string().max(2048).optional() }), req);
+    // Bot check first (PRD-007 §8.4): a failed token never reaches account creation.
+    if (ctx.verifyTurnstile && !(turnstileToken && (await ctx.verifyTurnstile(turnstileToken, req.ip)))) {
+      throw new HttpError(400, 'TURNSTILE_FAILED', 'Please complete the check and try again');
+    }
     await auth.signup(ctx, b);
     res.status(202).json({ status: 'verification_sent', message: 'Check your email to verify your account, then sign in.' });
   }));
@@ -71,14 +81,14 @@ export function buildRouter(ctx: ApiContext): Router {
   }));
 
   r.post('/auth/verify-email/resend', ah(async (req, res) => {
-    await auth.resendVerification(ctx, session(req));
+    await auth.resendVerification(ctx, enrollmentSession(req));
     res.status(202).json({ status: 'sent' });
   }));
 
   r.post('/auth/login', ah(async (req, res) => {
     const b = body(z.object({ email, password: z.string().max(200), client }), req);
     const result = await auth.login(ctx, { ...b, ...clientInfo(req) });
-    issue(res, b.client, result.token, { mfaRequired: result.mfaRequired });
+    issue(res, b.client, result.token, { mfaRequired: result.mfaRequired, mfaEnrollmentRequired: !result.mfaRequired });
   }));
 
   r.post('/auth/login/mfa', ah(async (req, res) => {
@@ -93,7 +103,7 @@ export function buildRouter(ctx: ApiContext): Router {
   }));
 
   r.post('/auth/logout-all', ah(async (req, res) => {
-    const n = await auth.logoutAll(ctx, session(req));
+    const n = await auth.logoutAll(ctx, enrollmentSession(req));
     clearCookie(res).json({ sessionsRevoked: n });
   }));
 
@@ -115,11 +125,11 @@ export function buildRouter(ctx: ApiContext): Router {
   }));
 
   r.post('/auth/mfa/totp/setup', ah(async (req, res) => {
-    res.json(await auth.totpSetup(ctx, session(req), body(z.object({ password: z.string().max(200) }), req).password));
+    res.json(await auth.totpSetup(ctx, enrollmentSession(req), body(z.object({ password: z.string().max(200) }), req).password));
   }));
 
   r.post('/auth/mfa/totp/confirm', ah(async (req, res) => {
-    res.json(await auth.totpConfirm(ctx, session(req), body(z.object({ code }), req).code));
+    res.json(await auth.totpConfirm(ctx, enrollmentSession(req), body(z.object({ code }), req).code));
   }));
 
   r.post('/auth/mfa/backup-codes/regenerate', ah(async (req, res) => {
@@ -135,7 +145,7 @@ export function buildRouter(ctx: ApiContext): Router {
 
   // ── me ──────────────────────────────────────────────────────────────────
   r.get('/me', ah(async (req, res) => {
-    res.json(meView(ctx, session(req)));
+    res.json(meView(ctx, enrollmentSession(req)));
   }));
 
   r.get('/me/sessions', ah(async (req, res) => {
@@ -151,6 +161,72 @@ export function buildRouter(ctx: ApiContext): Router {
     const s = session(req);
     await ctx.leaderboard.setHandle(s.userId, body(z.object({ handle: z.string() }), req).handle, ctx.config.currentSeason, ctx.now());
     res.json({ handle: req.body.handle });
+  }));
+
+  r.get('/me/burns', ah(async (req, res) => {
+    const season = seasonSchema.default(ctx.config.currentSeason).parse(req.query.season);
+    res.json({ season, burns: await views.myBurns(ctx, session(req).userId, season) });
+  }));
+
+  r.get('/me/notifications', ah(async (req, res) => {
+    const q = z.object({ before: z.coerce.date().optional(), limit: z.coerce.number().int().min(1).max(100).default(30) }).parse(req.query);
+    res.json(await views.myNotifications(ctx, session(req).userId, q.before ?? null, q.limit));
+  }));
+
+  r.post('/me/notifications/read', ah(async (req, res) => {
+    const b = body(z.union([z.object({ ids: z.array(uuid).min(1).max(200) }).strict(), z.object({ all: z.literal(true) }).strict()]), req);
+    res.json({ marked: await views.markNotificationsRead(ctx, session(req).userId, b) });
+  }));
+
+  r.get('/me/receipts', ah(async (req, res) => {
+    const season = seasonSchema.default(ctx.config.currentSeason).parse(req.query.season);
+    res.json({ season, receipts: await views.myReceipts(ctx, session(req).userId, season) });
+  }));
+
+  // ── season, week, windows, field board (PRD-007 §8.1–§8.2) ──────────────
+  r.get('/time', (_req, res) => {
+    // The official clock: public and never cached (PRD-007 §5.3).
+    res.set('Cache-Control', 'no-store').json({ serverTime: ctx.now().toISOString() });
+  });
+
+  r.get('/seasons/current', ah(async (req, res) => {
+    session(req);
+    res.json(await views.currentSeason(ctx));
+  }));
+
+  r.get('/seasons/:season/weeks/:week/windows', ah(async (req, res) => {
+    session(req);
+    const { season, week } = seasonWeek(req);
+    res.json({ season, week, windows: await views.weekWindows(ctx, season, week) });
+  }));
+
+  r.get('/seasons/:season/leaderboard', ah(async (req, res) => {
+    const s = session(req);
+    const season = seasonSchema.parse(req.params.season);
+    const { offset, limit } = paging(req);
+    const out = await views.fieldBoard(ctx, s.userId, season, offset, limit);
+    const etag = `"${out.version}:${offset}:${limit}"`;
+    // Express answers 304 itself when If-None-Match matches this ETag.
+    res.set('Cache-Control', 'private, no-cache').set('ETag', etag).json(out);
+  }));
+
+  r.get('/seasons/:season/leaderboard/me', ah(async (req, res) => {
+    const s = session(req);
+    res.json(await views.fieldMe(ctx, s.userId, seasonSchema.parse(req.params.season)));
+  }));
+
+  r.get('/seasons/:season/weeks/:week/managers/:handle/lineup', ah(async (req, res) => {
+    const s = session(req);
+    const { season, week } = seasonWeek(req);
+    const handle = z.string().regex(/^[A-Za-z0-9_]{3,20}$/).parse(req.params.handle);
+    res.set('Cache-Control', 'private, no-store').json(await views.fieldReveal(ctx, s.userId, season, week, handle));
+  }));
+
+  // ── feedback (PRD-007 §10) ──────────────────────────────────────────────
+  r.post('/feedback', ah(async (req, res) => {
+    const s = enrollmentSession(req); // a tester stuck in sign-up can still tell us
+    const b = body(z.object({ body: z.string().trim().min(1).max(feedback.FEEDBACK_MAX_CHARS) }).strict(), req);
+    res.status(201).json(await feedback.submitFeedback(ctx, s.userId, feedback.cleanScreen(req.get('x-current-screen')), b.body));
   }));
 
   // ── players and lineups ─────────────────────────────────────────────────
@@ -320,6 +396,30 @@ export function buildRouter(ctx: ApiContext): Router {
     await ctx.payments.recordIdentityVerification({ ...b, provider: 'manual' });
     ctx.log('info', 'manual identity verification recorded', { by: s.userId, userId: b.userId });
     res.status(201).json({ verified: true });
+  }));
+
+  r.get('/admin/feedback', ah(async (req, res) => {
+    adminSession(ctx, req);
+    const q = z.object({
+      reviewed: z.enum(['true', 'false']).transform((v) => v === 'true').optional(),
+      category: z.string().max(30).optional(),
+      severity: z.string().max(20).optional(),
+      before: z.coerce.date().optional(),
+      limit: z.coerce.number().int().min(1).max(200).default(50),
+    }).parse(req.query);
+    res.json(await feedback.listFeedback(ctx, q));
+  }));
+
+  r.post('/admin/feedback/:id/review', ah(async (req, res) => {
+    const s = adminSession(ctx, req);
+    const b = body(z.object({ reviewed: z.boolean().default(true) }), req);
+    res.json(await feedback.reviewFeedback(ctx, s.userId, uuid.parse(req.params.id), b.reviewed));
+  }));
+
+  r.post('/admin/users/:id/factors/reset', ah(async (req, res) => {
+    const s = adminSession(ctx, req);
+    const out = await auth.resetFactors(ctx, s, uuid.parse(req.params.id), body(z.object({ reason: z.string().min(3).max(500) }), req).reason);
+    res.json(out);
   }));
 
   r.post('/admin/users/:id/suspend', ah(async (req, res) => {

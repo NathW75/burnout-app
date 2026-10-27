@@ -3,7 +3,7 @@
  * These never go through the notification outbox, so the token is never
  * stored in plaintext (PRD-006 §6.1). Everything else uses the outbox.
  */
-export type MailTemplate = 'verify_email' | 'password_reset' | 'account_exists';
+export type MailTemplate = 'verify_email' | 'password_reset' | 'account_exists' | 'mfa_reset';
 
 export interface MailMessage {
   to: string;
@@ -30,6 +30,7 @@ const SUBJECTS: Record<MailTemplate, string> = {
   verify_email: 'Verify your Burnout League email',
   password_reset: 'Reset your Burnout League password',
   account_exists: 'You already have a Burnout League account',
+  mfa_reset: 'Your Burnout League two-factor setup was reset',
 };
 
 function body(msg: MailMessage): string {
@@ -40,6 +41,8 @@ function body(msg: MailMessage): string {
       return `Reset your password: ${msg.data.link}\n\nThe link works once and expires in 1 hour. If you didn't ask for this, ignore this email.`;
     case 'account_exists':
       return `Someone tried to sign up with this email, but you already have an account. Sign in, or reset your password: ${msg.data.link}`;
+    case 'mfa_reset':
+      return `An administrator reset your two-factor authentication after verifying your identity. You've been signed out everywhere. Sign in and set up a new authenticator: ${msg.data.link}\n\nIf you didn't ask for this, reply to this email right away.`;
   }
 }
 

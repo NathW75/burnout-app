@@ -10,6 +10,7 @@ import type { PaymentsService } from '@burnout/payments';
 import { createScoringStore, parseGamelogs, parseGames, type GameStatus } from '@burnout/scoring-engine';
 import type { Redis } from 'ioredis';
 import type { ApiContext, Log } from './context';
+import { classifyPending, type FeedbackClassifier } from './feedback/service';
 import { parsePlayers } from './players/msf-players';
 import { reresolveSubmissions, syncInjuries, syncPlayers } from './players/roster';
 import { importSchedule } from './schedule/import';
@@ -50,9 +51,11 @@ export interface JobsDeps {
   log: Log;
   /** Context used by roster sync / re-resolve (audit + notifications). */
   apiContext: ApiContext;
+  /** Tags feedback (PRD-007 §10). Absent when ANTHROPIC_API_KEY isn't set: feedback stays untagged. */
+  classifier?: FeedbackClassifier;
 }
 
-export type JobName = 'locks' | 'payments' | 'scoring' | 'roster' | 'injuries' | 'schedule';
+export type JobName = 'locks' | 'payments' | 'scoring' | 'roster' | 'injuries' | 'schedule' | 'feedback';
 
 /** Regular-season weeks, for the week-by-week schedule fallback. */
 export const REGULAR_SEASON_WEEKS = 18;
@@ -189,6 +192,12 @@ export function createJobs(deps: JobsDeps) {
       if (r.windowsCreated || r.windowsRemoved || r.windowsPostponed) await rebuildBoards();
       return { source, ...r, review: r.review.length };
     },
+
+    /** Runs on its own 15-second loop in the worker, so tags land within 30 seconds (feedback spec AC4). */
+    async feedback() {
+      if (!deps.classifier) return { skipped: 'NO_CLASSIFIER' };
+      return classifyPending(db, deps.classifier, now, log);
+    },
   };
 
   /** Runs one job under its advisory lock. Returns null if another worker holds it. */
@@ -200,7 +209,9 @@ export function createJobs(deps: JobsDeps) {
         if (!ok) return null;
         return jobs[name]();
       });
-      log('info', `job ${name}`, { job: name, ms: Date.now() - started, result: result ?? 'skipped (held elsewhere)' });
+      // The 15-second feedback loop stays quiet when there was nothing to tag.
+      const idle = name === 'feedback' && result !== null && (result as { claimed?: number }).claimed === 0;
+      if (!idle) log('info', `job ${name}`, { job: name, ms: Date.now() - started, result: result ?? 'skipped (held elsewhere)' });
       return result;
     } catch (err) {
       log('error', `job ${name} failed`, { job: name, ms: Date.now() - started, error: err instanceof Error ? err.message : String(err) });
