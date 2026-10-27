@@ -1,0 +1,1365 @@
+{
+ "lastUpdatedOn": "2026-10-26T23:59:20.590Z",
+ "gamelogs": [
+  {
+   "game": {
+    "id": 163650,
+    "week": 7,
+    "startTime": "2026-10-25T20:05:00.000Z",
+    "awayTeamAbbreviation": "DEN",
+    "homeTeamAbbreviation": "ARI"
+   },
+   "player": {
+    "id": 112073,
+    "firstName": "Nate",
+    "lastName": "Adkins",
+    "position": "TE",
+    "jerseyNumber": 45
+   },
+   "team": {
+    "id": 72,
+    "abbreviation": "DEN"
+   },
+   "stats": {
+    "passing": {
+     "passAttempts": 0,
+     "passCompletions": 0,
+     "passPct": 0.0,
+     "passYards": 0,
+     "passAvg": 0.0,
+     "passYardsPerAtt": 0.0,
+     "passTD": 0,
+     "passTDPct": 0.0,
+     "passInt": 0,
+     "passIntPct": 0.0,
+     "passLng": 0,
+     "pass20Plus": 0,
+     "pass40Plus": 0,
+     "passSacks": 0,
+     "passSackY": 0,
+     "qbRating": 0.0
+    },
+    "rushing": {
+     "rushAttempts": 0,
+     "rushYards": 0,
+     "rushAverage": 0.0,
+     "rushTD": 0,
+     "rushLng": 0,
+     "rush1stDowns": 0,
+     "rush1stDownsPct": 0.0,
+     "rush20Plus": 0,
+     "rush40Plus": 0,
+     "rushFumbles": 0
+    },
+    "receiving": {
+     "targets": 0,
+     "receptions": 0,
+     "recYards": 0,
+     "recAverage": 0.0,
+     "recTD": 0,
+     "recLng": 0,
+     "rec1stDowns": 0,
+     "rec20Plus": 0,
+     "rec40Plus": 0,
+     "recFumbles": 0
+    },
+    "tackles": {
+     "tackleSolo": 0,
+     "tackleTotal": 0,
+     "tackleAst": 0,
+     "sacks": 0.0,
+     "sackYds": 0,
+     "tacklesForLoss": 0.0
+    },
+    "interceptions": {
+     "interceptions": 0,
+     "intTD": 0,
+     "intYds": 0,
+     "intAverage": 0.0,
+     "intLng": 0,
+     "passesDefended": 0,
+     "stuffs": 0,
+     "stuffYds": 0,
+     "safeties": 0,
+     "kB": 0
+    },
+    "fumbles": {
+     "fumbles": 0,
+     "fumLost": 0,
+     "fumForced": 0,
+     "fumOwnRec": 0,
+     "fumOppRec": 0,
+     "fumRecYds": 0,
+     "fumTotalRec": 0,
+     "fumTD": 0,
+     "offFumTD": 0
+    },
+    "kickoffReturns": {
+     "krRet": 0,
+     "krYds": 0,
+     "krAvg": 0.0,
+     "krLng": 0,
+     "krTD": 0,
+     "kr20Plus": 0,
+     "kr40Plus": 0,
+     "krFC": 0,
+     "krFum": 0
+    },
+    "puntReturns": {
+     "prRet": 0,
+     "prYds": 0,
+     "prAvg": 0.0,
+     "prLng": 0,
+     "prTD": 0,
+     "pr20Plus": 0,
+     "pr40Plus": 0,
+     "prFC": 0,
+     "prFum": 0
+    },
+    "miscellaneous": {
+     "gamesStarted": 0
+    },
+    "twoPointAttempts": {
+     "twoPtAtt": 0,
+     "twoPtMade": 0,
+     "twoPtPassAtt": 0,
+     "twoPtPassMade": 0,
+     "twoPtPassRec": 0,
+     "twoPtRushAtt": 0,
+     "twoPtRushMade": 0
+    },
+    "snapCounts": {
+     "offenseSnaps": 24,
+     "defenseSnaps": 0,
+     "specialTeamSnaps": 9
+    }
+   }
+  },
+  {
+   "game": {
+    "id": 163648,
+    "week": 7,
+    "startTime": "2026-10-25T17:00:00.000Z",
+    "awayTeamAbbreviation": "MIA",
+    "homeTeamAbbreviation": "NYJ"
+   },
+   "player": {
+    "id": 16099,
+    "firstName": "Andrew",
+    "lastName": "Beck",
+    "position": "FB",
+    "jerseyNumber": 47
+   },
+   "team": {
+    "id": 51,
+    "abbreviation": "NYJ"
+   },
+   "stats": {
+    "passing": {
+     "passAttempts": 0,
+     "passCompletions": 0,
+     "passPct": 0.0,
+     "passYards": 0,
+     "passAvg": 0.0,
+     "passYardsPerAtt": 0.0,
+     "passTD": 0,
+     "passTDPct": 0.0,
+     "passInt": 0,
+     "passIntPct": 0.0,
+     "passLng": 0,
+     "pass20Plus": 0,
+     "pass40Plus": 0,
+     "passSacks": 0,
+     "passSackY": 0,
+     "qbRating": 0.0
+    },
+    "rushing": {
+     "rushAttempts": 1,
+     "rushYards": -1,
+     "rushAverage": -1.0,
+     "rushTD": 0,
+     "rushLng": -1,
+     "rush1stDowns": 0,
+     "rush1stDownsPct": 0.0,
+     "rush20Plus": 0,
+     "rush40Plus": 0,
+     "rushFumbles": 0
+    },
+    "receiving": {
+     "targets": 0,
+     "receptions": 0,
+     "recYards": 0,
+     "recAverage": 0.0,
+     "recTD": 0,
+     "recLng": 0,
+     "rec1stDowns": 0,
+     "rec20Plus": 0,
+     "rec40Plus": 0,
+     "recFumbles": 0
+    },
+    "tackles": {
+     "tackleSolo": 0,
+     "tackleTotal": 1,
+     "tackleAst": 1,
+     "sacks": 0.0,
+     "sackYds": 0,
+     "tacklesForLoss": 0.0
+    },
+    "interceptions": {
+     "interceptions": 0,
+     "intTD": 0,
+     "intYds": 0,
+     "intAverage": 0.0,
+     "intLng": 0,
+     "passesDefended": 0,
+     "stuffs": 0,
+     "stuffYds": 0,
+     "safeties": 0,
+     "kB": 0
+    },
+    "fumbles": {
+     "fumbles": 0,
+     "fumLost": 0,
+     "fumForced": 0,
+     "fumOwnRec": 0,
+     "fumOppRec": 0,
+     "fumRecYds": 0,
+     "fumTotalRec": 0,
+     "fumTD": 0,
+     "offFumTD": 0
+    },
+    "kickoffReturns": {
+     "krRet": 0,
+     "krYds": 0,
+     "krAvg": 0.0,
+     "krLng": 0,
+     "krTD": 0,
+     "kr20Plus": 0,
+     "kr40Plus": 0,
+     "krFC": 0,
+     "krFum": 0
+    },
+    "puntReturns": {
+     "prRet": 0,
+     "prYds": 0,
+     "prAvg": 0.0,
+     "prLng": 0,
+     "prTD": 0,
+     "pr20Plus": 0,
+     "pr40Plus": 0,
+     "prFC": 0,
+     "prFum": 0
+    },
+    "miscellaneous": {
+     "gamesStarted": 0
+    },
+    "twoPointAttempts": {
+     "twoPtAtt": 0,
+     "twoPtMade": 0,
+     "twoPtPassAtt": 0,
+     "twoPtPassMade": 0,
+     "twoPtPassRec": 0,
+     "twoPtRushAtt": 0,
+     "twoPtRushMade": 0
+    },
+    "snapCounts": {
+     "offenseSnaps": 5,
+     "defenseSnaps": 0,
+     "specialTeamSnaps": 16
+    }
+   }
+  },
+  {
+   "game": {
+    "id": 163643,
+    "week": 7,
+    "startTime": "2026-10-25T17:00:00.000Z",
+    "awayTeamAbbreviation": "SF",
+    "homeTeamAbbreviation": "ATL"
+   },
+   "player": {
+    "id": 207994,
+    "firstName": "Kaelon",
+    "lastName": "Black",
+    "position": "RB",
+    "jerseyNumber": 26
+   },
+   "team": {
+    "id": 78,
+    "abbreviation": "SF"
+   },
+   "stats": {
+    "passing": {
+     "passAttempts": 0,
+     "passCompletions": 0,
+     "passPct": 0.0,
+     "passYards": 0,
+     "passAvg": 0.0,
+     "passYardsPerAtt": 0.0,
+     "passTD": 0,
+     "passTDPct": 0.0,
+     "passInt": 0,
+     "passIntPct": 0.0,
+     "passLng": 0,
+     "pass20Plus": 0,
+     "pass40Plus": 0,
+     "passSacks": 0,
+     "passSackY": 0,
+     "qbRating": 0.0
+    },
+    "rushing": {
+     "rushAttempts": 12,
+     "rushYards": 63,
+     "rushAverage": 5.2,
+     "rushTD": 1,
+     "rushLng": 30,
+     "rush1stDowns": 2,
+     "rush1stDownsPct": 16.7,
+     "rush20Plus": 1,
+     "rush40Plus": 0,
+     "rushFumbles": 1
+    },
+    "receiving": {
+     "targets": 3,
+     "receptions": 1,
+     "recYards": -4,
+     "recAverage": -4.0,
+     "recTD": 0,
+     "recLng": -4,
+     "rec1stDowns": 0,
+     "rec20Plus": 0,
+     "rec40Plus": 0,
+     "recFumbles": 0
+    },
+    "tackles": {
+     "tackleSolo": 0,
+     "tackleTotal": 0,
+     "tackleAst": 0,
+     "sacks": 0.0,
+     "sackYds": 0,
+     "tacklesForLoss": 0.0
+    },
+    "interceptions": {
+     "interceptions": 0,
+     "intTD": 0,
+     "intYds": 0,
+     "intAverage": 0.0,
+     "intLng": 0,
+     "passesDefended": 0,
+     "stuffs": 0,
+     "stuffYds": 0,
+     "safeties": 0,
+     "kB": 0
+    },
+    "fumbles": {
+     "fumbles": 1,
+     "fumLost": 1,
+     "fumForced": 0,
+     "fumOwnRec": 0,
+     "fumOppRec": 0,
+     "fumRecYds": 0,
+     "fumTotalRec": 0,
+     "fumTD": 0,
+     "offFumTD": 0
+    },
+    "kickoffReturns": {
+     "krRet": 1,
+     "krYds": 34,
+     "krAvg": 34.0,
+     "krLng": 34,
+     "krTD": 0,
+     "kr20Plus": 1,
+     "kr40Plus": 0,
+     "krFC": 0,
+     "krFum": 0
+    },
+    "puntReturns": {
+     "prRet": 0,
+     "prYds": 0,
+     "prAvg": 0.0,
+     "prLng": 0,
+     "prTD": 0,
+     "pr20Plus": 0,
+     "pr40Plus": 0,
+     "prFC": 0,
+     "prFum": 0
+    },
+    "miscellaneous": {
+     "gamesStarted": 0
+    },
+    "twoPointAttempts": {
+     "twoPtAtt": 0,
+     "twoPtMade": 0,
+     "twoPtPassAtt": 0,
+     "twoPtPassMade": 0,
+     "twoPtPassRec": 0,
+     "twoPtRushAtt": 0,
+     "twoPtRushMade": 0
+    },
+    "snapCounts": {
+     "offenseSnaps": 31,
+     "defenseSnaps": 0,
+     "specialTeamSnaps": 2
+    }
+   }
+  },
+  {
+   "game": {
+    "id": 163653,
+    "week": 7,
+    "startTime": "2026-10-26T00:20:00.000Z",
+    "awayTeamAbbreviation": "KC",
+    "homeTeamAbbreviation": "SEA"
+   },
+   "player": {
+    "id": 12796,
+    "firstName": "Harrison",
+    "lastName": "Butker",
+    "position": "K",
+    "jerseyNumber": 7
+   },
+   "team": {
+    "id": 73,
+    "abbreviation": "KC"
+   },
+   "stats": {
+    "tackles": {
+     "tackleSolo": 0,
+     "tackleTotal": 1,
+     "tackleAst": 1,
+     "sacks": 0.0,
+     "sackYds": 0,
+     "tacklesForLoss": 0.0
+    },
+    "interceptions": {
+     "interceptions": 0,
+     "intTD": 0,
+     "intYds": 0,
+     "intAverage": 0.0,
+     "intLng": 0,
+     "passesDefended": 0,
+     "stuffs": 0,
+     "stuffYds": 0,
+     "safeties": 0,
+     "kB": 0
+    },
+    "fumbles": {
+     "fumbles": 0,
+     "fumLost": 0,
+     "fumForced": 0,
+     "fumOwnRec": 0,
+     "fumOppRec": 0,
+     "fumRecYds": 0,
+     "fumTotalRec": 0,
+     "fumTD": 0,
+     "offFumTD": 0
+    },
+    "kickoffReturns": {
+     "krRet": 2,
+     "krYds": 0,
+     "krAvg": 0.0,
+     "krLng": 0,
+     "krTD": 0,
+     "kr20Plus": 0,
+     "kr40Plus": 0,
+     "krFC": 0,
+     "krFum": 0
+    },
+    "puntReturns": {
+     "prRet": 0,
+     "prYds": 0,
+     "prAvg": 0.0,
+     "prLng": 0,
+     "prTD": 0,
+     "pr20Plus": 0,
+     "pr40Plus": 0,
+     "prFC": 0,
+     "prFum": 0
+    },
+    "fieldGoals": {
+     "fgBlk": 0,
+     "fgMade": 1,
+     "fgAtt": 3,
+     "fgPct": 33.3,
+     "fgMade1_19": 0,
+     "fgAtt1_19": 0,
+     "fg1_19Pct": 0.0,
+     "fgMade20_29": 0,
+     "fgAtt20_29": 0,
+     "fg20_29Pct": 0.0,
+     "fgMade30_39": 0,
+     "fgAtt30_39": 0,
+     "fg30_39Pct": 0.0,
+     "fgMade40_49": 0,
+     "fgAtt40_49": 1,
+     "fg40_49Pct": 0.0,
+     "fgMade50Plus": 1,
+     "fgAtt50Plus": 2,
+     "fg50PlusPct": 50.0,
+     "fgLng": 50
+    },
+    "extraPointAttempts": {
+     "xpBlk": 0,
+     "xpMade": 0,
+     "xpAtt": 0,
+     "xpPct": 0.0,
+     "fgAndXpPts": 3
+    },
+    "kickoffs": {
+     "kickoffs": 2,
+     "koYds": 120,
+     "koOOB": 0,
+     "koAvg": 60.0,
+     "koTB": 0,
+     "koRet": 2,
+     "koRetYds": 60,
+     "koRetAvgYds": 30.0,
+     "koTD": 0,
+     "koOS": 0,
+     "koOSR": 0
+    },
+    "punting": {
+     "punts": 0,
+     "puntYds": 0,
+     "puntNetYds": 0,
+     "puntLng": 0,
+     "puntAvg": 0.0,
+     "puntNetAvg": 0.0,
+     "puntBlk": 0,
+     "puntOOB": 0,
+     "puntDown": 0,
+     "puntIn20": 0,
+     "puntIn20Pct": 0.0,
+     "puntTB": 0,
+     "puntTBPct": 0.0,
+     "puntFC": 0,
+     "puntRet": 0,
+     "puntRetYds": 0,
+     "puntRetAvg": 0.0
+    },
+    "miscellaneous": {
+     "gamesStarted": 0
+    },
+    "snapCounts": {
+     "offenseSnaps": 0,
+     "defenseSnaps": 0,
+     "specialTeamSnaps": 5
+    }
+   }
+  },
+  {
+   "game": {
+    "id": 163643,
+    "week": 7,
+    "startTime": "2026-10-25T17:00:00.000Z",
+    "awayTeamAbbreviation": "SF",
+    "homeTeamAbbreviation": "ATL"
+   },
+   "player": {
+    "id": 39438,
+    "firstName": "Brock",
+    "lastName": "Purdy",
+    "position": "QB",
+    "jerseyNumber": 13
+   },
+   "team": {
+    "id": 78,
+    "abbreviation": "SF"
+   },
+   "stats": {
+    "passing": {
+     "passAttempts": 40,
+     "passCompletions": 27,
+     "passPct": 67.5,
+     "passYards": 288,
+     "passAvg": 7.2,
+     "passYardsPerAtt": 7.2,
+     "passTD": 1,
+     "passTDPct": 2.5,
+     "passInt": 2,
+     "passIntPct": 5.0,
+     "passLng": 35,
+     "pass20Plus": 4,
+     "pass40Plus": 0,
+     "passSacks": 2,
+     "passSackY": 11,
+     "qbRating": 75.8
+    },
+    "rushing": {
+     "rushAttempts": 2,
+     "rushYards": 5,
+     "rushAverage": 2.5,
+     "rushTD": 0,
+     "rushLng": 3,
+     "rush1stDowns": 2,
+     "rush1stDownsPct": 100.0,
+     "rush20Plus": 0,
+     "rush40Plus": 0,
+     "rushFumbles": 0
+    },
+    "receiving": {
+     "targets": 0,
+     "receptions": 0,
+     "recYards": 0,
+     "recAverage": 0.0,
+     "recTD": 0,
+     "recLng": 0,
+     "rec1stDowns": 0,
+     "rec20Plus": 0,
+     "rec40Plus": 0,
+     "recFumbles": 0
+    },
+    "tackles": {
+     "tackleSolo": 0,
+     "tackleTotal": 0,
+     "tackleAst": 0,
+     "sacks": 0.0,
+     "sackYds": 0,
+     "tacklesForLoss": 0.0
+    },
+    "interceptions": {
+     "interceptions": 0,
+     "intTD": 0,
+     "intYds": 0,
+     "intAverage": 0.0,
+     "intLng": 0,
+     "passesDefended": 0,
+     "stuffs": 0,
+     "stuffYds": 0,
+     "safeties": 0,
+     "kB": 0
+    },
+    "fumbles": {
+     "fumbles": 0,
+     "fumLost": 0,
+     "fumForced": 0,
+     "fumOwnRec": 0,
+     "fumOppRec": 0,
+     "fumRecYds": 0,
+     "fumTotalRec": 0,
+     "fumTD": 0,
+     "offFumTD": 0
+    },
+    "kickoffReturns": {
+     "krRet": 0,
+     "krYds": 0,
+     "krAvg": 0.0,
+     "krLng": 0,
+     "krTD": 0,
+     "kr20Plus": 0,
+     "kr40Plus": 0,
+     "krFC": 0,
+     "krFum": 0
+    },
+    "puntReturns": {
+     "prRet": 0,
+     "prYds": 0,
+     "prAvg": 0.0,
+     "prLng": 0,
+     "prTD": 0,
+     "pr20Plus": 0,
+     "pr40Plus": 0,
+     "prFC": 0,
+     "prFum": 0
+    },
+    "miscellaneous": {
+     "gamesStarted": 0
+    },
+    "twoPointAttempts": {
+     "twoPtAtt": 0,
+     "twoPtMade": 0,
+     "twoPtPassAtt": 0,
+     "twoPtPassMade": 0,
+     "twoPtPassRec": 0,
+     "twoPtRushAtt": 0,
+     "twoPtRushMade": 0
+    },
+    "snapCounts": {
+     "offenseSnaps": 66,
+     "defenseSnaps": 0,
+     "specialTeamSnaps": 0
+    }
+   }
+  },
+  {
+   "game": {
+    "id": 163647,
+    "week": 7,
+    "startTime": "2026-10-25T17:00:00.000Z",
+    "awayTeamAbbreviation": "IND",
+    "homeTeamAbbreviation": "MIN"
+   },
+   "player": {
+    "id": 134039,
+    "firstName": "Will",
+    "lastName": "Reichard",
+    "position": "K",
+    "jerseyNumber": 16
+   },
+   "team": {
+    "id": 63,
+    "abbreviation": "MIN"
+   },
+   "stats": {
+    "tackles": {
+     "tackleSolo": 0,
+     "tackleTotal": 0,
+     "tackleAst": 0,
+     "sacks": 0.0,
+     "sackYds": 0,
+     "tacklesForLoss": 0.0
+    },
+    "interceptions": {
+     "interceptions": 0,
+     "intTD": 0,
+     "intYds": 0,
+     "intAverage": 0.0,
+     "intLng": 0,
+     "passesDefended": 0,
+     "stuffs": 0,
+     "stuffYds": 0,
+     "safeties": 0,
+     "kB": 0
+    },
+    "fumbles": {
+     "fumbles": 0,
+     "fumLost": 0,
+     "fumForced": 0,
+     "fumOwnRec": 0,
+     "fumOppRec": 0,
+     "fumRecYds": 0,
+     "fumTotalRec": 0,
+     "fumTD": 0,
+     "offFumTD": 0
+    },
+    "kickoffReturns": {
+     "krRet": 0,
+     "krYds": 0,
+     "krAvg": 0.0,
+     "krLng": 0,
+     "krTD": 0,
+     "kr20Plus": 0,
+     "kr40Plus": 0,
+     "krFC": 0,
+     "krFum": 0
+    },
+    "puntReturns": {
+     "prRet": 0,
+     "prYds": 0,
+     "prAvg": 0.0,
+     "prLng": 0,
+     "prTD": 0,
+     "pr20Plus": 0,
+     "pr40Plus": 0,
+     "prFC": 0,
+     "prFum": 0
+    },
+    "fieldGoals": {
+     "fgBlk": 1,
+     "fgMade": 3,
+     "fgAtt": 4,
+     "fgPct": 75.0,
+     "fgMade1_19": 0,
+     "fgAtt1_19": 0,
+     "fg1_19Pct": 0.0,
+     "fgMade20_29": 1,
+     "fgAtt20_29": 1,
+     "fg20_29Pct": 100.0,
+     "fgMade30_39": 0,
+     "fgAtt30_39": 0,
+     "fg30_39Pct": 0.0,
+     "fgMade40_49": 1,
+     "fgAtt40_49": 1,
+     "fg40_49Pct": 100.0,
+     "fgMade50Plus": 1,
+     "fgAtt50Plus": 2,
+     "fg50PlusPct": 50.0,
+     "fgLng": 52
+    },
+    "extraPointAttempts": {
+     "xpBlk": 0,
+     "xpMade": 1,
+     "xpAtt": 1,
+     "xpPct": 100.0,
+     "fgAndXpPts": 10
+    },
+    "kickoffs": {
+     "kickoffs": 5,
+     "koYds": 296,
+     "koOOB": 0,
+     "koAvg": 59.2,
+     "koTB": 0,
+     "koRet": 5,
+     "koRetYds": 154,
+     "koRetAvgYds": 30.8,
+     "koTD": 0,
+     "koOS": 0,
+     "koOSR": 0
+    },
+    "punting": {
+     "punts": 0,
+     "puntYds": 0,
+     "puntNetYds": 0,
+     "puntLng": 0,
+     "puntAvg": 0.0,
+     "puntNetAvg": 0.0,
+     "puntBlk": 0,
+     "puntOOB": 0,
+     "puntDown": 0,
+     "puntIn20": 0,
+     "puntIn20Pct": 0.0,
+     "puntTB": 0,
+     "puntTBPct": 0.0,
+     "puntFC": 0,
+     "puntRet": 0,
+     "puntRetYds": 0,
+     "puntRetAvg": 0.0
+    },
+    "miscellaneous": {
+     "gamesStarted": 0
+    },
+    "snapCounts": {
+     "offenseSnaps": 0,
+     "defenseSnaps": 0,
+     "specialTeamSnaps": 10
+    }
+   }
+  },
+  {
+   "game": {
+    "id": 163648,
+    "week": 7,
+    "startTime": "2026-10-25T17:00:00.000Z",
+    "awayTeamAbbreviation": "MIA",
+    "homeTeamAbbreviation": "NYJ"
+   },
+   "player": {
+    "id": 19276,
+    "firstName": "Geno",
+    "lastName": "Smith",
+    "position": "QB",
+    "jerseyNumber": 7
+   },
+   "team": {
+    "id": 51,
+    "abbreviation": "NYJ"
+   },
+   "stats": {
+    "passing": {
+     "passAttempts": 30,
+     "passCompletions": 23,
+     "passPct": 76.7,
+     "passYards": 287,
+     "passAvg": 9.6,
+     "passYardsPerAtt": 9.6,
+     "passTD": 3,
+     "passTDPct": 10.0,
+     "passInt": 1,
+     "passIntPct": 3.3,
+     "passLng": 60,
+     "pass20Plus": 4,
+     "pass40Plus": 3,
+     "passSacks": 2,
+     "passSackY": 18,
+     "qbRating": 0.0
+    },
+    "rushing": {
+     "rushAttempts": 2,
+     "rushYards": 0,
+     "rushAverage": 0.0,
+     "rushTD": 0,
+     "rushLng": 1,
+     "rush1stDowns": 1,
+     "rush1stDownsPct": 50.0,
+     "rush20Plus": 0,
+     "rush40Plus": 0,
+     "rushFumbles": 0
+    },
+    "receiving": {
+     "targets": 0,
+     "receptions": 0,
+     "recYards": 0,
+     "recAverage": 0.0,
+     "recTD": 0,
+     "recLng": 0,
+     "rec1stDowns": 0,
+     "rec20Plus": 0,
+     "rec40Plus": 0,
+     "recFumbles": 0
+    },
+    "tackles": {
+     "tackleSolo": 0,
+     "tackleTotal": 0,
+     "tackleAst": 0,
+     "sacks": 0.0,
+     "sackYds": 0,
+     "tacklesForLoss": 0.0
+    },
+    "interceptions": {
+     "interceptions": 0,
+     "intTD": 0,
+     "intYds": 0,
+     "intAverage": 0.0,
+     "intLng": 0,
+     "passesDefended": 0,
+     "stuffs": 0,
+     "stuffYds": 0,
+     "safeties": 0,
+     "kB": 0
+    },
+    "fumbles": {
+     "fumbles": 0,
+     "fumLost": 0,
+     "fumForced": 0,
+     "fumOwnRec": 0,
+     "fumOppRec": 0,
+     "fumRecYds": 0,
+     "fumTotalRec": 0,
+     "fumTD": 0,
+     "offFumTD": 0
+    },
+    "kickoffReturns": {
+     "krRet": 0,
+     "krYds": 0,
+     "krAvg": 0.0,
+     "krLng": 0,
+     "krTD": 0,
+     "kr20Plus": 0,
+     "kr40Plus": 0,
+     "krFC": 0,
+     "krFum": 0
+    },
+    "puntReturns": {
+     "prRet": 0,
+     "prYds": 0,
+     "prAvg": 0.0,
+     "prLng": 0,
+     "prTD": 0,
+     "pr20Plus": 0,
+     "pr40Plus": 0,
+     "prFC": 0,
+     "prFum": 0
+    },
+    "miscellaneous": {
+     "gamesStarted": 0
+    },
+    "twoPointAttempts": {
+     "twoPtAtt": 1,
+     "twoPtMade": 1,
+     "twoPtPassAtt": 1,
+     "twoPtPassMade": 1,
+     "twoPtPassRec": 0,
+     "twoPtRushAtt": 0,
+     "twoPtRushMade": 0
+    },
+    "snapCounts": {
+     "offenseSnaps": 59,
+     "defenseSnaps": 0,
+     "specialTeamSnaps": 0
+    }
+   }
+  },
+  {
+   "game": {
+    "id": 163646,
+    "week": 7,
+    "startTime": "2026-10-25T17:00:00.000Z",
+    "awayTeamAbbreviation": "NYG",
+    "homeTeamAbbreviation": "HOU"
+   },
+   "player": {
+    "id": 133958,
+    "firstName": "Cade",
+    "lastName": "Stover",
+    "position": "TE",
+    "jerseyNumber": 8
+   },
+   "team": {
+    "id": 64,
+    "abbreviation": "HOU"
+   },
+   "stats": {
+    "passing": {
+     "passAttempts": 0,
+     "passCompletions": 0,
+     "passPct": 0.0,
+     "passYards": 0,
+     "passAvg": 0.0,
+     "passYardsPerAtt": 0.0,
+     "passTD": 0,
+     "passTDPct": 0.0,
+     "passInt": 0,
+     "passIntPct": 0.0,
+     "passLng": 0,
+     "pass20Plus": 0,
+     "pass40Plus": 0,
+     "passSacks": 0,
+     "passSackY": 0,
+     "qbRating": 0.0
+    },
+    "rushing": {
+     "rushAttempts": 1,
+     "rushYards": 0,
+     "rushAverage": 0.0,
+     "rushTD": 0,
+     "rushLng": 0,
+     "rush1stDowns": 0,
+     "rush1stDownsPct": 0.0,
+     "rush20Plus": 0,
+     "rush40Plus": 0,
+     "rushFumbles": 0
+    },
+    "receiving": {
+     "targets": 1,
+     "receptions": 1,
+     "recYards": -1,
+     "recAverage": -1.0,
+     "recTD": 0,
+     "recLng": -1,
+     "rec1stDowns": 0,
+     "rec20Plus": 0,
+     "rec40Plus": 0,
+     "recFumbles": 0
+    },
+    "tackles": {
+     "tackleSolo": 0,
+     "tackleTotal": 0,
+     "tackleAst": 0,
+     "sacks": 0.0,
+     "sackYds": 0,
+     "tacklesForLoss": 0.0
+    },
+    "interceptions": {
+     "interceptions": 0,
+     "intTD": 0,
+     "intYds": 0,
+     "intAverage": 0.0,
+     "intLng": 0,
+     "passesDefended": 0,
+     "stuffs": 0,
+     "stuffYds": 0,
+     "safeties": 0,
+     "kB": 0
+    },
+    "fumbles": {
+     "fumbles": 0,
+     "fumLost": 0,
+     "fumForced": 0,
+     "fumOwnRec": 0,
+     "fumOppRec": 0,
+     "fumRecYds": 0,
+     "fumTotalRec": 0,
+     "fumTD": 0,
+     "offFumTD": 0
+    },
+    "kickoffReturns": {
+     "krRet": 0,
+     "krYds": 0,
+     "krAvg": 0.0,
+     "krLng": 0,
+     "krTD": 0,
+     "kr20Plus": 0,
+     "kr40Plus": 0,
+     "krFC": 0,
+     "krFum": 0
+    },
+    "puntReturns": {
+     "prRet": 0,
+     "prYds": 0,
+     "prAvg": 0.0,
+     "prLng": 0,
+     "prTD": 0,
+     "pr20Plus": 0,
+     "pr40Plus": 0,
+     "prFC": 0,
+     "prFum": 0
+    },
+    "miscellaneous": {
+     "gamesStarted": 0
+    },
+    "twoPointAttempts": {
+     "twoPtAtt": 0,
+     "twoPtMade": 1,
+     "twoPtPassAtt": 0,
+     "twoPtPassMade": 0,
+     "twoPtPassRec": 1,
+     "twoPtRushAtt": 0,
+     "twoPtRushMade": 0
+    },
+    "snapCounts": {
+     "offenseSnaps": 22,
+     "defenseSnaps": 0,
+     "specialTeamSnaps": 16
+    }
+   }
+  },
+  {
+   "game": {
+    "id": 163646,
+    "week": 7,
+    "startTime": "2026-10-25T17:00:00.000Z",
+    "awayTeamAbbreviation": "NYG",
+    "homeTeamAbbreviation": "HOU"
+   },
+   "player": {
+    "id": 79740,
+    "firstName": "C.J.",
+    "lastName": "Stroud",
+    "position": "QB",
+    "jerseyNumber": 7
+   },
+   "team": {
+    "id": 64,
+    "abbreviation": "HOU"
+   },
+   "stats": {
+    "passing": {
+     "passAttempts": 28,
+     "passCompletions": 17,
+     "passPct": 60.7,
+     "passYards": 153,
+     "passAvg": 5.5,
+     "passYardsPerAtt": 5.5,
+     "passTD": 2,
+     "passTDPct": 7.1,
+     "passInt": 0,
+     "passIntPct": 0.0,
+     "passLng": 43,
+     "pass20Plus": 2,
+     "pass40Plus": 1,
+     "passSacks": 1,
+     "passSackY": 0,
+     "qbRating": 99.3
+    },
+    "rushing": {
+     "rushAttempts": 2,
+     "rushYards": 4,
+     "rushAverage": 2.0,
+     "rushTD": 0,
+     "rushLng": 2,
+     "rush1stDowns": 2,
+     "rush1stDownsPct": 100.0,
+     "rush20Plus": 0,
+     "rush40Plus": 0,
+     "rushFumbles": 0
+    },
+    "receiving": {
+     "targets": 0,
+     "receptions": 0,
+     "recYards": 0,
+     "recAverage": 0.0,
+     "recTD": 0,
+     "recLng": 0,
+     "rec1stDowns": 0,
+     "rec20Plus": 0,
+     "rec40Plus": 0,
+     "recFumbles": 0
+    },
+    "tackles": {
+     "tackleSolo": 0,
+     "tackleTotal": 0,
+     "tackleAst": 0,
+     "sacks": 0.0,
+     "sackYds": 0,
+     "tacklesForLoss": 0.0
+    },
+    "interceptions": {
+     "interceptions": 0,
+     "intTD": 0,
+     "intYds": 0,
+     "intAverage": 0.0,
+     "intLng": 0,
+     "passesDefended": 0,
+     "stuffs": 0,
+     "stuffYds": 0,
+     "safeties": 0,
+     "kB": 0
+    },
+    "fumbles": {
+     "fumbles": 0,
+     "fumLost": 0,
+     "fumForced": 0,
+     "fumOwnRec": 0,
+     "fumOppRec": 0,
+     "fumRecYds": 0,
+     "fumTotalRec": 0,
+     "fumTD": 0,
+     "offFumTD": 0
+    },
+    "kickoffReturns": {
+     "krRet": 0,
+     "krYds": 0,
+     "krAvg": 0.0,
+     "krLng": 0,
+     "krTD": 0,
+     "kr20Plus": 0,
+     "kr40Plus": 0,
+     "krFC": 0,
+     "krFum": 0
+    },
+    "puntReturns": {
+     "prRet": 0,
+     "prYds": 0,
+     "prAvg": 0.0,
+     "prLng": 0,
+     "prTD": 0,
+     "pr20Plus": 0,
+     "pr40Plus": 0,
+     "prFC": 0,
+     "prFum": 0
+    },
+    "miscellaneous": {
+     "gamesStarted": 0
+    },
+    "twoPointAttempts": {
+     "twoPtAtt": 1,
+     "twoPtMade": 1,
+     "twoPtPassAtt": 1,
+     "twoPtPassMade": 1,
+     "twoPtPassRec": 0,
+     "twoPtRushAtt": 0,
+     "twoPtRushMade": 0
+    },
+    "snapCounts": {
+     "offenseSnaps": 61,
+     "defenseSnaps": 0,
+     "specialTeamSnaps": 0
+    }
+   }
+  },
+  {
+   "game": {
+    "id": 163648,
+    "week": 7,
+    "startTime": "2026-10-25T17:00:00.000Z",
+    "awayTeamAbbreviation": "MIA",
+    "homeTeamAbbreviation": "NYJ"
+   },
+   "player": {
+    "id": 166711,
+    "firstName": "Mason",
+    "lastName": "Taylor",
+    "position": "TE",
+    "jerseyNumber": 85
+   },
+   "team": {
+    "id": 51,
+    "abbreviation": "NYJ"
+   },
+   "stats": {
+    "passing": {
+     "passAttempts": 0,
+     "passCompletions": 0,
+     "passPct": 0.0,
+     "passYards": 0,
+     "passAvg": 0.0,
+     "passYardsPerAtt": 0.0,
+     "passTD": 0,
+     "passTDPct": 0.0,
+     "passInt": 0,
+     "passIntPct": 0.0,
+     "passLng": 0,
+     "pass20Plus": 0,
+     "pass40Plus": 0,
+     "passSacks": 0,
+     "passSackY": 0,
+     "qbRating": 0.0
+    },
+    "rushing": {
+     "rushAttempts": 0,
+     "rushYards": 0,
+     "rushAverage": 0.0,
+     "rushTD": 0,
+     "rushLng": 0,
+     "rush1stDowns": 0,
+     "rush1stDownsPct": 0.0,
+     "rush20Plus": 0,
+     "rush40Plus": 0,
+     "rushFumbles": 0
+    },
+    "receiving": {
+     "targets": 6,
+     "receptions": 5,
+     "recYards": 62,
+     "recAverage": 12.4,
+     "recTD": 2,
+     "recLng": 20,
+     "rec1stDowns": 4,
+     "rec20Plus": 1,
+     "rec40Plus": 0,
+     "recFumbles": 0
+    },
+    "tackles": {
+     "tackleSolo": 0,
+     "tackleTotal": 0,
+     "tackleAst": 0,
+     "sacks": 0.0,
+     "sackYds": 0,
+     "tacklesForLoss": 0.0
+    },
+    "interceptions": {
+     "interceptions": 0,
+     "intTD": 0,
+     "intYds": 0,
+     "intAverage": 0.0,
+     "intLng": 0,
+     "passesDefended": 0,
+     "stuffs": 0,
+     "stuffYds": 0,
+     "safeties": 0,
+     "kB": 0
+    },
+    "fumbles": {
+     "fumbles": 0,
+     "fumLost": 0,
+     "fumForced": 0,
+     "fumOwnRec": 0,
+     "fumOppRec": 0,
+     "fumRecYds": 0,
+     "fumTotalRec": 0,
+     "fumTD": 0,
+     "offFumTD": 0
+    },
+    "kickoffReturns": {
+     "krRet": 0,
+     "krYds": 0,
+     "krAvg": 0.0,
+     "krLng": 0,
+     "krTD": 0,
+     "kr20Plus": 0,
+     "kr40Plus": 0,
+     "krFC": 0,
+     "krFum": 0
+    },
+    "puntReturns": {
+     "prRet": 0,
+     "prYds": 0,
+     "prAvg": 0.0,
+     "prLng": 0,
+     "prTD": 0,
+     "pr20Plus": 0,
+     "pr40Plus": 0,
+     "prFC": 0,
+     "prFum": 0
+    },
+    "miscellaneous": {
+     "gamesStarted": 0
+    },
+    "twoPointAttempts": {
+     "twoPtAtt": 0,
+     "twoPtMade": 1,
+     "twoPtPassAtt": 0,
+     "twoPtPassMade": 0,
+     "twoPtPassRec": 1,
+     "twoPtRushAtt": 0,
+     "twoPtRushMade": 0
+    },
+    "snapCounts": {
+     "offenseSnaps": 37,
+     "defenseSnaps": 0,
+     "specialTeamSnaps": 0
+    }
+   }
+  }
+ ]
+}

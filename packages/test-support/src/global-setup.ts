@@ -12,13 +12,13 @@ import { join } from 'node:path';
 import { Client } from 'pg';
 
 export const TEMPLATE_DB = 'burnout_test_template';
-const MIGRATIONS_DIR = join(__dirname, '../../../../db/prisma/migrations');
+const MIGRATIONS_DIR = join(__dirname, '../../db/prisma/migrations');
 
 export default async function globalSetup(): Promise<void> {
   const adminUrl = process.env.TEST_DATABASE_URL;
   if (!adminUrl) {
     console.warn(
-      '\n[burn-engine tests] TEST_DATABASE_URL is not set: integration suites (PRD-001 §11 acceptance) are SKIPPED.\n'
+      '\n[tests] TEST_DATABASE_URL is not set: Postgres integration suites (PRD acceptance) are SKIPPED.\n'
     );
     return;
   }

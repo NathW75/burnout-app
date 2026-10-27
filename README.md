@@ -12,6 +12,8 @@ burnout/
 ├── packages/
 │   ├── api/          Node.js/Express backend (Railway)
 │   ├── burn-engine/  Core burn mechanic (PRD-001)
+│   ├── scoring-engine/ Fantasy scoring, MSF ingestion, corrections (PRD-002)
+│   ├── test-support/ Test-only Postgres harness (never imported at runtime)
 │   ├── db/           Prisma schema + migrations (PostgreSQL)
 │   └── shared/       Types, constants, utilities
 ├── docs/
@@ -86,7 +88,7 @@ before implementing any feature.
 | PRD | Component | Status |
 |-----|-----------|--------|
 | PRD-001 | Burn Engine | APPROVED |
-| PRD-002 | Scoring Engine | TODO |
+| PRD-002 | Scoring Engine | APPROVED |
 | PRD-003 | Leaderboard | TODO |
 | PRD-004 | Payment Processing (Stripe) | TODO |
 | PRD-005 | Pri/Alt Insurance (P2) | TODO |

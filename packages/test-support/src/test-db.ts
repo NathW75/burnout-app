@@ -5,7 +5,13 @@
  */
 import { randomUUID } from 'node:crypto';
 import { Client, Pool, type PoolClient } from 'pg';
-import type { SqlDatabase, SqlRunner } from '../../sql';
+/** Same shape as the SqlDatabase seam each engine declares (structurally identical). */
+export interface SqlRunner {
+  query<T = Record<string, unknown>>(sql: string, params?: unknown[]): Promise<T[]>;
+}
+export interface SqlDatabase extends SqlRunner {
+  transaction<R>(fn: (tx: SqlRunner) => Promise<R>): Promise<R>;
+}
 
 const TEMPLATE_DB = 'burnout_test_template';
 
@@ -59,17 +65,28 @@ export async function createTestDb(): Promise<TestDb> {
   const url = new URL(adminUrl);
   url.pathname = `/${name}`;
   const pool = new Pool({ connectionString: url.toString(), max: 5 });
+  // node-postgres requires an error listener on every pool: an idle client can
+  // emit errors at any time, and an unhandled one crashes the test process.
+  // Errors while we are tearing down (dropping the database) are expected;
+  // any other error fails the suite in close().
+  let closing = false;
+  const unexpected: Error[] = [];
+  pool.on('error', (err) => {
+    if (!closing) unexpected.push(err);
+  });
   const db = pgSqlDatabase(pool);
 
   return {
     db,
     sql: (text, params) => db.query(text, params),
     async close() {
+      closing = true;
       await pool.end();
       const a = new Client({ connectionString: adminUrl });
       await a.connect();
       await a.query(`DROP DATABASE IF EXISTS ${name} WITH (FORCE)`);
       await a.end();
+      if (unexpected.length) throw new Error(`Unexpected Postgres pool error during test: ${unexpected[0].message}`);
     },
   };
 }

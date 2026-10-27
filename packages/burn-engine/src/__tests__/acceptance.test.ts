@@ -18,7 +18,7 @@ import {
   submitWeekly,
   TestClock,
   type TestDb,
-} from './support/test-db';
+} from '@burnout/test-support';
 
 const KICKOFF = new Date('2026-11-01T18:00:00.000Z'); // Sun Nov 1, 1:00 PM ET
 const MIN = 60_000;

@@ -1,7 +1,7 @@
 # PRD-002 — Scoring Engine
 **Burnout League · packages/scoring-engine**
-Version 1.1 · 2026-10-26
-Status: DRAFT — decisions in §3, §5.2, §7, §7.1 and §9 locked 2026-10-26; full document pending review
+Version 1.2 · 2026-10-26
+Status: APPROVED 2026-10-26 — implement against this spec (v1.2 changes: see change log)
 
 ---
 
@@ -84,10 +84,26 @@ Team defense is a P2 slot (PRD-001 §2) and is scored by the DEF PRD, not this o
 
 ### 4.1 MSF ingestion
 
-- Stats come from MSF v2.1 per-game player stat feeds, called only by the backend worker (one authenticated client; PRD-001 constraints apply).
-- An MSF adapter maps feed fields into the normalized stat line (§8.1). **Field mapping must be verified against the live feed** (MSF key lives in Railway env vars only) and captured as recorded fixtures before this ships. Specifically confirm: two-point conversion credit for passer, rusher and receiver; kick/punt return TDs; offensive fumble recovery TDs; field goals made by distance bucket so they map onto the three Yahoo tiers.
-- The adapter is the only code that knows MSF field names. The scoring function never sees raw MSF payloads.
+- Feeds: `https://api.mysportsfeeds.com/v2.1/pull/nfl/{season}/week/{week}/games.json` and `.../player_gamelogs.json`, season slug e.g. `2026-2027-regular`. HTTP Basic auth, username = API key, password = `MYSPORTSFEEDS`. Called only by the backend worker; the key lives only in Railway env vars.
+- Current subscription covers the 2026-27 season only. 2025-26 requests return 403.
+- An MSF adapter maps feed fields into the normalized stat line (§8.1). It is the only code that knows MSF field names, and it never passes MSF player or team reference data (headshot URLs, logos, biographical fields) through (NIL).
+- **Mapping verified against the live 2026-27 Week 7 feeds (2026-10-26):**
 
+| Stat line field | MSF field(s) |
+|---|---|
+| Passing yds / TD / INT | `passing.passYards`, `passing.passTD`, `passing.passInt` |
+| Rushing yds / TD | `rushing.rushYards`, `rushing.rushTD` |
+| Receptions / yds / TD | `receiving.receptions`, `receiving.recYards`, `receiving.recTD` |
+| Return TD | `kickoffReturns.krTD` + `puntReturns.prTD` |
+| Fumble recovery TD | `fumbles.offFumTD` (offensive). `fumbles.fumTD` is the defensive stat and is excluded |
+| Fumbles lost | `fumbles.fumLost` |
+| Two-point conversions | `twoPtPassMade` (passer) + `twoPtPassRec` (receiver) + `twoPtRushMade` (rusher); must equal `twoPtMade` |
+| FG 0–39 / 40–49 / 50+ | `fgMade1_19 + fgMade20_29 + fgMade30_39` / `fgMade40_49` / `fgMade50Plus`; buckets must equal `fgMade` |
+| FG missed, XP made, XP missed | `fgAtt − fgMade`, `xpMade`, `xpAtt − xpMade` |
+
+- The adapter rejects the whole feed if either sum invariant fails or any stat is not an integer. Both invariants held for all 365 scored-position rows in Week 7.
+- Scored positions: QB, RB, FB, WR, TE, K.
+- **Final:** `playedStatus` `COMPLETED` or `COMPLETED_PENDING_REVIEW`. Any other value, including unknown ones, is not Final.
 ### 4.2 Ingestion cadence
 
 | Situation | Cadence |
@@ -176,6 +192,31 @@ Correction notices are **not** sent as push notifications. Corrections can arriv
 ---
 
 ## 8. Database Schema — Scoring Tables
+
+### 8.0 Games and ruleset
+
+```sql
+CREATE TABLE nfl_games (                         -- per-game status from the MSF schedule feed
+  msf_game_id       VARCHAR(50) PRIMARY KEY,
+  season            VARCHAR(20) NOT NULL,
+  week              SMALLINT NOT NULL,
+  game_window_id    UUID REFERENCES game_windows(id),   -- via game_windows.msf_game_ids
+  scheduled_start   TIMESTAMPTZ NOT NULL,
+  played_status     VARCHAR(40) NOT NULL,
+  schedule_status   VARCHAR(40) NOT NULL,
+  is_final          BOOLEAN NOT NULL DEFAULT false,
+  final_observed_at TIMESTAMPTZ,                  -- server time ingestion first saw Final; drives the §7 freeze clock
+  updated_at        TIMESTAMPTZ NOT NULL
+);
+
+CREATE TABLE season_rules (                      -- §3.4: pinned by the first score written for the season
+  season         VARCHAR(20) PRIMARY KEY,
+  rules_version  VARCHAR(40) NOT NULL,
+  pinned_at      TIMESTAMPTZ NOT NULL
+);
+```
+
+DB triggers: `season_rules` rejects UPDATE and DELETE; `player_game_scores` rejects any row whose `rules_version` differs from its season's pinned version. Stat lines for games with no mapped game window are skipped and reported.
 
 ### 8.1 Stat lines
 
@@ -320,7 +361,7 @@ After any job changes scores, it emits a `SCORES_UPDATED {season, week}` event f
    - RB: −3 rush yds, 5 receptions, 41 rec yds, 1 rec TD → **12.30** (1230)
    - K: FGs of 38, 44 and 52 yds, 1 FG missed, 3 XP made → **15.00** (1500)
    - WR active with no stats → **0.00**, stored as a real score row.
-   Also verified: the computed scores for one full 2025 MSF week match Yahoo's published default-scoring totals for a sample of at least 50 players.
+   Also verified against real 2026-27 Week 7 MSF data for 10 players covering passing, rushing, receiving, two-point conversions (passer and receiver), fumbles lost, every FG tier and misses, negative yardage and a zero-stat line. These hand-computed values are spot-checked against Yahoo's Week 7 default-scoring totals before launch.
 2. **Exact arithmetic.** All points are stored and summed as integer centipoints. A week score always equals the sum of its displayed slot scores, to the cent.
 3. **Only locked slots score.** Empty and voided slots score 0. A player in `weekly_submissions` adds nothing to the season-long week score or season total.
 4. **Lifecycle.** Live ingests update provisional scores. Final sets status `final` for that player's game even if other games in the window are still live.
@@ -347,9 +388,11 @@ After any job changes scores, it emits a `SCORES_UPDATED {season, week}` event f
 
 ## 13. Open Questions
 
-1. **MSF field mapping.** Confirm against the live feed and record fixtures (§4.1), especially two-point conversion crediting and FG distance buckets.
+1. **Fullbacks.** MSF lists fullbacks as `FB`. Scoring handles them; PRD-001's position types have no FB, so player-pool eligibility (RB and FLEX?) needs a decision.
+2. **Yahoo spot-check.** Compare the AC1 Week 7 values with Yahoo's published Week 7 totals for the same players.
 
 Resolved 2026-10-26:
+- **MSF field mapping:** verified against the live feed (§4.1).
 - **Mid-week trades:** submission and burn are bound to the player; see PRD-001 §6.5 and §5.2 above.
 - **Correction notifications:** in-app + weekly recap email, no push (§7.1).
 - **Push provider:** Expo Push, standard Web Push, SendGrid email (PRD-001 §8.4).
@@ -359,6 +402,13 @@ Resolved 2026-10-26:
 ---
 
 ## Change log
+
+**v1.2 — 2026-10-26**
+- Status: APPROVED
+- §4.1: MSF endpoints, auth, verified field mapping, invariants, Final statuses, subscription scope
+- §8.0: new — `nfl_games` and `season_rules`; `SCORE_CORRECTION` added to the notification outbox kinds
+- AC1: parity verified on 2026-27 Week 7 data (2025-26 is outside the subscription)
+- §13: MSF mapping resolved; fullback eligibility and Yahoo spot-check added
 
 **v1.1 — 2026-10-26**
 - §5.2: player team changes (PRD-001 §6.5)

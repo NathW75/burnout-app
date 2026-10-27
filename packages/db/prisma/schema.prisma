@@ -27,6 +27,7 @@ model User {
   weeklySubmissions   WeeklySubmission[]
   burnRecords         BurnRecord[]
   submissionReceipts  SubmissionReceipt[]
+  weekScores          UserWeekScore[]
 
   @@map("users")
 }
@@ -66,6 +67,9 @@ model GameWindow {
   weeklySubmissions  WeeklySubmission[]
   burnRecords        BurnRecord[]
   lockEvents         LockEvent[]
+  nflGames           NflGame[]
+  playerGameStats    PlayerGameStats[]
+  playerGameScores   PlayerGameScore[]
 
   @@index([status, scheduledEt], name: "idx_game_windows_status")
   @@map("game_windows")
@@ -208,4 +212,142 @@ model NotificationQueue {
 
   @@index([dispatchedAt, createdAt], name: "idx_notification_queue_pending")
   @@map("notification_queue")
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// PRD-002 — Scoring Engine
+// ═════════════════════════════════════════════════════════════════════════════
+
+// Per-game status from the MSF schedule feed. Freeze timing (PRD-002 §7) runs
+// off final_observed_at: the server time at which ingestion first saw Final.
+model NflGame {
+  msfGameId        String    @id @map("msf_game_id") @db.VarChar(50)
+  season           String    @db.VarChar(20)
+  week             Int       @db.SmallInt
+  gameWindowId     String?   @map("game_window_id") @db.Uuid
+  scheduledStart   DateTime  @map("scheduled_start") @db.Timestamptz
+  playedStatus     String    @map("played_status") @db.VarChar(40)
+  scheduleStatus   String    @map("schedule_status") @db.VarChar(40)
+  isFinal          Boolean   @default(false) @map("is_final")
+  finalObservedAt  DateTime? @map("final_observed_at") @db.Timestamptz
+  updatedAt        DateTime  @map("updated_at") @db.Timestamptz
+
+  gameWindow GameWindow? @relation(fields: [gameWindowId], references: [id])
+
+  @@index([season, week], name: "idx_nfl_games_season_week")
+  @@map("nfl_games")
+}
+
+// The ruleset a season is scored under. Pinned by the first score written; a
+// trigger rejects any score row with a different rules_version (§3.4).
+model SeasonRules {
+  season        String   @id @db.VarChar(20)
+  rulesVersion  String   @map("rules_version") @db.VarChar(40)
+  pinnedAt      DateTime @map("pinned_at") @db.Timestamptz
+
+  @@map("season_rules")
+}
+
+model PlayerGameStats {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  season           String   @db.VarChar(20)
+  week             Int      @db.SmallInt
+  msfGameId        String   @map("msf_game_id") @db.VarChar(50)
+  playerId         String   @map("player_id") @db.VarChar(50)
+  gameWindowId     String   @map("game_window_id") @db.Uuid
+  passYds          Int      @default(0) @map("pass_yds")
+  passTd           Int      @default(0) @map("pass_td") @db.SmallInt
+  passInt          Int      @default(0) @map("pass_int") @db.SmallInt
+  rushYds          Int      @default(0) @map("rush_yds")
+  rushTd           Int      @default(0) @map("rush_td") @db.SmallInt
+  receptions       Int      @default(0) @db.SmallInt
+  recYds           Int      @default(0) @map("rec_yds")
+  recTd            Int      @default(0) @map("rec_td") @db.SmallInt
+  returnTd         Int      @default(0) @map("return_td") @db.SmallInt
+  fumbleRecTd      Int      @default(0) @map("fumble_rec_td") @db.SmallInt
+  fumblesLost      Int      @default(0) @map("fumbles_lost") @db.SmallInt
+  twoPt            Int      @default(0) @map("two_pt") @db.SmallInt
+  fgMade0To39      Int      @default(0) @map("fg_made_0_39") @db.SmallInt
+  fgMade40To49     Int      @default(0) @map("fg_made_40_49") @db.SmallInt
+  fgMade50Plus     Int      @default(0) @map("fg_made_50_plus") @db.SmallInt
+  fgMissed         Int      @default(0) @map("fg_missed") @db.SmallInt
+  xpMade           Int      @default(0) @map("xp_made") @db.SmallInt
+  xpMissed         Int      @default(0) @map("xp_missed") @db.SmallInt
+  statHash         String   @map("stat_hash") @db.Char(64)
+  sourceUpdatedAt  DateTime @map("source_updated_at") @db.Timestamptz
+  ingestedAt       DateTime @map("ingested_at") @db.Timestamptz
+
+  gameWindow GameWindow       @relation(fields: [gameWindowId], references: [id])
+  score      PlayerGameScore?
+
+  @@unique([season, msfGameId, playerId])
+  @@map("player_game_stats")
+}
+
+model PlayerGameScore {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  statsId        String   @unique @map("stats_id") @db.Uuid
+  season         String   @db.VarChar(20)
+  week           Int      @db.SmallInt
+  msfGameId      String   @map("msf_game_id") @db.VarChar(50)
+  playerId       String   @map("player_id") @db.VarChar(50)
+  gameWindowId   String   @map("game_window_id") @db.Uuid
+  pointsX100     Int      @map("points_x100")
+  status         String   @db.VarChar(12)   // provisional | final | frozen
+  rulesVersion   String   @map("rules_version") @db.VarChar(40)
+  computedAt     DateTime @map("computed_at") @db.Timestamptz
+
+  stats       PlayerGameStats   @relation(fields: [statsId], references: [id])
+  gameWindow  GameWindow        @relation(fields: [gameWindowId], references: [id])
+  corrections ScoreCorrection[]
+
+  @@unique([season, msfGameId, playerId])
+  @@index([season, week, playerId], name: "idx_pgs_player_week")
+  @@index([gameWindowId, playerId], name: "idx_pgs_window_player")
+  @@map("player_game_scores")
+}
+
+// Append-only audit of every change to a Final score (§7).
+model ScoreCorrection {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  scoreId          String   @map("score_id") @db.Uuid
+  detectedAt       DateTime @map("detected_at") @db.Timestamptz
+  pointsBeforeX100 Int      @map("points_before_x100")
+  pointsAfterX100  Int      @map("points_after_x100")
+  statsBefore      Json     @map("stats_before")
+  statsAfter       Json     @map("stats_after")
+  applied          Boolean
+  reason           String   @db.VarChar(30)   // STAT_CORRECTION | AFTER_FREEZE
+
+  score PlayerGameScore @relation(fields: [scoreId], references: [id])
+
+  @@index([scoreId], name: "idx_score_corrections_score")
+  @@map("score_corrections")
+}
+
+model UserWeekScore {
+  userId       String   @map("user_id") @db.Uuid
+  season       String   @db.VarChar(20)
+  week         Int      @db.SmallInt
+  pointsX100   Int      @default(0) @map("points_x100")
+  slotsScored  Int      @default(0) @map("slots_scored") @db.SmallInt
+  status       String   @db.VarChar(12)   // provisional | final | frozen
+  updatedAt    DateTime @map("updated_at") @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@id([userId, season, week])
+  @@index([season, week, pointsX100], name: "idx_user_week_scores_rank")
+  @@map("user_week_scores")
+}
+
+model WeekFreeze {
+  season        String   @db.VarChar(20)
+  week          Int      @db.SmallInt
+  lastFinalAt   DateTime @map("last_final_at") @db.Timestamptz
+  frozenAt      DateTime @map("frozen_at") @db.Timestamptz
+  scoresFrozen  Int      @map("scores_frozen")
+
+  @@id([season, week])
+  @@map("week_freezes")
 }

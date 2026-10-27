@@ -1,0 +1,341 @@
+{
+ "lastUpdatedOn": "2026-10-26T23:58:54.251Z",
+ "games": [
+  {
+   "schedule": {
+    "id": 163641,
+    "week": 7,
+    "startTime": "2026-10-23T00:15:00.000Z",
+    "endedTime": "2026-10-23T04:22:00.000Z",
+    "awayTeam": {
+     "id": 50,
+     "abbreviation": "NE"
+    },
+    "homeTeam": {
+     "id": 60,
+     "abbreviation": "CHI"
+    },
+    "scheduleStatus": "NORMAL",
+    "originalStartTime": null,
+    "delayedOrPostponedReason": null,
+    "playedStatus": "COMPLETED"
+   },
+   "score": {
+    "awayScoreTotal": 24,
+    "homeScoreTotal": 30
+   }
+  },
+  {
+   "schedule": {
+    "id": 163642,
+    "week": 7,
+    "startTime": "2026-10-25T13:30:00.000Z",
+    "endedTime": "2026-10-25T17:32:00.000Z",
+    "awayTeam": {
+     "id": 59,
+     "abbreviation": "PIT"
+    },
+    "homeTeam": {
+     "id": 70,
+     "abbreviation": "NO"
+    },
+    "scheduleStatus": "NORMAL",
+    "originalStartTime": null,
+    "delayedOrPostponedReason": null,
+    "playedStatus": "COMPLETED"
+   },
+   "score": {
+    "awayScoreTotal": 16,
+    "homeScoreTotal": 10
+   }
+  },
+  {
+   "schedule": {
+    "id": 163643,
+    "week": 7,
+    "startTime": "2026-10-25T17:00:00.000Z",
+    "endedTime": "2026-10-25T21:07:00.000Z",
+    "awayTeam": {
+     "id": 78,
+     "abbreviation": "SF"
+    },
+    "homeTeam": {
+     "id": 68,
+     "abbreviation": "ATL"
+    },
+    "scheduleStatus": "NORMAL",
+    "originalStartTime": null,
+    "delayedOrPostponedReason": null,
+    "playedStatus": "COMPLETED"
+   },
+   "score": {
+    "awayScoreTotal": 20,
+    "homeScoreTotal": 29
+   }
+  },
+  {
+   "schedule": {
+    "id": 163644,
+    "week": 7,
+    "startTime": "2026-10-25T17:00:00.000Z",
+    "endedTime": "2026-10-25T20:55:00.000Z",
+    "awayTeam": {
+     "id": 57,
+     "abbreviation": "CIN"
+    },
+    "homeTeam": {
+     "id": 56,
+     "abbreviation": "BAL"
+    },
+    "scheduleStatus": "NORMAL",
+    "originalStartTime": null,
+    "delayedOrPostponedReason": null,
+    "playedStatus": "COMPLETED"
+   },
+   "score": {
+    "awayScoreTotal": 35,
+    "homeScoreTotal": 13
+   }
+  },
+  {
+   "schedule": {
+    "id": 163645,
+    "week": 7,
+    "startTime": "2026-10-25T17:00:00.000Z",
+    "endedTime": "2026-10-25T20:46:00.000Z",
+    "awayTeam": {
+     "id": 71,
+     "abbreviation": "TB"
+    },
+    "homeTeam": {
+     "id": 69,
+     "abbreviation": "CAR"
+    },
+    "scheduleStatus": "NORMAL",
+    "originalStartTime": null,
+    "delayedOrPostponedReason": null,
+    "playedStatus": "COMPLETED"
+   },
+   "score": {
+    "awayScoreTotal": 43,
+    "homeScoreTotal": 13
+   }
+  },
+  {
+   "schedule": {
+    "id": 163646,
+    "week": 7,
+    "startTime": "2026-10-25T17:00:00.000Z",
+    "endedTime": "2026-10-25T21:19:00.000Z",
+    "awayTeam": {
+     "id": 53,
+     "abbreviation": "NYG"
+    },
+    "homeTeam": {
+     "id": 64,
+     "abbreviation": "HOU"
+    },
+    "scheduleStatus": "NORMAL",
+    "originalStartTime": null,
+    "delayedOrPostponedReason": null,
+    "playedStatus": "COMPLETED"
+   },
+   "score": {
+    "awayScoreTotal": 27,
+    "homeScoreTotal": 21
+   }
+  },
+  {
+   "schedule": {
+    "id": 163647,
+    "week": 7,
+    "startTime": "2026-10-25T17:00:00.000Z",
+    "endedTime": "2026-10-25T20:45:00.000Z",
+    "awayTeam": {
+     "id": 65,
+     "abbreviation": "IND"
+    },
+    "homeTeam": {
+     "id": 63,
+     "abbreviation": "MIN"
+    },
+    "scheduleStatus": "NORMAL",
+    "originalStartTime": null,
+    "delayedOrPostponedReason": null,
+    "playedStatus": "COMPLETED"
+   },
+   "score": {
+    "awayScoreTotal": 10,
+    "homeScoreTotal": 16
+   }
+  },
+  {
+   "schedule": {
+    "id": 163648,
+    "week": 7,
+    "startTime": "2026-10-25T17:00:00.000Z",
+    "endedTime": "2026-10-25T20:55:00.000Z",
+    "awayTeam": {
+     "id": 49,
+     "abbreviation": "MIA"
+    },
+    "homeTeam": {
+     "id": 51,
+     "abbreviation": "NYJ"
+    },
+    "scheduleStatus": "NORMAL",
+    "originalStartTime": null,
+    "delayedOrPostponedReason": null,
+    "playedStatus": "COMPLETED"
+   },
+   "score": {
+    "awayScoreTotal": 28,
+    "homeScoreTotal": 25
+   }
+  },
+  {
+   "schedule": {
+    "id": 163649,
+    "week": 7,
+    "startTime": "2026-10-25T17:00:00.000Z",
+    "endedTime": "2026-10-25T21:04:00.000Z",
+    "awayTeam": {
+     "id": 58,
+     "abbreviation": "CLE"
+    },
+    "homeTeam": {
+     "id": 67,
+     "abbreviation": "TEN"
+    },
+    "scheduleStatus": "NORMAL",
+    "originalStartTime": null,
+    "delayedOrPostponedReason": null,
+    "playedStatus": "COMPLETED"
+   },
+   "score": {
+    "awayScoreTotal": 27,
+    "homeScoreTotal": 24
+   }
+  },
+  {
+   "schedule": {
+    "id": 163650,
+    "week": 7,
+    "startTime": "2026-10-25T20:05:00.000Z",
+    "endedTime": "2026-10-26T00:27:00.000Z",
+    "awayTeam": {
+     "id": 72,
+     "abbreviation": "DEN"
+    },
+    "homeTeam": {
+     "id": 76,
+     "abbreviation": "ARI"
+    },
+    "scheduleStatus": "NORMAL",
+    "originalStartTime": null,
+    "delayedOrPostponedReason": null,
+    "playedStatus": "COMPLETED"
+   },
+   "score": {
+    "awayScoreTotal": 30,
+    "homeScoreTotal": 16
+   }
+  },
+  {
+   "schedule": {
+    "id": 163651,
+    "week": 7,
+    "startTime": "2026-10-25T20:25:00.000Z",
+    "endedTime": "2026-10-26T00:30:00.000Z",
+    "awayTeam": {
+     "id": 62,
+     "abbreviation": "GB"
+    },
+    "homeTeam": {
+     "id": 61,
+     "abbreviation": "DET"
+    },
+    "scheduleStatus": "NORMAL",
+    "originalStartTime": null,
+    "delayedOrPostponedReason": null,
+    "playedStatus": "COMPLETED"
+   },
+   "score": {
+    "awayScoreTotal": 17,
+    "homeScoreTotal": 20
+   }
+  },
+  {
+   "schedule": {
+    "id": 163652,
+    "week": 7,
+    "startTime": "2026-10-25T20:25:00.000Z",
+    "endedTime": "2026-10-26T00:35:00.000Z",
+    "awayTeam": {
+     "id": 77,
+     "abbreviation": "LA"
+    },
+    "homeTeam": {
+     "id": 74,
+     "abbreviation": "LV"
+    },
+    "scheduleStatus": "NORMAL",
+    "originalStartTime": null,
+    "delayedOrPostponedReason": null,
+    "playedStatus": "COMPLETED"
+   },
+   "score": {
+    "awayScoreTotal": 35,
+    "homeScoreTotal": 21
+   }
+  },
+  {
+   "schedule": {
+    "id": 163653,
+    "week": 7,
+    "startTime": "2026-10-26T00:20:00.000Z",
+    "endedTime": "2026-10-26T04:14:00.000Z",
+    "awayTeam": {
+     "id": 73,
+     "abbreviation": "KC"
+    },
+    "homeTeam": {
+     "id": 79,
+     "abbreviation": "SEA"
+    },
+    "scheduleStatus": "NORMAL",
+    "originalStartTime": null,
+    "delayedOrPostponedReason": null,
+    "playedStatus": "COMPLETED"
+   },
+   "score": {
+    "awayScoreTotal": 3,
+    "homeScoreTotal": 20
+   }
+  },
+  {
+   "schedule": {
+    "id": 163654,
+    "week": 7,
+    "startTime": "2026-10-27T00:15:00.000Z",
+    "endedTime": null,
+    "awayTeam": {
+     "id": 52,
+     "abbreviation": "DAL"
+    },
+    "homeTeam": {
+     "id": 54,
+     "abbreviation": "PHI"
+    },
+    "scheduleStatus": "NORMAL",
+    "originalStartTime": null,
+    "delayedOrPostponedReason": null,
+    "playedStatus": "UNPLAYED"
+   },
+   "score": {
+    "awayScoreTotal": null,
+    "homeScoreTotal": null
+   }
+  }
+ ]
+}

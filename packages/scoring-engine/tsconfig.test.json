@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": "..",
+    "types": ["jest", "node"],
+    "baseUrl": ".",
+    "paths": { "@burnout/test-support": ["../test-support/src/index.ts"] }
+  },
+  "include": ["src", "../test-support/src"],
+  "exclude": ["dist", "node_modules"]
+}

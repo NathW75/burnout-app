@@ -3,13 +3,29 @@
   "compilerOptions": {
     "noEmit": true,
     "rootDir": "..",
-    "types": ["jest", "node"],
+    "types": [
+      "jest",
+      "node"
+    ],
     "baseUrl": ".",
     "paths": {
-      "@burnout/db": ["../db/src/index.ts"],
-      "@burnout/shared": ["../shared/src/index.ts"]
+      "@burnout/db": [
+        "../db/src/index.ts"
+      ],
+      "@burnout/shared": [
+        "../shared/src/index.ts"
+      ],
+      "@burnout/test-support": [
+        "../test-support/src/index.ts"
+      ]
     }
   },
-  "include": ["src"],
-  "exclude": ["dist", "node_modules"]
+  "include": [
+    "src",
+    "../test-support/src"
+  ],
+  "exclude": [
+    "dist",
+    "node_modules"
+  ]
 }
