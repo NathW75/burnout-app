@@ -135,8 +135,9 @@ export interface PlayEligibility {
 /**
  * Free play (decision 2026-10-27): anyone may play without paying, but can't
  * win prizes. Once a season has paid pools, free play ends at the paid-entry
- * cutoff (the earliest entry_closes_at — set to the Week 4 lock): users
- * without a paid entry may submit only weeks before the cutoff week.
+ * cutoff (the earliest entry_closes_at — set to the Week 3 lock, so free play
+ * is Weeks 1–2): users without a paid entry may submit only weeks before the
+ * cutoff week.
  */
 export async function playEligibility(q: SqlRunner, userId: string, season: string): Promise<PlayEligibility> {
   const [r] = await q.query<{ cutoff: Date | null; cutoff_week: number | null; entered: boolean }>(

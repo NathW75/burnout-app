@@ -1,6 +1,6 @@
 # PRD-006 — API, Accounts and Lineup Submission
 **Burnout League · packages/api**
-Version 1.3 · 2026-10-27
+Version 1.4 · 2026-10-27
 Status: APPROVED 2026-10-27 — scope and auth decisions locked by Nath (§3); rules calls Q1, Q2, Q4 resolved in v1.1
 
 ---
@@ -249,7 +249,7 @@ Only the worker calls MSF, with `MSF_API_KEY` from env using Basic auth (`key:MY
 ### 9.0 Who may submit (locked 2026-10-27)
 
 - **Free play:** anyone may submit lineups without paying. Free players can't win prizes.
-- **Cutoff:** once a season has published paid pools, free play ends at the paid-entry cutoff (the earliest pool `entry_closes_at`, set to the Week 4 lock). A user without an active paid entry may submit only weeks **before** the cutoff week. After that, review and confirm return `403 PAID_ENTRY_REQUIRED`. Both gates check it.
+- **Cutoff:** once a season has published paid pools, free play ends at the paid-entry cutoff (the earliest pool `entry_closes_at`, set to the **Week 3 lock**). A user without an active paid entry may submit only weeks **before** the cutoff week, so free play is Weeks 1–2. After that, review and confirm return `403 PAID_ENTRY_REQUIRED`. Both gates check it.
 - **Late payers:** paying before the cutoff unblocks play and prize eligibility, with prize standings from the week of payment (PRD-003 §3).
 - **No paid pools:** in a season without published paid pools (the 2026 test season), everyone plays free all season.
 - `GET …/lineup` returns `eligibility: { prizeEligible, freePlayThroughWeek }` so clients can show it.
@@ -513,7 +513,7 @@ Every critical rule also gets a mutation check, as with PRD-001 to PRD-004.
 | Q1 | ~~Can Out and IR players be selected?~~ **Resolved 2026-10-27:** no — greyed out, not burned; an existing pick is voided before its lock (PRD-001 §3.1.1). | — |
 | Q2 | ~~Fullback eligibility.~~ **Resolved 2026-10-27:** FB eligible at RB and FLEX. | — |
 | Q3 | Projections feed for `projectedPoints` (MSF add-on or another source). Null until then. | Nath |
-| Q4 | ~~Paid entry to submit?~~ **Resolved 2026-10-27:** free play until the Week 4 cutoff, no prizes; late payers score for prizes from their paid week (§9.0, PRD-003 §3). | — |
+| Q4 | ~~Paid entry to submit?~~ **Resolved 2026-10-27, revised same day:** free play for two weeks (until the Week 3 cutoff), no prizes; late payers score for prizes from their paid week (§9.0, PRD-003 §3). | — |
 | Q5 | ~~Players feed shape.~~ **Resolved 2026-10-27:** `players`, `injuries` and `player_stats_totals` all return 200; the earlier 403 came from the season parameter. Parser verified against real samples (now test fixtures). | — |
 | Q6 | Identity-verification provider (PRD-004 Q10). | Nath |
 | Q7 | Supersedes Tech Summary §6.1 "JWT 24-hour". The Tech Summary should note that sessions are server-side and revocable. | Nath (doc) |
@@ -524,6 +524,7 @@ Every critical rule also gets a mutation check, as with PRD-001 to PRD-004.
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.4 | 2026-10-27 | Free play is two weeks: the paid-entry cutoff moves from the Week 4 lock to the Week 3 lock (§9.0, Q4; PRD-003 §3, PRD-004 D7). |
 | 1.3 | 2026-10-27 | Railway deploy: §10.4 edge trust. The cf-* location and client-IP headers count only with the Cloudflare edge secret; otherwise they're dropped (checkout blocked, proxy IP used). |
 | 1.2 | 2026-10-27 | Real MSF samples: `players.json` without a season parameter; `INJURY_LIST` → IR; separate 15-minute injuries job on the light `injuries.json` feed; Q5 resolved. |
 | 1.1 | 2026-10-27 | Rules calls: Out/IR unselectable and voided before lock; FB at RB/FLEX; free play through the Week 4 cutoff (§9.0); injury-report sync cadence; `players` feed 403 fallback. |

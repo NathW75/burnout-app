@@ -71,7 +71,7 @@ describeDbRedis('PRD-003 §11 acceptance (Postgres + Redis)', () => {
     await createWindow(t, { week: 1, scheduledEt: new Date('2026-09-11T00:20:00Z'), status: 'final' });
     await createWindow(t, { week: 2, scheduledEt: new Date('2026-09-18T00:15:00Z'), status: 'final' });
     await createWindow(t, { week: 3, scheduledEt: new Date('2026-09-25T00:15:00Z'), status: 'pending' });
-    const p = await pool(2500, new Date('2026-10-01T17:00:00Z')); // late entry open through Week 4
+    const p = await pool(2500, new Date('2026-09-25T00:15:00Z')); // late entry closes at the Week 3 lock
     const early = await manager('early_bird');
     const late = await manager('late_comer');
     const midweek = await manager('mid_week');
