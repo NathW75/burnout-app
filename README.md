@@ -92,7 +92,7 @@ before implementing any feature.
 | PRD-001 | Burn Engine | APPROVED |
 | PRD-002 | Scoring Engine | APPROVED |
 | PRD-003 | Leaderboard | APPROVED |
-| PRD-004 | Payment Processing (Stripe) | TODO |
+| PRD-004 | Payments (processor-agnostic) | DRAFT |
 | PRD-005 | Pri/Alt Insurance (P2) | TODO |
 
 ## Stack
