@@ -1,0 +1,39 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "esModuleInterop": true,
+    "strict": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "baseUrl": "../../..",
+    "paths": {
+      "@burnout/leaderboard": [
+        "packages/leaderboard/src/index.ts"
+      ],
+      "@burnout/payments": [
+        "packages/payments/src/index.ts"
+      ],
+      "@burnout/burn-engine": [
+        "packages/burn-engine/src/index.ts"
+      ],
+      "@burnout/scoring-engine": [
+        "packages/scoring-engine/src/index.ts"
+      ],
+      "@burnout/db": [
+        "packages/db/src/index.ts"
+      ],
+      "@burnout/shared": [
+        "packages/shared/src/index.ts"
+      ]
+    },
+    "noEmit": true,
+    "types": [
+      "node"
+    ]
+  },
+  "include": [
+    "api-server.cts"
+  ]
+}

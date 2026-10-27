@@ -1,0 +1,67 @@
+name: Deploy web app
+
+# PRD-007 §4: the web app is static files on Cloudflare.
+# Staging (app-staging.burnoutfantasy.com) deploys on every push to main that
+# touches the app. Production (app.burnoutfantasy.com) deploys after staging,
+# only outside the NFL blackout window (Thu 5:00 PM → Tue 2:00 AM ET), and
+# only once production is switched on (repository variable WEB_PRODUCTION=on).
+#
+# Secrets (GitHub → Settings → Secrets and variables → Actions):
+#   CLOUDFLARE_API_TOKEN   scoped token, see docs/deploy/CLOUDFLARE-APP.md
+#   CLOUDFLARE_ACCOUNT_ID  the Cloudflare account that owns burnoutfantasy.com
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/web/**'
+      - 'package-lock.json'
+      - '.github/workflows/deploy-web.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-web-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  staging:
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm -w apps/web run test
+      - run: npm -w apps/web run build:staging
+      - name: Deploy to app-staging.burnoutfantasy.com
+        working-directory: apps/web
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx wrangler deploy --env staging
+
+  production:
+    needs: staging
+    if: vars.WEB_PRODUCTION == 'on'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - name: Blackout window (Thu 5:00 PM ET → Tue 2:00 AM ET)
+        env:
+          COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
+        run: scripts/deploy-gate.sh "$(date +%s)" "$COMMIT_MESSAGE"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm -w apps/web run build:production
+      - name: Deploy to app.burnoutfantasy.com
+        working-directory: apps/web
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx wrangler deploy --env production

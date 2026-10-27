@@ -1,0 +1,24 @@
+// Cloudflare static assets for the web app (PRD-007 §4). No Worker code: the
+// files in dist/ are served as they are, with dist/_headers applied (CSP,
+// HSTS; written by vite.config.ts) and index.html for every app route.
+// Deployed by .github/workflows/deploy-web.yml; runbook docs/deploy/CLOUDFLARE-APP.md.
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "burnout-app",
+  "compatibility_date": "2026-10-13",
+  "assets": {
+    "directory": "./dist",
+    "not_found_handling": "single-page-application"
+  },
+  "workers_dev": false,
+  "env": {
+    "staging": {
+      "name": "burnout-app-staging",
+      "routes": [{ "pattern": "app-staging.burnoutfantasy.com", "custom_domain": true }]
+    },
+    "production": {
+      "name": "burnout-app-production",
+      "routes": [{ "pattern": "app.burnoutfantasy.com", "custom_domain": true }]
+    }
+  }
+}

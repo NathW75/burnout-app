@@ -1,0 +1,129 @@
+@import "tailwindcss";
+
+/*
+ * Design tokens: the live landing page's system (PRD-007 §11).
+ * Names match the landing page so the product and the site read as one brand.
+ */
+@theme {
+  --color-graphite: #0d0e0f;
+  --color-newsprint: #17191b;
+  --color-paper: #202326;
+  --color-rule: #33383c;
+  --color-frame: #4a5056;
+  --color-type: #edefea;
+  --color-muted: #a3aaae;
+  --color-steel: #8a9196;
+  --color-line: #e6ff3d;
+  --color-pencil: #ff5c66;
+  --color-bulb: #ffb81c;
+  --color-commit: #d9363f;
+  --color-ink: #141414;
+  --color-slate: #1b232a;
+  --color-slate-edge: #2c3a45;
+
+  --font-mono: "DM Mono", ui-monospace, monospace;
+  --font-sans: "IBM Plex Sans", system-ui, sans-serif;
+
+  --radius-sm: 4px;
+}
+
+@layer base {
+  html {
+    background: var(--color-graphite);
+    color-scheme: dark;
+  }
+  body {
+    margin: 0;
+    background: var(--color-newsprint);
+    color: var(--color-type);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+  a {
+    color: var(--color-line);
+    text-underline-offset: 3px;
+  }
+  /* Links inside text are underlined, not just colored (WCAG 1.4.1). Buttons and nav set their own. */
+  :where(p, li, span, dd) > a:not([class*="btn-"]) {
+    text-decoration: underline;
+  }
+  a:hover {
+    color: var(--color-type);
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-line);
+    outline-offset: 2px;
+  }
+  button:disabled {
+    cursor: not-allowed;
+  }
+}
+
+@utility tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+@utility label-mono {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 1px;
+}
+
+/* Primary action: lime with ink text. */
+@utility btn-primary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 52px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 4px;
+  background: var(--color-line);
+  color: var(--color-ink);
+  font-family: var(--font-mono);
+  font-size: 15px;
+  font-weight: 500;
+  letter-spacing: 1px;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+@utility btn-outline {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--color-frame);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--color-type);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 500;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+@utility field {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 46px;
+  padding: 0 12px;
+  border-radius: 4px;
+  border: 1px solid var(--color-frame);
+  background: var(--color-paper);
+  color: var(--color-type);
+  font: 15px var(--font-sans);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

@@ -1,6 +1,6 @@
 # PRD-007 — Web App (Player Portal)
 **Burnout League · apps/web**
-*Status: v1.3 — **APPROVED 2026-10-27** (Nath), decisions Q1–Q7 in §14; mockups approved on the landing-page design system (§11); API additions (§8) built.*
+*Status: v1.4 — **APPROVED 2026-10-27** (Nath), decisions Q1–Q7 in §14; mockups approved on the landing-page design system (§11); API additions (§8) built; web app patch (a) built.*
 *Author: Build thread · 2026-10-27*
 
 ---
@@ -66,7 +66,7 @@ The server is the authority for every rule. The web app never decides a lock, a 
 | Rendering | Static single-page app. No server rendering, and no secrets in the bundle. |
 | Hosting (Q1) | Cloudflare (static assets on Workers) at **`app.burnoutfantasy.com`**, staging at **`app-staging.burnoutfantasy.com`**. Same zone as the API, so DNS, TLS and headers live in one place. |
 | Deploys (Q1) | GitHub Actions with `wrangler`. Staging deploys every push to `main`; production runs behind the same blackout deploy gate as the API (Thu 5:00 PM → Tue 2:00 AM ET). Needs a scoped `CLOUDFLARE_API_TOKEN` secret in GitHub. |
-| API base | Build-time `VITE_API_BASE_URL` (`https://api-staging.burnoutfantasy.com` or `https://api.burnoutfantasy.com`). |
+| API base | Build-time `VITE_API_BASE_URL` (`https://api-staging.burnoutfantasy.com` or `https://api.burnoutfantasy.com`), with the Turnstile site key, in `apps/web/.env.staging` and `.env.production` (public values only). Runbook: `docs/deploy/CLOUDFLARE-APP.md`. |
 | API config change | `CORS_ORIGINS` adds the app origin and `APP_BASE_URL` becomes it, so email links and checkout returns land in the app (set per environment in `.railway/railway.ts`). |
 
 **Sessions:** the API's `httpOnly`, `Secure`, `SameSite=Lax` cookie works across `app.` and `api.` because both are on the same site (burnoutfantasy.com). The app never sees or stores the session token; nothing auth-related goes in `localStorage`. Every unsafe request sends `X-Burnout-CSRF: 1`, and the API also checks `Origin` (PRD-006 §5).
@@ -142,7 +142,7 @@ A user who stops partway resumes at the step they left on their next sign-in (th
 
 **Draft:** changes are a local draft until confirmed, saved per week in browser storage as a convenience only. The draft is cleared or reconciled on refetch: any slot the server now reports as locked or voided wins over the draft.
 
-**Submit:** "Review lineup" starts the three gates (§7). Only open slots can change; the API keeps locked slots fixed.
+**Submit:** "Review lineup" starts the three gates (§7). Only open slots can change; the API keeps locked slots fixed. **Every slot that hasn't locked needs a player to submit** (PRD-006 §9, `SLOT_EMPTY`): the button stays off and names the slots to fill. An empty slot happens only when a confirmed pick is voided later, and it then scores 0 and burns nothing. A draft pick whose window has since locked, or who is now listed Out, is flagged and must be replaced before review.
 
 ### 6.4 Burned roster
 
@@ -302,7 +302,7 @@ Mockups (approved): the "Burnout League — Web App Mockups" canvas.
 ## 12. Testing
 
 - **Unit and component (Vitest + Testing Library):** slot states, the picker's eligibility rules (FB at RB/FLEX; Out/IR, bye and locked greyed), countdown and clock offset, the draft reconciling against server state, and gate flows including expiry, stale-lock rejection, the Gate 2 button states and the Gate 3 hold/cancel.
-- **End to end (Playwright) in CI,** against the real API with Postgres and Redis services (as CI already runs):
+- **End to end (Playwright) in CI,** against the real API with Postgres and Redis services (as CI already runs). Patch (a) covers sign-up through the receipt, the server-enforced 2FA gate, sign-in with a code, a window locking during the gates, and axe on each screen it adds; the anonymity and tied-rank tests arrive with the standings in patch (b):
   - sign up → verify → set a lineup through all three gates → receipt
   - a window locks during Gate 2 → rejected → rebuilt
   - pre-lock anonymity: another manager's unlocked slot never appears in any response or in the DOM
@@ -352,8 +352,8 @@ Mockups (approved): the "Burnout League — Web App Mockups" canvas.
 1. ~~Approve this PRD (with Q1–Q7).~~ Done 2026-10-27.
 2. ~~Mockups of the three key screens, for sign-off.~~ Done 2026-10-27.
 3. ~~API additions (§8), shipped as their own patch with tests.~~ Built 2026-10-27.
-4. Web app Phase A, as two patches: (a) accounts, This Week, lineup and gates; (b) standings, burned roster, inbox, account, feedback, help.
-5. Cloudflare setup (DNS, Worker, headers, the Turnstile widget) and the GitHub deploy secret, from a runbook like `RAILWAY.md`.
+4. Web app Phase A, as two patches: (a) accounts, This Week, lineup and gates, with a short rules page and a basic account page; built 2026-10-27. (b) standings, burned roster, inbox, full account (security, sessions, receipts), feedback, and the light theme.
+5. Cloudflare setup: the deploy workflow, `wrangler.jsonc` and headers ship in patch (a); the runbook is `docs/deploy/CLOUDFLARE-APP.md` (API token and two GitHub secrets). Turnstile widgets created 2026-10-27.
 6. Testers invited once SendGrid domain authentication is done (verification emails must arrive).
 
 Depends on: PRD-001, PRD-003, PRD-004 (Phase B), PRD-006, `SPEC-feedback-system.md`. PRD-011 Phase 1a hosts its consent page and token settings here (Phase B).
@@ -364,6 +364,7 @@ Depends on: PRD-001, PRD-003, PRD-004 (Phase B), PRD-006, `SPEC-feedback-system.
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.4 | 2026-10-27 | §6.3: every open slot must be filled to submit (as the API already required), stale draft picks are flagged. §4, §12, §15: as built in web app patch (a). |
 | 1.3 | 2026-10-27 | §7: Gate 2 (CONTINUE lime and untappable until all three are ticked, then red with white text) and Gate 3 (red center fills 0→100% with the ring) as approved in the mockups. §8, §10: as built (response shapes, Turnstile fails closed, 30-second field cache with ETag, feedback limits and tagging). Corrected the PRD-006 decision reference to D3. Added to the repo. |
 | 1.2 | 2026-10-27 | §11: the visual design follows the live landing page's system (newsprint grays, lime/red/amber accents, DM Mono + IBM Plex Sans), replacing the brand-guide palette; mockups approved. |
 | 1.1 | 2026-10-27 | Approved with Q1–Q7. Q5 changed: a second factor is required for all use, set up within sign-up (§6.1.1), and enforced by the API (§8.6, amends PRD-006). |
