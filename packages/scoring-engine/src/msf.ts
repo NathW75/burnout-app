@@ -44,6 +44,9 @@ export interface GameStatus {
   scheduledStart: Date;
   playedStatus: string;
   scheduleStatus: string;
+  /** Team abbreviations (PRD-006 §7.2: player → team → game → window). */
+  homeTeam?: string | null;
+  awayTeam?: string | null;
   /** Game is over per MSF. Drives score status `final` (PRD-002 §6). */
   isFinal: boolean;
 }
@@ -152,6 +155,9 @@ export function parseGamelogs(feed: unknown): ParsedGamelogs {
   return { lastUpdatedOn, lines };
 }
 
+const teamAbbr = (t: unknown): string | null =>
+  typeof t === 'object' && t !== null && typeof (t as Json).abbreviation === 'string' ? String((t as Json).abbreviation) : null;
+
 export function parseGames(feed: unknown): ParsedGames {
   const root = obj(feed, 'feed');
   if (!Array.isArray(root.games)) throw new MsfFeedError('feed.games is not an array');
@@ -165,6 +171,8 @@ export function parseGames(feed: unknown): ParsedGames {
       scheduledStart: date(s.startTime, `games[${i}].schedule.startTime`),
       playedStatus,
       scheduleStatus: String(s.scheduleStatus),
+      homeTeam: teamAbbr(s.homeTeam),
+      awayTeam: teamAbbr(s.awayTeam),
       isFinal: MSF_FINAL_STATUSES.has(playedStatus),
     };
   });

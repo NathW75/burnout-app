@@ -488,10 +488,16 @@ describeDb('PRD-001 §11 acceptance (Postgres)', () => {
 
   // ── AC8 ───────────────────────────────────────────────────────────────────
   describe('AC8: three-gate confirmation writes submission_receipts', () => {
-    // Belongs to the API submission flow, not this package. Blocked on a schema
-    // question: submission_receipts.submission_id is a single UUID but one
-    // confirmed lineup writes nine season_submissions rows. See the open
-    // questions in the build notes.
-    it.todo('completing a submission writes a submission_receipts row with gate1_at, gate2_at and gate3_at');
+    // Resolved by PRD-006 §9.5: one receipt (submission_id = the confirmation)
+    // covers all nine rows via season_submissions.receipt_id. The flow lives in
+    // the API, so the end-to-end check is packages/api lineup.test.ts AC7.
+    it('submission_receipts and season_submissions.receipt_id exist in the shipped schema', async () => {
+      const cols = await t.sql<{ table_name: string; column_name: string }>(
+        `SELECT table_name, column_name FROM information_schema.columns
+          WHERE (table_name = 'submission_receipts' AND column_name IN ('gate1_at', 'gate2_at', 'gate3_at', 'lineup_sha256'))
+             OR (table_name = 'season_submissions' AND column_name = 'receipt_id')`
+      );
+      expect(cols).toHaveLength(5);
+    });
   });
 });

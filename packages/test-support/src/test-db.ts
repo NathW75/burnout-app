@@ -112,7 +112,7 @@ export async function createUser(t: TestDb, label = 'user'): Promise<string> {
   const [row] = await t.sql<{ id: string }>(
     `INSERT INTO users (email, password_hash, display_name, updated_at)
      VALUES ($1, 'x', $2, now()) RETURNING id`,
-    [`${label}-${randomUUID()}@test.local`, label]
+    [`${label}-${randomUUID()}@test.local`.toLowerCase(), label]
   );
   return row.id;
 }

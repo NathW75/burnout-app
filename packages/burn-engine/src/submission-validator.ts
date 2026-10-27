@@ -47,19 +47,32 @@ export interface SubmissionValidatorDependencies {
   getGameWindowStatus: (gameWindowId: string) => Promise<string | null>;
 }
 
+export interface ValidateOptions {
+  /**
+   * Slots that cannot change (already locked, or left empty after every
+   * window has passed). They are neither required nor validated, but their
+   * players still count for the duplicate check. Used for re-saves after
+   * part of the week has locked (PRD-006 §9.1).
+   */
+  fixedSlots?: Partial<Record<SlotKey, string | null>>;
+}
+
 /**
  * Validates a complete 9-slot lineup draft before submission.
  * Must pass before the three-gate confirmation flow begins.
  */
 export async function validateLineupDraft(
   draft: LineupDraft,
-  deps: SubmissionValidatorDependencies
+  deps: SubmissionValidatorDependencies,
+  options: ValidateOptions = {}
 ): Promise<ValidationResult> {
   const errors: ValidationError[] = [];
-  const slots = Object.keys(draft.slots) as SlotKey[];
+  const fixed = options.fixedSlots ?? {};
+  const isFixed = (slot: SlotKey) => Object.prototype.hasOwnProperty.call(fixed, slot);
+  const slots = (Object.keys(draft.slots) as SlotKey[]).filter((slot) => !isFixed(slot));
 
   // 1. All 9 slots must be filled
-  const requiredSlots: SlotKey[] = ['qb', 'rb1', 'rb2', 'wr1', 'wr2', 'wr3', 'te', 'flex', 'k'];
+  const requiredSlots: SlotKey[] = (['qb', 'rb1', 'rb2', 'wr1', 'wr2', 'wr3', 'te', 'flex', 'k'] as SlotKey[]).filter((slot) => !isFixed(slot));
   for (const slot of requiredSlots) {
     if (!draft.slots[slot]) {
       errors.push({
@@ -78,8 +91,7 @@ export async function validateLineupDraft(
   const availablePool = await deps.getUserAvailablePool(draft.userId, draft.season);
 
   // 3. Validate each slot
-  const playerIds = Object.values(draft.slots) as string[];
-  const duplicateCheck = new Set<string>();
+  const duplicateCheck = new Set<string>(Object.values(fixed).filter((p): p is string => !!p));
 
   for (const slot of slots) {
     const playerId = draft.slots[slot]!;

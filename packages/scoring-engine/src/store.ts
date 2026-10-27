@@ -135,24 +135,27 @@ export function createScoringStore(db: SqlDatabase, options: ScoringStoreOptions
       for (const g of games) {
         const changed = await tx.query(
           `INSERT INTO nfl_games (msf_game_id, season, week, game_window_id, scheduled_start, played_status,
-                                  schedule_status, is_final, final_observed_at, updated_at)
+                                  schedule_status, is_final, final_observed_at, updated_at, home_team, away_team)
            VALUES ($1::text, $2::text, $3,
                    (SELECT id FROM game_windows WHERE season = $2::text AND $1::text = ANY (msf_game_ids) LIMIT 1),
                    $4::timestamptz, $5, $6, $7::boolean,
-                   CASE WHEN $7::boolean THEN $8::timestamptz END, $8::timestamptz)
+                   CASE WHEN $7::boolean THEN $8::timestamptz END, $8::timestamptz, $9::text, $10::text)
            ON CONFLICT (msf_game_id) DO UPDATE SET
+             home_team = COALESCE(EXCLUDED.home_team, nfl_games.home_team),
+             away_team = COALESCE(EXCLUDED.away_team, nfl_games.away_team),
              game_window_id = EXCLUDED.game_window_id, scheduled_start = EXCLUDED.scheduled_start,
              played_status = EXCLUDED.played_status, schedule_status = EXCLUDED.schedule_status,
              is_final = EXCLUDED.is_final,
              final_observed_at = COALESCE(nfl_games.final_observed_at, EXCLUDED.final_observed_at),
              updated_at = EXCLUDED.updated_at
            WHERE (nfl_games.game_window_id, nfl_games.scheduled_start, nfl_games.played_status,
-                  nfl_games.schedule_status, nfl_games.is_final)
+                  nfl_games.schedule_status, nfl_games.is_final, nfl_games.home_team, nfl_games.away_team)
                  IS DISTINCT FROM
                  (EXCLUDED.game_window_id, EXCLUDED.scheduled_start, EXCLUDED.played_status,
-                  EXCLUDED.schedule_status, EXCLUDED.is_final)
+                  EXCLUDED.schedule_status, EXCLUDED.is_final,
+                  COALESCE(EXCLUDED.home_team, nfl_games.home_team), COALESCE(EXCLUDED.away_team, nfl_games.away_team))
            RETURNING 1`,
-          [g.msfGameId, season, week, g.scheduledStart, g.playedStatus, g.scheduleStatus, g.isFinal, serverNow]
+          [g.msfGameId, season, week, g.scheduledStart, g.playedStatus, g.scheduleStatus, g.isFinal, serverNow, g.homeTeam ?? null, g.awayTeam ?? null]
         );
         result.gamesChanged += changed.length;
       }

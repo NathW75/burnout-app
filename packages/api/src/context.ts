@@ -1,0 +1,76 @@
+/**
+ * API context and configuration — PRD-006 §13
+ */
+import type { Redis } from 'ioredis';
+import type { createLeaderboardService } from '@burnout/leaderboard';
+import type { PaymentsService } from '@burnout/payments';
+import type { SecretBox } from './auth/crypto';
+import type { RateLimiter } from './auth/rate-limit';
+import type { Mailer } from './mailer';
+import type { SqlDatabase } from './sql';
+
+export interface ApiConfig {
+  bcryptCost: number;
+  sessionIdleMs: number;
+  sessionMaxMs: number;
+  pendingMfaMs: number;
+  touchIntervalMs: number;
+  sessionCacheSeconds: number;
+  stepUpMaxAgeMs: number;
+  confirmationTtlMs: number;
+  emailVerifyTtlMs: number;
+  passwordResetTtlMs: number;
+  cookieName: string;
+  cookieSecure: boolean;
+  corsOrigins: string[];
+  appBaseUrl: string;
+  /** Trusted edge headers for checkout geolocation (§10.4). */
+  geoRegionHeader: string;
+  geoCountryHeader: string;
+  /** Number of proxies in front of the app (for req.ip). */
+  trustProxy: number;
+  currentSeason: string;
+}
+
+export const DEFAULT_API_CONFIG: ApiConfig = {
+  bcryptCost: 12,
+  sessionIdleMs: 24 * 3600_000,
+  sessionMaxMs: 30 * 24 * 3600_000,
+  pendingMfaMs: 5 * 60_000,
+  touchIntervalMs: 5 * 60_000,
+  sessionCacheSeconds: 60,
+  stepUpMaxAgeMs: 5 * 60_000,
+  confirmationTtlMs: 10 * 60_000,
+  emailVerifyTtlMs: 48 * 3600_000,
+  passwordResetTtlMs: 3600_000,
+  cookieName: 'bl_session',
+  cookieSecure: true,
+  corsOrigins: [],
+  appBaseUrl: 'https://burnoutfantasy.com',
+  geoRegionHeader: 'cf-region-code',
+  geoCountryHeader: 'cf-ipcountry',
+  trustProxy: 1,
+  currentSeason: '2026-2027-regular',
+};
+
+export type Log = (level: 'info' | 'warn' | 'error', message: string, meta?: object) => void;
+
+export type LeaderboardService = ReturnType<typeof createLeaderboardService>;
+
+export interface ApiContext {
+  db: SqlDatabase;
+  redis?: Redis;
+  /** Redis key prefix (tests use a unique one per suite). */
+  ns: string;
+  now: () => Date;
+  log: Log;
+  config: ApiConfig;
+  secretBox: SecretBox;
+  limiter: RateLimiter;
+  mailer: Mailer;
+  leaderboard: LeaderboardService;
+  payments: PaymentsService;
+}
+
+/** The all-zero UUID records system actions in security_audit_log (§6.8). */
+export const SYSTEM_USER_ID = '00000000-0000-0000-0000-000000000000';

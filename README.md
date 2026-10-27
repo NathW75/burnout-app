@@ -10,7 +10,7 @@ burnout/
 │   ├── web/          React.js frontend (burnoutfantasy.com)
 │   └── mobile/       Expo React Native (iOS + Android)
 ├── packages/
-│   ├── api/          Node.js/Express backend (Railway)
+│   ├── api/          Express API, accounts/2FA, lineups, worker (PRD-006, Railway)
 │   ├── burn-engine/  Core burn mechanic (PRD-001)
 │   ├── scoring-engine/ Fantasy scoring, MSF ingestion, corrections (PRD-002)
 │   ├── leaderboard/  Pool rankings, projected movement, reveal, handles (PRD-003)
@@ -92,6 +92,24 @@ Always build the Prisma client with `createDbClient()` from `@burnout/db`.
 
 `FakeProcessor` is the only adapter until a processor approves the contest use case in writing.
 
+## API (PRD-006)
+
+```bash
+npm -w packages/api run build
+npm -w packages/api start     # HTTP API
+npm -w packages/api run worker  # locks, payments jobs, scoring, roster sync
+```
+
+| Guarantee | Where |
+|---|---|
+| Sessions revocable at once (logout, password change, suspension) | server-side sessions, token hash only, Redis cache dropped on revoke |
+| Step-up for every financial action | verified email → enrolled TOTP → fresh second factor (5 min) |
+| TOTP secrets never in plaintext; codes never replayable | AES-256-GCM at rest; last used step stored |
+| Every lineup goes through three gates with server timestamps | `lineup_confirmations` + append-only `submission_receipts` with SHA-256 |
+| No submission after `scheduled_et`, even before the lock job runs | gate 3 re-checks under a share lock on each window |
+| Locked submissions are frozen | `season_submissions` trigger (only the PRD-001 slot reopen passes) |
+| Players are text only (NIL) | `nfl_players` has no image/URL columns; parser drops them |
+
 ## Environment Variables
 
 See `.env.example` for all required variables.
@@ -110,6 +128,7 @@ before implementing any feature.
 | PRD-002 | Scoring Engine | APPROVED |
 | PRD-003 | Leaderboard | APPROVED |
 | PRD-004 | Payments (processor-agnostic) | APPROVED |
+| PRD-006 | API, accounts and lineup submission | APPROVED |
 | PRD-005 | Pri/Alt Insurance (P2) | TODO |
 
 ## Stack
