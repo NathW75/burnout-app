@@ -1,7 +1,7 @@
 # PRD-003 — Leaderboard
 **Burnout League · packages/leaderboard**
-Version 1.0 · 2026-10-26
-Status: DRAFT — decisions in §3, §6 and §7 locked 2026-10-26; full document pending review
+Version 1.1 · 2026-10-26
+Status: DRAFT — all open questions resolved 2026-10-26 (v1.1); pending approval to build
 
 ---
 
@@ -24,7 +24,9 @@ This PRD is the single source of truth for ranking and reveal behavior. Code tha
 | **Standing** | An entry's season total (PRD-002 user season total) and its rank within the pool. |
 | **Rank** | Standard competition ranking on exact centipoints: 1, 2, 2, 4. |
 | **Week rank** | Rank within the pool on a single week's score. |
-| **Movement** | Change from the entry's rank in the most recent official snapshot. |
+| **Baseline rank** | An entry's rank when the week's first game window locks. |
+| **Projected rank** | An entry's rank right now, with this week's scores as they currently stand. |
+| **Movement** | Baseline rank minus projected rank: positive = moved up. |
 | **Reveal** | Showing another manager's players after their game window has locked. |
 | **Handle** | A user's public name. The only identity shown to other users. |
 
@@ -56,6 +58,16 @@ This PRD is the single source of truth for ranking and reveal behavior. Code tha
 | OFFICIAL | Every week counted so far is frozen (PRD-002 §7) |
 
 6. **Final standings** for a pool are the OFFICIAL standings after Week 18 freezes. That snapshot is the only input PRD-004 uses to settle the pool.
+
+### 4.1 Projected movement (LOCKED 2026-10-26)
+
+Modeled on the PGA Tour's FedEx Cup projected standings: every row shows where the entry started the week and where it is projected to finish it.
+
+- **Baseline** is captured once per week per pool, in the transaction that fires the week's first lock (PRD-001 §4.4), as a `week_start` snapshot.
+- **Projected** is the live rank from the current standings.
+- **Arrow:** green ▲ with places gained when movement > 0, red ▼ with places lost when movement < 0, a dash when unchanged. New entries have no arrow in their first week.
+- While the standing status is LIVE or PROVISIONAL, the column is labeled **Projected**. When the week goes OFFICIAL, the arrow becomes that week's final movement and stays visible until the next week's first lock sets a new baseline.
+- Movement is shown on the leaderboard rows and the viewer's own card. It is display only and never affects ranking or prizes.
 
 ---
 
@@ -94,7 +106,15 @@ This PRD is the single source of truth for ranking and reveal behavior. Code tha
 
 - `users.handle`: 3–20 characters, letters, digits and underscore, unique case-insensitively.
 - Set at signup. Reserved words (e.g. `burnout`, `admin`, `official`, `support`, `corewright`) and a profanity list are rejected.
+- **Changes (LOCKED 2026-10-26):** a user may change their handle at most **2 times per season**. Every handle a user has held is kept in `user_handle_history`.
+- A released handle is reserved for 30 days before anyone else can claim it, so nobody can take the name of the current leader the moment they rename.
+- Links and API paths identify entries by entry ID, never by handle, so renames break nothing.
+- Snapshots record the handle shown at the time, so a past week's official standings display as they did that week.
 - No leaderboard or reveal response contains email, legal name, or any other personal field.
+
+### 7.1 Visibility (LOCKED 2026-10-26)
+
+The full leaderboard is visible only to signed-in users with an entry in that pool. Marketing uses anonymized top-10 exports (brand guide); no public leaderboard page shows handles.
 
 ---
 
@@ -125,19 +145,33 @@ CREATE TABLE contest_entries (
 );
 -- DB trigger: reject INSERT when entered_at >= the pool's entry_closes_at.
 
-CREATE TABLE leaderboard_snapshots (             -- official standings, written at each week freeze
+CREATE TABLE leaderboard_snapshots (
   pool_id      UUID NOT NULL REFERENCES contest_pools(id),
-  week         SMALLINT NOT NULL,                  -- standings through this week
+  week         SMALLINT NOT NULL,
+  kind         VARCHAR(12) NOT NULL,               -- week_start | official
   user_id      UUID NOT NULL REFERENCES users(id),
+  handle       VARCHAR(20) NOT NULL,               -- as displayed at snapshot time
   rank         INTEGER NOT NULL,
   points_x100  BIGINT NOT NULL,
-  frozen_at    TIMESTAMPTZ NOT NULL,
-  PRIMARY KEY (pool_id, week, user_id)
+  taken_at     TIMESTAMPTZ NOT NULL,
+  PRIMARY KEY (pool_id, week, kind, user_id)
 );
 -- Append-only: UPDATE and DELETE rejected.
+
+CREATE TABLE user_handle_history (
+  user_id      UUID NOT NULL REFERENCES users(id),
+  handle       VARCHAR(20) NOT NULL,
+  season       VARCHAR(20) NOT NULL,
+  valid_from   TIMESTAMPTZ NOT NULL,
+  valid_to     TIMESTAMPTZ,                         -- NULL = current
+  PRIMARY KEY (user_id, valid_from)
+);
+-- DB trigger: reject a change when the user already has 2 changes in the season;
+-- reject claiming a handle another user released less than 30 days ago.
 ```
 
-`leaderboard_snapshots` is written in the same transaction that freezes a week (PRD-002 §7), for every pool in that season, so official standings and frozen scores always agree.
+- `week_start` snapshots are written in the transaction that fires each week's first lock (§4.1).
+- `official` snapshots are written in the transaction that freezes a week (PRD-002 §7), for every pool in that season, so official standings and frozen scores always agree.
 
 ---
 
@@ -147,10 +181,10 @@ All endpoints require a signed-in user with an entry in the pool.
 
 | Endpoint | Returns |
 |----------|---------|
-| `GET /pools/:poolId/leaderboard?offset&limit` | `{ status, version, asOf, fieldSize, rows: [{ rank, handle, pointsX100, weekPointsX100, movement, isMe }] }` |
-| `GET /pools/:poolId/leaderboard/me` | The viewer's card: rank, field size, percentile, points behind the entry above, points ahead of the entry below, week score, week rank, field average and top score this week |
+| `GET /pools/:poolId/leaderboard?offset&limit` | `{ status, version, asOf, fieldSize, rows: [{ entryId, rank, baselineRank, movement, handle, pointsX100, weekPointsX100, isMe }] }` |
+| `GET /pools/:poolId/leaderboard/me` | The viewer's card: rank, baseline rank and movement, field size, percentile, points behind the entry above, points ahead of the entry below, week score, week rank, field average and top score this week |
 | `GET /pools/:poolId/leaderboard/week/:week` | Week ranks for that week |
-| `GET /pools/:poolId/lineups/:handle?week=N` | Revealed lineup per §6 |
+| `GET /pools/:poolId/lineups/:entryId?week=N` | Revealed lineup per §6 |
 
 `limit` is capped at 100. Points are returned as integer centipoints; clients format them (two decimals).
 
@@ -158,8 +192,8 @@ All endpoints require a signed-in user with an entry in the pool.
 
 ## 10. Notifications
 
-- **Rank milestone (push):** when a manager moves up into the top 10, top 3 or 1st in a pool. At most one milestone push per manager per game window, upward crossings only, so live swings don't spam (Tech Summary §10.2).
-- **Weekly recap email** (Tech Summary §10.2) includes official rank, movement and week rank per pool. The recap itself belongs to the notifications PRD; this package supplies the data.
+- **No rank pushes.** Movement is communicated by the projected arrows (§4.1), not by push notifications. This supersedes the Tech Summary §10.2 "you just passed #3" push.
+- **Weekly recap email** includes, per pool: official rank, the week's movement (start-of-week rank → finish), and week rank. The recap itself belongs to the notifications PRD; this package supplies the data.
 
 ---
 
@@ -173,9 +207,12 @@ All endpoints require a signed-in user with an entry in the pool.
 6. **Atomic rebuild.** A reader during a rebuild sees either the complete old board or the complete new board, never a mix.
 7. **Reveal.** Another manager's unlocked slots are never returned (player, window, or filled/empty state); locked slots are returned after their lock; a viewer outside the pool gets 403.
 8. **Identity.** No leaderboard or reveal response contains email or real name.
-9. **Official snapshots.** Freezing a week writes a snapshot row for every entry in every pool of that season, in the freeze transaction; movement equals snapshot rank minus current rank.
+9. **Snapshots.** The week's first lock writes a `week_start` snapshot, and freezing a week writes an `official` snapshot, each for every entry in every pool of that season, inside the lock and freeze transactions respectively. Snapshot rows record the handle shown at the time.
 10. **Status.** LIVE, PROVISIONAL and OFFICIAL are derived as in §4.5.
 11. **Entry close.** An entry created at or after the pool's `entry_closes_at` is rejected by the database.
+12. **Projected movement.** Movement = baseline rank − projected rank; ▲ when positive, ▼ when negative, dash when zero, no arrow for an entry with no baseline. The label reads Projected until the week is OFFICIAL.
+13. **Handle changes.** A third handle change in a season is rejected; a handle released less than 30 days ago cannot be claimed by another user; entry IDs and past snapshots are unaffected by a rename.
+14. **Visibility.** A signed-in user without an entry in a pool gets 403 on that pool's leaderboard.
 
 ---
 
@@ -190,10 +227,23 @@ All endpoints require a signed-in user with an entry in the pool.
 
 ## 13. Open Questions
 
-1. **Handle changes mid-season.** Proposed: fixed for the season once the user's first lineup locks; changeable in the offseason.
-2. **Public visibility.** Proposed: the full leaderboard is entrants-only; marketing uses anonymized top-10 exports (brand guide). Confirm.
-3. **Milestone thresholds.** Top 10 / top 3 / 1st as proposed in §10, or different?
+None. Resolved 2026-10-26:
+- **Handle changes:** allowed, at most 2 per season (§7).
+- **Public visibility:** entrants only (§7.1).
+- **Milestones:** replaced by FedEx Cup–style projected movement arrows (§4.1); no rank pushes (§10).
 
 ---
+
+---
+
+## Change log
+
+**v1.1 — 2026-10-26**
+- §4.1: new — projected movement arrows (baseline at the week's first lock vs. live projected rank)
+- §7: handle changes, 2 per season; history; 30-day reservation; entry IDs in links
+- §7.1: entrants-only visibility
+- §8: `leaderboard_snapshots.kind` (week_start | official) and `handle`; `user_handle_history`
+- §10: rank pushes removed
+- AC9 updated; AC12–AC14 added; §13 resolved
 
 *This PRD is authoritative once approved. Disputes between this document and earlier design docs: this document wins.*
