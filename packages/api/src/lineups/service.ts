@@ -58,6 +58,10 @@ function validatorDeps(q: SqlRunner, now: Date): SubmissionValidatorDependencies
       return (p?.position as NFLPosition) ?? null;
     },
     getPlayerGameWindowId: (playerId, week, season) => playerWindow(q, playerId, season, week),
+    async getPlayerInjuryStatus(playerId) {
+      const [p] = await q.query<{ injury_status: string }>(`SELECT injury_status FROM nfl_players WHERE msf_player_id = $1`, [playerId]);
+      return p?.injury_status ?? null;
+    },
     async getGameWindowStatus(id) {
       const [w] = await q.query<{ status: string; scheduled_et: Date }>(`SELECT status, scheduled_et FROM game_windows WHERE id = $1::uuid`, [id]);
       if (!w) return null;
@@ -121,6 +125,41 @@ async function describeSlots(q: SqlRunner, season: string, week: number, merged:
   });
 }
 
+export interface PlayEligibility {
+  /** True when the user holds an active paid entry in this season. */
+  prizeEligible: boolean;
+  /** Last week a user without a paid entry may submit; null = free all season. */
+  freePlayThroughWeek: number | null;
+}
+
+/**
+ * Free play (decision 2026-10-27): anyone may play without paying, but can't
+ * win prizes. Once a season has paid pools, free play ends at the paid-entry
+ * cutoff (the earliest entry_closes_at — set to the Week 4 lock): users
+ * without a paid entry may submit only weeks before the cutoff week.
+ */
+export async function playEligibility(q: SqlRunner, userId: string, season: string): Promise<PlayEligibility> {
+  const [r] = await q.query<{ cutoff: Date | null; cutoff_week: number | null; entered: boolean }>(
+    `WITH c AS (SELECT min(entry_closes_at) AS t FROM contest_pools WHERE season = $1 AND status IN ('open', 'closed', 'settled'))
+     SELECT (SELECT t FROM c) AS cutoff,
+            (SELECT min(week)::int FROM game_windows WHERE season = $1 AND scheduled_et >= (SELECT t FROM c)) AS cutoff_week,
+            EXISTS (SELECT 1 FROM contest_entries ce JOIN contest_pools p ON p.id = ce.pool_id
+                     WHERE p.season = $1 AND ce.user_id = $2::uuid
+                       AND NOT EXISTS (SELECT 1 FROM contest_entry_voids v WHERE v.entry_id = ce.id)) AS entered`,
+    [season, userId]
+  );
+  if (r.entered) return { prizeEligible: true, freePlayThroughWeek: null };
+  if (!r.cutoff) return { prizeEligible: false, freePlayThroughWeek: null };
+  return { prizeEligible: false, freePlayThroughWeek: (r.cutoff_week ?? 1) - 1 };
+}
+
+async function assertMayPlay(q: SqlRunner, userId: string, season: string, week: number): Promise<void> {
+  const e = await playEligibility(q, userId, season);
+  if (e.freePlayThroughWeek !== null && week > e.freePlayThroughWeek) {
+    throw new HttpError(403, 'PAID_ENTRY_REQUIRED', `Free play ended after Week ${e.freePlayThroughWeek}. Enter a pool to keep playing.`);
+  }
+}
+
 function assertSeasonWeek(ctx: ApiContext, season: string, week: number): void {
   if (season !== ctx.config.currentSeason) throw new HttpError(400, 'SEASON_CLOSED', `Lineups are open for ${ctx.config.currentSeason} only`);
   if (!Number.isInteger(week) || week < 1 || week > 18) throw new HttpError(400, 'VALIDATION', 'week must be 1–18');
@@ -136,6 +175,7 @@ export async function getLineup(ctx: ApiContext, userId: string, season: string,
   const slots = await describeSlots(ctx.db, season, week, merged, fixed);
   return {
     season, week,
+    eligibility: await playEligibility(ctx.db, userId, season),
     slots: slots.map((s) => {
       const row = current.get(s.slot);
       return { ...s, voidReason: row?.void_reason ?? null, lockedAt: row?.locked_at ?? null };
@@ -153,6 +193,7 @@ export async function review(ctx: ApiContext, s: SessionInfo, season: string, we
     [season, week, now]
   );
   if (!open.open) throw conflict('WEEK_CLOSED', 'Every game window this week has locked');
+  await assertMayPlay(ctx.db, s.userId, season, week);
   const { merged, fixed } = await mergeAndValidate(ctx.db, s.userId, season, week, slots, now);
   const expiresAt = new Date(now.getTime() + ctx.config.confirmationTtlMs);
   const [c] = await ctx.db.query<{ id: string }>(
@@ -214,6 +255,7 @@ export async function confirm(ctx: ApiContext, s: SessionInfo, id: string) {
     if (c.status !== 'acknowledged') throw conflict('GATE_ORDER', c.status === 'confirmed' ? 'Already confirmed' : 'Acknowledge the rules first');
     if (now > new Date(c.expires_at)) throw conflict('CONFIRMATION_EXPIRED', 'Review the lineup again');
 
+    await assertMayPlay(tx, s.userId, c.season, c.week);
     // Revalidate at Gate 3 time, with the user's submissions locked for update.
     const { merged, fixed, current } = await mergeAndValidate(tx, s.userId, c.season, c.week, c.slots, now, true);
 

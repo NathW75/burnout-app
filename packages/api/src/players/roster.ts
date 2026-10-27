@@ -4,7 +4,7 @@
 import { audit } from '../auth/audit';
 import type { ApiContext } from '../context';
 import type { SqlRunner } from '../sql';
-import type { ParsedPlayer } from './msf-players';
+import { INACTIVE_STATUSES, type ParsedPlayer } from './msf-players';
 
 /** A player's game window in a week, through his current team (§7.2). Null on bye / unsigned. */
 export const PLAYER_WINDOW_SQL = `
@@ -56,6 +56,8 @@ export interface ReresolveResult {
   checked: number;
   repointed: number;
   voided: number;
+  /** Of the voided: players listed Out or IR (decision 2026-10-27). */
+  inactive: number;
   skipped: string | null;
 }
 
@@ -72,7 +74,7 @@ export async function reresolveSubmissions(ctx: ApiContext, season: string, week
     `SELECT count(*)::int AS n FROM nfl_games WHERE season = $1 AND week = $2 AND game_window_id IS NOT NULL AND home_team IS NOT NULL`,
     [season, week]
   );
-  if (known.n === 0) return { checked: 0, repointed: 0, voided: 0, skipped: 'NO_SCHEDULE' };
+  const scheduleKnown = known.n > 0;
 
   const subs = await ctx.db.query<{ id: string }>(
     `SELECT s.id::text AS id FROM season_submissions s
@@ -80,7 +82,7 @@ export async function reresolveSubmissions(ctx: ApiContext, season: string, week
         AND EXISTS (SELECT 1 FROM nfl_players p WHERE p.msf_player_id = s.player_id)`,
     [season, week]
   );
-  const result: ReresolveResult = { checked: subs.length, repointed: 0, voided: 0, skipped: null };
+  const result: ReresolveResult = { checked: subs.length, repointed: 0, voided: 0, inactive: 0, skipped: scheduleKnown ? null : 'NO_SCHEDULE' };
   for (const { id } of subs) {
     const outcome = await ctx.db.transaction(async (tx) => {
       const [s] = await tx.query<{ user_id: string; player_id: string; slot_key: string; game_window_id: string }>(
@@ -89,6 +91,24 @@ export async function reresolveSubmissions(ctx: ApiContext, season: string, week
         [id]
       );
       if (!s) return null;
+      const [player] = await tx.query<{ name: string; team: string | null; injury_status: string }>(
+        `SELECT first_name || ' ' || last_name AS name, team, injury_status FROM nfl_players WHERE msf_player_id = $1`,
+        [s.player_id]
+      );
+      const voidIt = async (reason: 'PLAYER_NO_GAME' | 'PLAYER_INACTIVE') => {
+        await tx.query(`UPDATE season_submissions SET void_reason = $2 WHERE id = $1::uuid`, [id, reason]);
+        await audit(tx, { event: 'SUBMISSION_VOIDED', userId: s.user_id, at: now, slotKey: s.slot_key,
+          metadata: { submissionId: id, playerId: s.player_id, reason, team: player?.team ?? null, injuryStatus: player?.injury_status } });
+        await tx.query(`INSERT INTO notification_queue (user_id, kind, payload) VALUES ($1, 'SUBMISSION_VOIDED', $2::jsonb)`, [
+          s.user_id, JSON.stringify({ season, week, slot: s.slot_key, playerId: s.player_id, playerName: player?.name, team: player?.team ?? null, reason, injuryStatus: player?.injury_status }),
+        ]);
+      };
+      // Out / IR: the slot reopens; the player is not locked or burned (decision 2026-10-27).
+      if (player && INACTIVE_STATUSES.has(player.injury_status)) {
+        await voidIt('PLAYER_INACTIVE');
+        return 'inactive' as const;
+      }
+      if (!scheduleKnown) return null; // never void on missing schedule data
       const target = await playerWindow(tx, s.player_id, season, week);
       if (target === s.game_window_id) return null;
       const [w] = target
@@ -97,10 +117,6 @@ export async function reresolveSubmissions(ctx: ApiContext, season: string, week
             [target]
           )
         : [];
-      const [player] = await tx.query<{ name: string; team: string | null }>(
-        `SELECT first_name || ' ' || last_name AS name, team FROM nfl_players WHERE msf_player_id = $1`,
-        [s.player_id]
-      );
       if (target && w && w.status === 'pending' && new Date(w.scheduled_et) > now) {
         await tx.query(`UPDATE season_submissions SET game_window_id = $2::uuid WHERE id = $1::uuid`, [id, target]);
         await audit(tx, { event: 'SUBMISSION_REPOINTED', userId: s.user_id, at: now, slotKey: s.slot_key, gameId: target,
@@ -111,16 +127,15 @@ export async function reresolveSubmissions(ctx: ApiContext, season: string, week
         ]);
         return 'repointed' as const;
       }
-      await tx.query(`UPDATE season_submissions SET void_reason = 'PLAYER_NO_GAME' WHERE id = $1::uuid`, [id]);
-      await audit(tx, { event: 'SUBMISSION_VOIDED', userId: s.user_id, at: now, slotKey: s.slot_key,
-        metadata: { submissionId: id, playerId: s.player_id, reason: 'PLAYER_NO_GAME', team: player?.team ?? null } });
-      await tx.query(`INSERT INTO notification_queue (user_id, kind, payload) VALUES ($1, 'SUBMISSION_VOIDED', $2::jsonb)`, [
-        s.user_id, JSON.stringify({ season, week, slot: s.slot_key, playerId: s.player_id, playerName: player?.name, team: player?.team ?? null, reason: 'PLAYER_NO_GAME' }),
-      ]);
+      await voidIt('PLAYER_NO_GAME');
       return 'voided' as const;
     });
     if (outcome === 'repointed') result.repointed++;
     if (outcome === 'voided') result.voided++;
+    if (outcome === 'inactive') {
+      result.voided++;
+      result.inactive++;
+    }
   }
   ctx.log('info', 'submissions re-resolved', { season, week, ...result });
   return result;

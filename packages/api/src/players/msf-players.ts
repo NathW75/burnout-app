@@ -8,12 +8,17 @@
  * Shape per the v2.1 docs: { lastUpdatedOn, players: [{ player: { id,
  * firstName, lastName, primaryPosition, currentTeam: { abbreviation } | null,
  * currentRosterStatus, currentInjury: { playingProbability } | null } }] }.
+ * The seasonal player stats feed (`{season}/player_stats_totals.json`,
+ * array `playerStatsTotals`) carries the same player object plus `team`, so
+ * it works as a fallback when the subscription doesn't include `players`.
  * PRD-006 Q5: confirm against a real sample before launch.
  */
 
 export const PLAYER_POSITIONS = new Set(['QB', 'RB', 'WR', 'TE', 'K', 'FB']);
-/** Positions selectable in a season lineup. FB pending PRD-006 Q2. */
-export const SELECTABLE_POSITIONS = ['QB', 'RB', 'WR', 'TE', 'K'] as const;
+/** Positions selectable in a season lineup (FB at RB/FLEX, decision 2026-10-27). */
+export const SELECTABLE_POSITIONS = ['QB', 'RB', 'FB', 'WR', 'TE', 'K'] as const;
+/** Out and IR players are greyed out: not selectable, not burned (decision 2026-10-27). */
+export const INACTIVE_STATUSES: ReadonlySet<string> = new Set(['Out', 'IR']);
 
 export type InjuryStatus = 'Active' | 'Questionable' | 'Doubtful' | 'Out' | 'IR' | 'PUP';
 
@@ -50,15 +55,17 @@ export function injuryFrom(rosterStatus: string | null, playingProbability: stri
 }
 
 export function parsePlayers(feed: unknown): { lastUpdatedOn: Date | null; players: ParsedPlayer[] } {
-  if (!isObj(feed) || !Array.isArray(feed.players)) throw new MsfPlayersFeedError('feed.players is not an array');
+  const list = isObj(feed) ? (Array.isArray(feed.players) ? feed.players : Array.isArray(feed.playerStatsTotals) ? feed.playerStatsTotals : null) : null;
+  if (!isObj(feed) || !list) throw new MsfPlayersFeedError('feed.players is not an array');
   const players: ParsedPlayer[] = [];
-  feed.players.forEach((entry, i) => {
+  list.forEach((entry, i) => {
     if (!isObj(entry) || !isObj(entry.player)) throw new MsfPlayersFeedError(`players[${i}].player is not an object`);
     const p = entry.player;
     const position = String(p.primaryPosition ?? p.position ?? '');
     if (!PLAYER_POSITIONS.has(position)) return; // only fantasy-relevant positions
     if (p.id === undefined || p.id === null) throw new MsfPlayersFeedError(`players[${i}] has no id`);
-    const team = isObj(p.currentTeam) && typeof p.currentTeam.abbreviation === 'string' ? p.currentTeam.abbreviation : null;
+    const entryTeam = isObj(entry.team) && typeof entry.team.abbreviation === 'string' ? entry.team.abbreviation : null;
+    const team = isObj(p.currentTeam) && typeof p.currentTeam.abbreviation === 'string' ? p.currentTeam.abbreviation : 'currentTeam' in p ? null : entryTeam;
     const rosterStatus = typeof p.currentRosterStatus === 'string' ? p.currentRosterStatus : null;
     const prob = isObj(p.currentInjury) && typeof p.currentInjury.playingProbability === 'string' ? p.currentInjury.playingProbability : null;
     players.push({

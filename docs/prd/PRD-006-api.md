@@ -1,7 +1,7 @@
 # PRD-006 — API, Accounts and Lineup Submission
 **Burnout League · packages/api**
-Version 1.0 · 2026-10-27
-Status: APPROVED 2026-10-27 — scope and auth decisions locked by Nath (§3); build-time details open for review (§17)
+Version 1.1 · 2026-10-27
+Status: APPROVED 2026-10-27 — scope and auth decisions locked by Nath (§3); rules calls Q1, Q2, Q4 resolved in v1.1
 
 ---
 
@@ -207,7 +207,11 @@ There are no image, headshot or URL columns, and a schema test enforces this (D8
 | A different window that is still pending | Re-point `game_window_id`, write `SUBMISSION_REPOINTED` to the audit log, and notify the user |
 | No game this week, unsigned, or the new window has locked | Void with `void_reason = 'PLAYER_NO_GAME'`, write `SUBMISSION_VOIDED` to the audit log, and notify the user |
 
-Locked submissions are never touched. The same re-resolve also covers a game moving to another window within the week (PRD-001 §6.4).
+Before the window check, a submission whose player is now **Out or IR** is voided with `PLAYER_INACTIVE` (PRD-001 §3.1.1), and the user is notified.
+
+Locked submissions are never touched. The same re-resolve also covers a game moving to another window within the week (PRD-001 §6.4). With no schedule loaded for the week, only the Out/IR rule runs; nothing is voided for missing schedule data.
+
+**Feed fallback:** if the subscription doesn't include the `players` feed (HTTP 403), the job reads `{season}/player_stats_totals.json`, which carries the same player objects. That feed only lists players with stats, so it is never treated as a complete roster: nobody is unrostered because they're missing from it.
 
 ### 7.4 MSF access
 
@@ -227,6 +231,7 @@ Only the worker calls MSF, with `MSF_API_KEY` from env using Basic auth (`key:MY
 | `projectedPoints` | Null until a projections feed is chosen (§17) |
 | `weekOwnershipPct`, `seasonOwnershipPct` | |
 | `burnState` | `available`, `locked` (locked in the caller's lineup this week) or `burned` (by the caller this season) |
+| `selectable`, `unavailableReason` | `false` → shown greyed out, with `BURNED`, `LOCKED`, `INACTIVE` (Out/IR: greyed but never burned), `BYE` or `WINDOW_CLOSED` |
 
 **Ownership:**
 - Week ownership is the share of this week's submitters who submitted the player.
@@ -239,6 +244,14 @@ Only the worker calls MSF, with `MSF_API_KEY` from env using Basic auth (`key:MY
 
 ## 9. Three-Gate Lineup Submission (PRD-001 §9)
 
+### 9.0 Who may submit (locked 2026-10-27)
+
+- **Free play:** anyone may submit lineups without paying. Free players can't win prizes.
+- **Cutoff:** once a season has published paid pools, free play ends at the paid-entry cutoff (the earliest pool `entry_closes_at`, set to the Week 4 lock). A user without an active paid entry may submit only weeks **before** the cutoff week. After that, review and confirm return `403 PAID_ENTRY_REQUIRED`. Both gates check it.
+- **Late payers:** paying before the cutoff unblocks play and prize eligibility, with prize standings from the week of payment (PRD-003 §3).
+- **No paid pools:** in a season without published paid pools (the 2026 test season), everyone plays free all season.
+- `GET …/lineup` returns `eligibility: { prizeEligible, freePlayThroughWeek }` so clients can show it.
+
 ### 9.1 Gate 1 — Review
 
 `POST /v1/seasons/:season/weeks/:week/lineup/review { slots }`:
@@ -250,6 +263,7 @@ Only the worker calls MSF, with `MSF_API_KEY` from env using Basic auth (`key:MY
    - the player isn't burned (`PLAYER_BURNED_OR_UNAVAILABLE`);
    - the player exists (`PLAYER_NOT_FOUND`);
    - the position fits the slot (`POSITION_INELIGIBLE`);
+   - the player isn't listed Out or IR (`PLAYER_INACTIVE`; PRD-001 §3.1.1);
    - the player has a game this week (`PLAYER_ON_BYE`);
    - the window is still open (`GAME_WINDOW_LOCKED`). A window counts as locked once `now ≥ scheduled_et`.
 3. **Empty slots:** a slot may be left empty only when it is empty now (for example, voided) and no window in the week is still pending.
@@ -389,7 +403,7 @@ The user can recompute it from their email.
 | Lock check (PRD-001), with the leaderboard `afterLock` hook | Every minute |
 | `payments.runJobs()` (PRD-004) | Every minute |
 | Scoring cycle (PRD-002): fetch the current week's games and gamelogs, ingest, evaluate burns for windows whose games are all Final, freeze due weeks with the leaderboard `afterFreeze` hook | Every 15 minutes during active windows, otherwise hourly |
-| Roster sync and re-resolve (§7.3) | 3:00 AM ET nightly and Tuesday 11:59 PM ET |
+| Roster sync and re-resolve (§7.3) | 3:00 AM ET nightly, Tuesday 11:59 PM ET, and every 15 minutes Wednesday–Sunday for injury reports (Tech Summary §5) |
 
 Each job:
 - runs under a Postgres advisory lock, so two workers never run it at once;
@@ -485,11 +499,11 @@ Every critical rule also gets a mutation check, as with PRD-001 to PRD-004.
 
 | # | Question | Owner |
 |---|----------|-------|
-| Q1 | Can Out and IR players be selected? PRD-001 allows them and only shows the status; Tech Summary §4.3 blocks them. This build follows PRD-001. | Nath |
-| Q2 | Fullback eligibility at RB and FLEX. FB players are synced but not selectable until decided. | Nath |
+| Q1 | ~~Can Out and IR players be selected?~~ **Resolved 2026-10-27:** no — greyed out, not burned; an existing pick is voided before its lock (PRD-001 §3.1.1). | — |
+| Q2 | ~~Fullback eligibility.~~ **Resolved 2026-10-27:** FB eligible at RB and FLEX. | — |
 | Q3 | Projections feed for `projectedPoints` (MSF add-on or another source). Null until then. | Nath |
-| Q4 | Must a user hold a paid entry to submit a lineup, or may anyone play free? This build lets anyone submit. Boards rank only entrants. | Nath |
-| Q5 | The MSF `players` feed shape is built from the v2.1 docs and needs a real sample to confirm, as was done for gamelogs. | Nath (fetch) |
+| Q4 | ~~Paid entry to submit?~~ **Resolved 2026-10-27:** free play until the Week 4 cutoff, no prizes; late payers score for prizes from their paid week (§9.0, PRD-003 §3). | — |
+| Q5 | The `players` feed returned 403 on the current subscription. The job falls back to seasonal player stats (§7.3). Confirm which feeds the subscription includes, and send a sample to verify the parser. | Nath (fetch) |
 | Q6 | Identity-verification provider (PRD-004 Q10). | Nath |
 | Q7 | Supersedes Tech Summary §6.1 "JWT 24-hour". The Tech Summary should note that sessions are server-side and revocable. | Nath (doc) |
 
@@ -499,4 +513,5 @@ Every critical rule also gets a mutation check, as with PRD-001 to PRD-004.
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.1 | 2026-10-27 | Rules calls: Out/IR unselectable and voided before lock; FB at RB/FLEX; free play through the Week 4 cutoff (§9.0); injury-report sync cadence; `players` feed 403 fallback. |
 | 1.0 | 2026-10-27 | First version, built against decisions D1–D5. From the build: signup returns 202 without a session (§6.1); the sign-in second factor counts as step-up (§6.2); PRD-001's validator gained a `fixedSlots` option for partial re-saves; the scoring job burns only windows whose games are all Final. |

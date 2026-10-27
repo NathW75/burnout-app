@@ -20,12 +20,19 @@ export interface MsfFetcher {
   get(path: string): Promise<unknown>;
 }
 
+export class MsfHttpError extends Error {
+  constructor(readonly status: number, path: string) {
+    super(`MSF ${path.split('?')[0]}: HTTP ${status}`); // never include the key
+    this.name = 'MsfHttpError';
+  }
+}
+
 export function msfFetcher(baseUrl: string, apiKey: string): MsfFetcher {
   const auth = `Basic ${Buffer.from(`${apiKey}:MYSPORTSFEEDS`).toString('base64')}`;
   return {
     async get(path) {
       const res = await fetch(`${baseUrl.replace(/\/$/, '')}/${path}`, { headers: { authorization: auth, 'accept-encoding': 'gzip' } });
-      if (!res.ok) throw new Error(`MSF ${path}: HTTP ${res.status}`); // never include the key
+      if (!res.ok) throw new MsfHttpError(res.status, path);
       return res.json();
     },
   };
@@ -122,11 +129,22 @@ export function createJobs(deps: JobsDeps) {
     },
 
     async roster() {
-      const feed = parsePlayers(await deps.msf.get(`players.json?season=${encodeURIComponent(season)}`));
-      const sync = await syncPlayers(deps.apiContext, feed.players, { complete: true });
+      // `players` may not be in the subscription (403): fall back to seasonal player stats (same player objects).
+      let raw: unknown;
+      let source = 'players';
+      try {
+        raw = await deps.msf.get(`players.json?season=${encodeURIComponent(season)}`);
+      } catch (err) {
+        if (!(err instanceof MsfHttpError && err.status === 403)) throw err;
+        source = 'player_stats_totals';
+        raw = await deps.msf.get(`${season}/player_stats_totals.json?position=QB,RB,FB,WR,TE,K`);
+      }
+      const feed = parsePlayers(raw);
+      const sync = await syncPlayers(deps.apiContext, feed.players, { complete: source === 'players' });
       const week = await currentWeek();
       const reresolve = week ? await reresolveSubmissions(deps.apiContext, season, week) : null;
-      return { ...sync, week, reresolve };
+      // The stats fallback only lists players with stats, so it can't be treated as a complete roster.
+      return { source, ...sync, week, reresolve };
     },
   };
 
@@ -163,6 +181,7 @@ export function dueJobs(at: Date, opts: { windowsActive: boolean }): JobName[] {
   const due: JobName[] = ['locks', 'payments'];
   const et = etParts(at);
   if (opts.windowsActive ? et.minute % 15 === 0 : et.minute === 0) due.push('scoring');
-  if ((et.hour === 3 && et.minute === 0) || (et.weekday === 'Tue' && et.hour === 23 && et.minute === 59)) due.push('roster');
+  const injuryDays = ['Wed', 'Thu', 'Fri', 'Sat', 'Sun'].includes(et.weekday) && et.minute % 15 === 0; // injury reports (Tech Summary §5)
+  if ((et.hour === 3 && et.minute === 0) || (et.weekday === 'Tue' && et.hour === 23 && et.minute === 59) || injuryDays) due.push('roster');
   return due;
 }

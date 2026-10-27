@@ -9,7 +9,7 @@ export type GameWindowStatus = 'pending' | 'locked' | 'final' | 'canceled' | 'po
 
 export type PlayerBurnState = 'available' | 'locked' | 'burned';
 
-export type NFLPosition = 'QB' | 'RB' | 'WR' | 'TE' | 'K';
+export type NFLPosition = 'QB' | 'RB' | 'FB' | 'WR' | 'TE' | 'K';
 
 export type InjuryStatus = 'Active' | 'Questionable' | 'Doubtful' | 'Out' | 'IR' | 'PUP';
 
@@ -150,12 +150,12 @@ export interface PlayerCard {
 
 export const SLOT_ELIGIBLE_POSITIONS: Record<SlotKey, NFLPosition[]> = {
   qb:   ['QB'],
-  rb1:  ['RB'],
-  rb2:  ['RB'],
+  rb1:  ['RB', 'FB'],   // FB eligible at RB and FLEX (decision 2026-10-27)
+  rb2:  ['RB', 'FB'],
   wr1:  ['WR'],
   wr2:  ['WR'],
   wr3:  ['WR'],
   te:   ['TE'],
-  flex: ['RB', 'WR', 'TE'],
+  flex: ['RB', 'FB', 'WR', 'TE'],
   k:    ['K'],
 };

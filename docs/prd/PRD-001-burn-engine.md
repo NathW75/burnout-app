@@ -1,7 +1,7 @@
 # PRD-001 — Burn Engine
 **Burnout League · packages/burn-engine**
-Version 1.1 · 2026-10-26
-Status: APPROVED — implement against this spec (v1.1 changes: see change log at end)
+Version 1.2 · 2026-10-27
+Status: APPROVED — implement against this spec (v1.2 changes: see change log at end)
 
 ---
 
@@ -35,14 +35,20 @@ This PRD is the single source of truth. Code that conflicts with it is wrong; th
 | Slot key | Position | Eligible positions |
 |----------|----------|--------------------|
 | `qb` | Quarterback | QB |
-| `rb1` | Running Back 1 | RB |
-| `rb2` | Running Back 2 | RB |
+| `rb1` | Running Back 1 | RB, FB |
+| `rb2` | Running Back 2 | RB, FB |
 | `wr1` | Wide Receiver 1 | WR |
 | `wr2` | Wide Receiver 2 | WR |
 | `wr3` | Wide Receiver 3 | WR |
 | `te` | Tight End | TE |
-| `flex` | Flex | RB, WR, TE |
+| `flex` | Flex | RB, FB, WR, TE |
 | `k` | Kicker | K |
+
+### 3.1.1 Fullbacks and inactive players (locked 2026-10-27)
+
+- **Fullbacks** (FB) are eligible at RB1, RB2 and FLEX.
+- **Out and IR players are not selectable.** They are shown greyed out with their designation, but they are **not burned**: they stay in the user's pool and become selectable again when their designation clears. Questionable and Doubtful players remain selectable. Validation code: `PLAYER_INACTIVE`.
+- A player who is **already in a confirmed lineup** and turns Out or IR **before his window locks** has his submission voided (`void_reason = 'PLAYER_INACTIVE'`), with an audit row and an email + in-app notice, exactly like §6.5. The slot is editable, the player is not locked or burned, and the slot scores 0 if it isn't refilled. A designation that arrives after the lock changes nothing: the lock stands.
 
 ### 3.2 One-per-franchise rule (weekly contests only)
 
@@ -177,7 +183,7 @@ Treated as cancellation for original week. Player un-burned. Fresh burn decision
    - Insert a `security_audit_log` row (`event_type = 'SUBMISSION_REPOINTED'` or `'SUBMISSION_VOIDED'`, performed by the system user) and queue an email + in-app notification to the user: player, old and new team, and the new lock time or the voided slot.
 3. Submissions already locked are never re-pointed. The lock stands, and the player scores and burns on the game he was locked to.
 
-`PLAYER_NO_GAME` is added to the `void_reason` domain by the roster-change migration.
+`PLAYER_NO_GAME` and `PLAYER_INACTIVE` are in the `void_reason` domain (PRD-006 migrations).
 
 ---
 
@@ -392,6 +398,10 @@ An implementation is correct when all of the following are true:
 ---
 
 ## Change log
+
+**v1.2 — 2026-10-27**
+- §3.1, §3.1.1: FB eligible at RB/FLEX; Out and IR players unselectable (greyed, not burned); an Out/IR pick is voided before its lock
+- §9 / AC8: resolved by PRD-006 — one receipt covers all nine rows via `season_submissions.receipt_id`
 
 **v1.1 — 2026-10-26**
 - §4.4, §8.1, §8.2: notifications batched to one per user per game window

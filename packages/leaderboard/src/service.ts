@@ -204,7 +204,7 @@ export function createLeaderboardService(deps: LeaderboardServiceDeps) {
         `WITH t AS (
            SELECT ce.id AS entry_id, COALESCE(u.handle, '') AS handle,
                   COALESCE((SELECT w.points_x100 FROM user_week_scores w
-                             WHERE w.user_id = ce.user_id AND w.season = p.season AND w.week = $2), 0)::int AS wk
+                             WHERE w.user_id = ce.user_id AND w.season = p.season AND w.week = $2 AND w.week >= ce.scoring_from_week), 0)::int AS wk
              FROM contest_entries ce JOIN contest_pools p ON p.id = ce.pool_id JOIN users u ON u.id = ce.user_id
             WHERE ce.pool_id = $1::uuid AND NOT EXISTS (SELECT 1 FROM contest_entry_voids v WHERE v.entry_id = ce.id))
          SELECT entry_id::text AS entry_id, handle, wk, RANK() OVER (ORDER BY wk DESC) AS rnk

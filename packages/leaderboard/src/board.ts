@@ -2,7 +2,8 @@
  * Leaderboard computation from Postgres — PRD-003 §4, §4.1, §8
  *
  * Postgres is the only authority for ranks. Everything here is plain SQL over
- * contest_entries (minus PRD-004 voids) + user_week_scores (PRD-002), ranked with RANK() on integer
+ * contest_entries (minus PRD-004 voids) + user_week_scores (PRD-002) from each entry's
+ * scoring_from_week (late entry: weeks already under way never count), ranked with RANK() on integer
  * centipoints. The Redis cache (cache.ts) only stores copies of these results.
  */
 
@@ -75,14 +76,16 @@ export async function computeBoard(q: SqlRunner, poolId: string): Promise<Board>
     entry_id: string; user_id: string; handle: string; pts: string; wk: number; rnk: string; wrnk: string; baseline: number | null;
   }>(
     `WITH e AS (
-       SELECT ce.id AS entry_id, ce.user_id, COALESCE(u.handle, '') AS handle
+       SELECT ce.id AS entry_id, ce.user_id, ce.scoring_from_week, COALESCE(u.handle, '') AS handle
          FROM contest_entries ce JOIN users u ON u.id = ce.user_id
         WHERE ce.pool_id = $1::uuid
           AND NOT EXISTS (SELECT 1 FROM contest_entry_voids v WHERE v.entry_id = ce.id)  -- refunded entries leave the field (PRD-004 §10.3)
      ), t AS (
        SELECT e.*,
-              COALESCE((SELECT SUM(w.points_x100) FROM user_week_scores w WHERE w.user_id = e.user_id AND w.season = $2), 0)::bigint AS pts,
-              COALESCE((SELECT w.points_x100 FROM user_week_scores w WHERE w.user_id = e.user_id AND w.season = $2 AND w.week = $3), 0)::int AS wk
+              COALESCE((SELECT SUM(w.points_x100) FROM user_week_scores w
+                         WHERE w.user_id = e.user_id AND w.season = $2 AND w.week >= e.scoring_from_week), 0)::bigint AS pts,
+              COALESCE((SELECT w.points_x100 FROM user_week_scores w
+                         WHERE w.user_id = e.user_id AND w.season = $2 AND w.week = $3 AND w.week >= e.scoring_from_week), 0)::int AS wk
          FROM e
      )
      SELECT t.entry_id::text AS entry_id, t.user_id::text AS user_id, t.handle, t.pts, t.wk,
@@ -131,10 +134,10 @@ export async function writeSnapshots(
        FROM (
          SELECT ce.pool_id, ce.user_id, COALESCE(u.handle, '') AS handle,
                 COALESCE((SELECT SUM(w.points_x100) FROM user_week_scores w
-                           WHERE w.user_id = ce.user_id AND w.season = p.season), 0)::bigint AS pts,
+                           WHERE w.user_id = ce.user_id AND w.season = p.season AND w.week >= ce.scoring_from_week), 0)::bigint AS pts,
                 RANK() OVER (PARTITION BY ce.pool_id ORDER BY
                   COALESCE((SELECT SUM(w.points_x100) FROM user_week_scores w
-                             WHERE w.user_id = ce.user_id AND w.season = p.season), 0) DESC) AS rnk
+                             WHERE w.user_id = ce.user_id AND w.season = p.season AND w.week >= ce.scoring_from_week), 0) DESC) AS rnk
            FROM contest_entries ce
            JOIN contest_pools p ON p.id = ce.pool_id
            JOIN users u ON u.id = ce.user_id

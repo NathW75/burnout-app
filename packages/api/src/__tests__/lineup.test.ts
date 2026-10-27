@@ -7,7 +7,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createPostgresBurnStore, evaluateAndFireLocks } from '@burnout/burn-engine';
 import { describeDbRedis, SEASON } from '@burnout/test-support';
-import { createJobs, type MsfFetcher } from '../jobs';
+import { createJobs, MsfHttpError, type MsfFetcher } from '../jobs';
 import { lineupChecksum } from '../lineups/service';
 import { reresolveSubmissions, syncPlayers } from '../players/roster';
 import { account, buildWeek, createWorld, LINEUP, PLAYERS, relogin, stepUp, submitLineup, WINDOWS, type Account, type World } from './harness';
@@ -157,7 +157,15 @@ describeDbRedis('PRD-006 lineups, players, payments routes (HTTP, Postgres + Red
     expect(codes(await review(a, { ...LINEUP, rb2: 'rbCHI' }))).toEqual(['rb2:PLAYER_ON_BYE']);
     expect(codes(await review(a, { ...LINEUP, qb: 'rbSF' }))).toEqual(['qb:POSITION_INELIGIBLE']);
     expect(codes(await review(a, { ...LINEUP, flex: 'wrKC' }))).toEqual(['flex:DUPLICATE_PLAYER']);
-    expect(codes(await review(a, { ...LINEUP, rb2: 'fbSF' }))).toEqual(['rb2:PLAYER_BURNED_OR_UNAVAILABLE']); // FB pending Q2
+    expect((await review(a, { ...LINEUP, rb2: 'fbSF' })).status).toBe(201); // FB eligible at RB/FLEX
+    expect((await review(a, { ...LINEUP, flex: 'fbSF' })).status).toBe(201);
+    expect(codes(await review(a, { ...LINEUP, qb: 'fbSF' }))).toEqual(['qb:POSITION_INELIGIBLE']);
+    await w.t.sql(`UPDATE nfl_players SET injury_status = 'Out' WHERE msf_player_id = 'rbSF'`);
+    await w.t.sql(`UPDATE nfl_players SET injury_status = 'IR' WHERE msf_player_id = 'teGB'`);
+    await w.t.sql(`UPDATE nfl_players SET injury_status = 'Doubtful' WHERE msf_player_id = 'wrBUF'`);
+    expect(codes(await review(a, { ...LINEUP, rb2: 'rbSF' }))).toEqual(['rb2:PLAYER_INACTIVE']);
+    expect(codes(await review(a, { ...LINEUP, te: 'teGB' }))).toEqual(['te:PLAYER_INACTIVE']);
+    expect((await review(a, { ...LINEUP, wr3: 'wrBUF' })).status).toBe(201); // Doubtful is still selectable
     expect(codes(await review(a, { ...LINEUP, te: null }))).toEqual(['te:SLOT_EMPTY']);
     expect((await review(a, { ...LINEUP, extra: 'x' })).body.error).toBe('VALIDATION');
     expect((await a.client.post(`/v1/seasons/2025-2026-regular/weeks/8/lineup/review`, { slots: LINEUP })).body.error).toBe('SEASON_CLOSED');
@@ -199,6 +207,26 @@ describeDbRedis('PRD-006 lineups, players, payments routes (HTTP, Postgres + Red
     expect((await reresolveSubmissions(w.ctx, SEASON, 8))).toMatchObject({ repointed: 0, voided: 0 });
   });
 
+  it('AC10: a picked player who turns Out or IR before his lock has his slot voided and the user notified; locked picks stay', async () => {
+    const a = await account(w);
+    await submitLineup(w, a);
+    await fireLocks(new Date(WINDOWS.tnf.getTime() + 30_000)); // rb1 rbDEN, wr1 wrKC locked
+    await w.t.sql(`UPDATE nfl_players SET injury_status = 'Out' WHERE msf_player_id IN ('wrPHI', 'rbDEN')`);
+    await w.t.sql(`UPDATE nfl_players SET injury_status = 'IR' WHERE msf_player_id = 'kDET'`);
+    const res = await reresolveSubmissions(w.ctx, SEASON, 8);
+    expect(res).toMatchObject({ voided: 2, inactive: 2, repointed: 0 });
+    const after = await rows(a.userId);
+    expect(after.find((r) => r.slot_key === 'wr3')).toMatchObject({ void_reason: 'PLAYER_INACTIVE', locked_at: null });
+    expect(after.find((r) => r.slot_key === 'k')).toMatchObject({ void_reason: 'PLAYER_INACTIVE' });
+    expect(after.find((r) => r.slot_key === 'rb1')).toMatchObject({ void_reason: null }); // locked: untouched
+    const [{ n }] = await w.t.sql<{ n: number }>(
+      `SELECT count(*)::int AS n FROM notification_queue WHERE user_id = $1 AND kind = 'SUBMISSION_VOIDED' AND payload->>'reason' = 'PLAYER_INACTIVE'`, [a.userId]);
+    expect(n).toBe(2);
+    // Voided Out/IR players are never burned: their windows going Final burns nothing for them.
+    const [{ b }] = await w.t.sql<{ b: number }>(`SELECT count(*)::int AS b FROM burn_records WHERE user_id = $1`, [a.userId]);
+    expect(b).toBe(0);
+  });
+
   it('AC10: with no schedule for the week, re-resolve does nothing rather than void everything', async () => {
     const a = await account(w);
     await submitLineup(w, a);
@@ -226,11 +254,59 @@ describeDbRedis('PRD-006 lineups, players, payments routes (HTTP, Postgres + Red
     expect(card('rbDEN')).toMatchObject({ burnState: 'locked', opponent: 'KC', homeAway: 'home', windowOpen: false, weekOwnershipPct: 100 });
     expect(card('kDET')).toMatchObject({ burnState: 'burned' });
     expect(card('wrPHI')).toMatchObject({ burnState: 'available', weekOwnershipPct: 50, windowOpen: true });
-    expect(card('rbCHI')).toMatchObject({ bye: true, opponent: null, scheduledEt: null });
-    expect(card('fbSF')).toBeUndefined(); // FB not selectable yet (Q2)
+    expect(card('rbCHI')).toMatchObject({ bye: true, opponent: null, scheduledEt: null, selectable: false, unavailableReason: 'BYE' });
+    expect(card('fbSF')).toMatchObject({ position: 'FB', selectable: true, unavailableReason: null });
+    expect(card('rbDEN')).toMatchObject({ selectable: false, unavailableReason: 'LOCKED' });
+    expect(card('kDET')).toMatchObject({ selectable: false, unavailableReason: 'BURNED' });
+    await w.t.sql(`UPDATE nfl_players SET injury_status = 'IR' WHERE msf_player_id = 'teGB'`);
+    const after = await a.client.get(`/v1/seasons/${SEASON}/weeks/8/pool`);
+    expect(after.body.players.find((p: { playerId: string }) => p.playerId === 'teGB')).toMatchObject({
+      injuryStatus: 'IR', burnState: 'available', selectable: false, unavailableReason: 'INACTIVE', // greyed, not burned
+    });
     const keys = new Set(pool.body.players.flatMap((p: object) => Object.keys(p)));
     expect([...keys].filter((k) => /image|photo|headshot|url|src|avatar/i.test(String(k)))).toEqual([]);
     expect(JSON.stringify(pool.body)).not.toMatch(/https?:\/\//);
+  });
+
+  // ── Free play (decision 2026-10-27) ──────────────────────────────────────
+  it('free play: anyone may submit until the paid-entry cutoff week; after that only entrants can', async () => {
+    const free = await account(w);
+    // No paid pools this season: free all season.
+    expect((await free.client.get(`/v1/seasons/${SEASON}/weeks/8/lineup`)).body.eligibility).toEqual({ prizeEligible: false, freePlayThroughWeek: null });
+
+    // A paid pool whose entry closes at the first Week 9 lock → free play runs through Week 8.
+    const week9 = new Date('2026-11-06T01:15:00Z');
+    await w.t.sql(`INSERT INTO game_windows (week, season, label, scheduled_et, status, msf_game_ids) VALUES (9, $1, 'tnf', $2, 'pending', '{g9}')`, [SEASON, week9]);
+    const [{ id: pool }] = await w.t.sql<{ id: string }>(
+      `INSERT INTO contest_pools (season, kind, buy_in_cents, name, entry_closes_at) VALUES ($1, 'season_open', 2500, '$25 Open', $2) RETURNING id::text AS id`,
+      [SEASON, week9]
+    );
+    await w.payments.publishPool(pool, { capacity: 10, minEntries: 2 });
+    expect((await free.client.get(`/v1/seasons/${SEASON}/weeks/8/lineup`)).body.eligibility).toEqual({ prizeEligible: false, freePlayThroughWeek: 8 });
+    expect((await submitLineup(w, free)).status).toBe(200); // Week 8: still free
+    const blocked = await free.client.post(`/v1/seasons/${SEASON}/weeks/9/lineup/review`, { slots: LINEUP });
+    expect(blocked.status).toBe(403);
+    expect(blocked.body.error).toBe('PAID_ENTRY_REQUIRED');
+
+    // Paying in (an active entry) unblocks it.
+    const payer = await account(w);
+    await w.t.sql(`INSERT INTO contest_entries (pool_id, user_id, entered_at) VALUES ($1, $2, $3)`, [pool, payer.userId, w.clock.get()]);
+    expect((await payer.client.get(`/v1/seasons/${SEASON}/weeks/8/lineup`)).body.eligibility).toEqual({ prizeEligible: true, freePlayThroughWeek: null });
+    const allowed = await payer.client.post(`/v1/seasons/${SEASON}/weeks/9/lineup/review`, { slots: LINEUP });
+    expect(allowed.body.error).not.toBe('PAID_ENTRY_REQUIRED'); // reaches lineup validation instead
+  });
+
+  it('free play: a confirmation reviewed before the cutoff is still checked at Gate 3', async () => {
+    const free = await account(w);
+    const rev = await free.client.post(`/v1/seasons/${SEASON}/weeks/8/lineup/review`, { slots: LINEUP });
+    await free.client.post(`/v1/lineup-confirmations/${rev.body.confirmationId}/acknowledge`, { burnRules: true, permanent: true, noRefund: true });
+    // Ops publishes a pool whose cutoff is this week while the user is mid-flow.
+    const [{ id: pool }] = await w.t.sql<{ id: string }>(
+      `INSERT INTO contest_pools (season, kind, buy_in_cents, name, entry_closes_at) VALUES ($1, 'season_open', 2500, '$25 Open', $2) RETURNING id::text AS id`,
+      [SEASON, WINDOWS.tnf]
+    );
+    await w.payments.publishPool(pool, { capacity: 10, minEntries: 2 });
+    expect((await free.client.post(`/v1/lineup-confirmations/${rev.body.confirmationId}/confirm`)).body.error).toBe('PAID_ENTRY_REQUIRED');
   });
 
   // ── AC12 ──────────────────────────────────────────────────────────────────
@@ -307,6 +383,27 @@ describeDbRedis('PRD-006 lineups, players, payments routes (HTTP, Postgres + Red
       expect(await jobs.run('locks')).toBeNull();
     });
     await held;
+  });
+
+  it('§11: when the players feed is not in the subscription (403), roster sync falls back to seasonal player stats', async () => {
+    const stats = {
+      // rbCHI has no stats yet (bye week): absent from this feed, but still rostered.
+      playerStatsTotals: PLAYERS.filter(([id]) => id !== 'rbCHI').map(([id, firstName, lastName, pos, team]) => ({ player: { id, firstName, lastName, primaryPosition: pos }, team: team ? { abbreviation: team } : null })),
+    };
+    const calls: string[] = [];
+    const msf: MsfFetcher = {
+      async get(path) {
+        calls.push(path.split('?')[0]);
+        if (path.startsWith('players.json')) throw new MsfHttpError(403, path);
+        return stats;
+      },
+    };
+    const jobs = createJobs({ db: w.t.db, payments: w.payments, msf, season: SEASON, now: w.clock.get, log: silent, apiContext: w.ctx });
+    expect(await jobs.run('roster')).toMatchObject({ source: 'player_stats_totals', unrostered: 0 });
+    expect(calls).toEqual(['players.json', `${SEASON}/player_stats_totals.json`]);
+    // The stats feed only lists players with stats, so it must never unroster anyone missing from it.
+    const [{ team }] = await w.t.sql<{ team: string | null }>(`SELECT team FROM nfl_players WHERE msf_player_id = 'rbCHI'`);
+    expect(team).toBe('CHI');
   });
 
   it('§11: the scoring job ingests MSF data, burns windows whose games are all Final, and freezes due weeks', async () => {

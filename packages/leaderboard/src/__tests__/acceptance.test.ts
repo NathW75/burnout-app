@@ -66,6 +66,32 @@ describeDbRedis('PRD-003 §11 acceptance (Postgres + Redis)', () => {
     (await lb.getBoard(viewer, poolId, { limit })) as LeaderboardView;
   const ranks = (b: LeaderboardView) => b.rows.map((row) => [row.handle, row.rank]);
 
+  // ── Late entry (decision 2026-10-27) ─────────────────────────────────────
+  it('late entry: weeks already under way at entry never count toward prize standings', async () => {
+    await createWindow(t, { week: 1, scheduledEt: new Date('2026-09-11T00:20:00Z'), status: 'final' });
+    await createWindow(t, { week: 2, scheduledEt: new Date('2026-09-18T00:15:00Z'), status: 'final' });
+    await createWindow(t, { week: 3, scheduledEt: new Date('2026-09-25T00:15:00Z'), status: 'pending' });
+    const p = await pool(2500, new Date('2026-10-01T17:00:00Z')); // late entry open through Week 4
+    const early = await manager('early_bird');
+    const late = await manager('late_comer');
+    const midweek = await manager('mid_week');
+    await enter(p, early, new Date('2026-09-01T00:00:00Z'));
+    await enter(p, late, new Date('2026-09-16T12:00:00Z')); // Week 1 done, Week 2 not started
+    await enter(p, midweek, new Date('2026-09-18T03:00:00Z')); // Week 2's first window already locked
+    const from = await t.sql<{ user_id: string; scoring_from_week: number }>(`SELECT user_id::text, scoring_from_week FROM contest_entries`);
+    const fromOf = (u: string) => from.find((r) => r.user_id === u)!.scoring_from_week;
+    expect([fromOf(early), fromOf(late), fromOf(midweek)]).toEqual([1, 2, 3]);
+
+    await score(early, 1, 10000); await score(early, 2, 5000);
+    await score(late, 1, 90000); await score(late, 2, 6000); // a hot free Week 1 doesn't count
+    await score(midweek, 1, 90000); await score(midweek, 2, 90000);
+    const b = await computeBoard(t.db, p);
+    expect(b.rows.map((r) => [r.handle, r.pointsX100, r.rank])).toEqual([['early_bird', 15000, 1], ['late_comer', 6000, 2], ['mid_week', 0, 3]]);
+    await t.db.transaction((tx) => leaderboardHooks.afterFreeze(tx, { season: SEASON, week: 2, serverNow: T0 }));
+    const snap = await t.sql<{ handle: string; points_x100: string }>(`SELECT handle, points_x100::text FROM leaderboard_snapshots WHERE pool_id = $1 ORDER BY rank`, [p]);
+    expect(snap.map((s) => [s.handle, Number(s.points_x100)])).toEqual([['early_bird', 15000], ['late_comer', 6000], ['mid_week', 0]]);
+  });
+
   // ── AC1 ───────────────────────────────────────────────────────────────────
   it('AC1: one lineup ranked in every pool entered; identical points, different fields', async () => {
     const p25 = await pool(2500);

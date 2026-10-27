@@ -108,7 +108,7 @@ model SeasonSubmission {
   gameWindowId  String    @map("game_window_id") @db.Uuid
   submittedAt   DateTime  @default(now()) @map("submitted_at") @db.Timestamptz
   lockedAt      DateTime? @map("locked_at") @db.Timestamptz  // null = not yet locked
-  voidReason    String?   @map("void_reason") @db.VarChar(50) // GAME_CANCELED | ADMIN_VOID | PLAYER_NO_GAME
+  voidReason    String?   @map("void_reason") @db.VarChar(50) // GAME_CANCELED | ADMIN_VOID | PLAYER_NO_GAME | PLAYER_INACTIVE
   receiptId     String?   @map("receipt_id") @db.Uuid         // PRD-006 §9.5: receipt that last wrote this row
 
   user          User         @relation(fields: [userId], references: [id])
@@ -420,6 +420,9 @@ model ContestEntry {
   poolId     String   @map("pool_id") @db.Uuid
   userId     String   @map("user_id") @db.Uuid
   enteredAt  DateTime @map("entered_at") @db.Timestamptz
+  // First week whose points count for prizes: weeks already started at entry
+  // never count (late entry, decision 2026-10-27). Set by trigger on insert.
+  scoringFromWeek Int @default(1) @map("scoring_from_week") @db.SmallInt
 
   pool ContestPool @relation(fields: [poolId], references: [id])
   user User        @relation(fields: [userId], references: [id])

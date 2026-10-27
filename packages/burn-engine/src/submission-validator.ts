@@ -45,7 +45,16 @@ export interface SubmissionValidatorDependencies {
    * If 'locked', 'final', or 'canceled', this player cannot be submitted
    */
   getGameWindowStatus: (gameWindowId: string) => Promise<string | null>;
+
+  /**
+   * Optional: the player's injury designation. Out and IR players are not
+   * selectable (greyed out, not burned) — decision 2026-10-27.
+   */
+  getPlayerInjuryStatus?: (playerId: string) => Promise<string | null>;
 }
+
+/** Designations that make a player unselectable (decision 2026-10-27). */
+export const INACTIVE_INJURY_STATUSES: ReadonlySet<string> = new Set(['Out', 'IR']);
 
 export interface ValidateOptions {
   /**
@@ -129,6 +138,19 @@ export async function validateLineupDraft(
         playerId,
       });
       continue;
+    }
+
+    if (deps.getPlayerInjuryStatus) {
+      const injury = await deps.getPlayerInjuryStatus(playerId);
+      if (injury && INACTIVE_INJURY_STATUSES.has(injury)) {
+        errors.push({
+          code: 'PLAYER_INACTIVE',
+          message: `Player ${playerId} is listed ${injury} and can't be selected`,
+          slot,
+          playerId,
+        });
+        continue;
+      }
     }
 
     const eligiblePositions = SLOT_ELIGIBLE_POSITIONS[slot];

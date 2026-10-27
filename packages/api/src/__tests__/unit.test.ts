@@ -100,6 +100,19 @@ describe('AC11: players parser keeps text only', () => {
     expect(injuryFrom('PUP', null)).toBe('PUP');
   });
 
+  it('reads the seasonal player stats feed as a fallback (same player objects, team from the entry)', () => {
+    const stats = {
+      lastUpdatedOn: '2026-10-28T08:00:00.000Z',
+      playerStatsTotals: [
+        { player: { id: 7, firstName: 'Ed', lastName: 'Ely', primaryPosition: 'WR', officialImageSrc: 'https://x/y.png' }, team: { id: 9, abbreviation: 'BUF' }, stats: { receiving: {} } },
+        { player: { id: 8, firstName: 'Flo', lastName: 'Fox', primaryPosition: 'TE', currentTeam: { abbreviation: 'MIA' } }, team: { abbreviation: 'NYJ' } },
+      ],
+    };
+    const { players } = parsePlayers(stats);
+    expect(players.map((p) => [p.msfPlayerId, p.team])).toEqual([['7', 'BUF'], ['8', 'MIA']]); // currentTeam wins when present
+    expect(JSON.stringify(players)).not.toMatch(/http/);
+  });
+
   it('rejects a malformed feed', () => {
     expect(() => parsePlayers({})).toThrow(/players is not an array/);
     expect(() => parsePlayers({ players: [{ nope: 1 }] })).toThrow(/player is not an object/);
@@ -109,9 +122,16 @@ describe('AC11: players parser keeps text only', () => {
 describe('§11: job schedule (Eastern Time)', () => {
   it('locks and payments every minute; scoring every 15 min in active weeks, hourly otherwise', () => {
     expect(dueJobs(new Date('2026-11-01T17:07:00Z'), { windowsActive: true })).toEqual(['locks', 'payments']);
-    expect(dueJobs(new Date('2026-11-01T17:15:00Z'), { windowsActive: true })).toEqual(['locks', 'payments', 'scoring']);
-    expect(dueJobs(new Date('2026-11-04T17:15:00Z'), { windowsActive: false })).toEqual(['locks', 'payments']);
-    expect(dueJobs(new Date('2026-11-04T17:00:00Z'), { windowsActive: false })).toEqual(['locks', 'payments', 'scoring']);
+    expect(dueJobs(new Date('2026-11-01T17:15:00Z'), { windowsActive: true })).toEqual(['locks', 'payments', 'scoring', 'roster']);
+    expect(dueJobs(new Date('2026-11-03T17:15:00Z'), { windowsActive: false })).toEqual(['locks', 'payments']); // Tuesday
+    expect(dueJobs(new Date('2026-11-03T17:00:00Z'), { windowsActive: false })).toEqual(['locks', 'payments', 'scoring']);
+  });
+
+  it('injury reports: roster sync every 15 minutes Wednesday through Sunday', () => {
+    expect(dueJobs(new Date('2026-11-04T17:15:00Z'), { windowsActive: false })).toContain('roster'); // Wed 12:15 EST
+    expect(dueJobs(new Date('2026-11-08T23:45:00Z'), { windowsActive: false })).toContain('roster'); // Sun 18:45 EST
+    expect(dueJobs(new Date('2026-11-04T17:20:00Z'), { windowsActive: false })).not.toContain('roster');
+    expect(dueJobs(new Date('2026-11-09T17:15:00Z'), { windowsActive: false })).not.toContain('roster'); // Monday
   });
 
   it('roster sync at 3:00 AM ET nightly and Tuesday 11:59 PM ET (DST-aware)', () => {

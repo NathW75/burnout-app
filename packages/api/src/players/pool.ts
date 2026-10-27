@@ -4,7 +4,7 @@
  */
 import type { ApiContext } from '../context';
 import type { SqlRunner } from '../sql';
-import { SELECTABLE_POSITIONS } from './msf-players';
+import { INACTIVE_STATUSES, SELECTABLE_POSITIONS } from './msf-players';
 
 export interface PlayerCard {
   playerId: string;
@@ -21,6 +21,9 @@ export interface PlayerCard {
   weekOwnershipPct: number;
   seasonOwnershipPct: number;
   burnState: 'available' | 'locked' | 'burned';
+  /** False → shown greyed out. Out/IR players are greyed but never burned. */
+  selectable: boolean;
+  unavailableReason: 'BURNED' | 'LOCKED' | 'INACTIVE' | 'BYE' | 'WINDOW_CLOSED' | null;
 }
 
 /** Players the user may still select this season: selectable positions, on a team, not burned by them. */
@@ -101,7 +104,12 @@ export async function getPool(ctx: ApiContext, userId: string, season: string, w
     [userId, season, week, [...SELECTABLE_POSITIONS]]
   );
   const own = await ownership(ctx, season, week);
-  return rows.map((r) => ({
+  const reason = (r: (typeof rows)[number], windowOpen: boolean): PlayerCard['unavailableReason'] =>
+    r.burned ? 'BURNED' : r.locked ? 'LOCKED' : INACTIVE_STATUSES.has(r.injury_status) ? 'INACTIVE' : r.opponent === null ? 'BYE' : !windowOpen ? 'WINDOW_CLOSED' : null;
+  return rows.map((r) => {
+    const windowOpen = r.status === 'pending' && !!r.scheduled_et && new Date(r.scheduled_et) > now;
+    const unavailableReason = reason(r, windowOpen);
+    return {
     playerId: r.id,
     name: r.name,
     team: r.team,
@@ -110,11 +118,14 @@ export async function getPool(ctx: ApiContext, userId: string, season: string, w
     homeAway: r.home_away,
     scheduledEt: r.scheduled_et ? new Date(r.scheduled_et).toISOString() : null,
     bye: r.opponent === null,
-    windowOpen: r.status === 'pending' && !!r.scheduled_et && new Date(r.scheduled_et) > now,
+    windowOpen,
     injuryStatus: r.injury_status,
     projectedPoints: null, // PRD-006 Q3
     weekOwnershipPct: own.week[r.id] ?? 0,
     seasonOwnershipPct: own.season[r.id] ?? 0,
     burnState: r.burned ? 'burned' : r.locked ? 'locked' : 'available',
-  }));
+    selectable: unavailableReason === null,
+    unavailableReason,
+    };
+  });
 }

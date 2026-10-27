@@ -1,7 +1,7 @@
 # PRD-003 — Leaderboard
 **Burnout League · packages/leaderboard**
-Version 1.2 · 2026-10-26
-Status: APPROVED 2026-10-26 — implement against this spec (v1.2 changes: see change log)
+Version 1.3 · 2026-10-27
+Status: APPROVED — implement against this spec (v1.3 changes: see change log)
 
 ---
 
@@ -37,7 +37,9 @@ This PRD is the single source of truth for ranking and reveal behavior. Code tha
 **Decision 2026-10-26:** a user has **one** season-long lineup and **one** burn pool (PRD-001), no matter how many tiers they enter. Entering more tiers adds more pools that the same lineup is ranked in. Points are identical in every pool the user is in; only the field differs.
 
 - A user may hold at most one entry per pool (decision log: one entry per verified person per buy-in tier).
-- Season-long entry closes at the Week 1 lock: no entry may be created after the first Week 1 game window's `scheduled_et`. Late joiners play weekly contests only.
+- **Late entry (locked 2026-10-27):** season-long entry closes at the **Week 4 lock** (the pool's `entry_closes_at` is set to the first Week 4 game window's `scheduled_et`). No entry may be created after that.
+- **Prize standings start the week a user pays.** `contest_entries.scoring_from_week` is set by the database on insert: one more than the last week that had any game window lock at or before `entered_at` (1 for anyone entering before Week 1). Points from weeks already under way at entry stay on the user's record but **never count** in pool standings, snapshots or settlement. This prevents buying in after seeing a hot start.
+- **Free play:** anyone may submit lineups without paying, but free players are in no pool and can't win prizes. Free play ends at the same cutoff (PRD-006 §9.0).
 - Entries are created by the payment flow (PRD-004) only after the entry fee is captured. This package reads entries; it does not create them.
 - Every entry is ranked from Week 1, including entries that never score (they rank at the bottom, tied at 0.00).
 
@@ -247,6 +249,9 @@ Resolved 2026-10-26:
 ---
 
 ## Change log
+
+**v1.3 — 2026-10-27**
+- §3: late entry through the Week 4 lock; prize standings count from `scoring_from_week` (weeks already under way at entry never count); free play noted
 
 **v1.2 — 2026-10-26**
 - Status: APPROVED
