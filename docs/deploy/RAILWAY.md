@@ -5,7 +5,7 @@ Railway-managed Postgres and Redis:
 
 | Service | Start | Notes |
 |---------|-------|-------|
-| `api` | `node packages/api/dist/index.js` | Health check `GET /healthz` (Postgres + Redis). Domain `api.burnoutfantasy.com` (production) or `api-staging.burnoutfantasy.com` (staging), port 8080. |
+| `api` | `node packages/api/dist/index.js` | Health check `GET /healthz` (Postgres + Redis). Custom domain `api.burnoutfantasy.com` (production) or `api-staging.burnoutfantasy.com` (staging), port 8080, added in the dashboard (Railway's config can't register domains). |
 | `worker` | `node packages/api/dist/worker.js` | One replica. Locks, payments, scoring, roster and injury jobs (PRD-006 §11). The only process that calls MySportsFeeds. |
 
 Both services build with `npm run build:server`, which builds every workspace
@@ -87,6 +87,16 @@ governance rule that code soaks in staging before production.
    railway config plan
    ```
 
+   **Windows:** if it fails with "requires Railway CLI 5.42.1 or newer" even though
+   `railway --version` is newer, that's a Railway SDK bug. Its version check can't
+   run npm's `railway.cmd` wrapper. Point it at the real binary for this cmd
+   window, then plan again:
+
+   ```
+   dir /s /b "%APPDATA%\npm\node_modules\@railway\cli\*.exe"
+   set _=<the path printed above>
+   ```
+
    Read it before applying. You should see `api` and `worker` created, and no
    changes to Postgres or Redis. **Do not apply** if the plan would:
    - replace or change the image of an existing Postgres or Redis. The names in
@@ -107,10 +117,16 @@ governance rule that code soaks in staging before production.
    Variables → staging. The first deploy may fail its health check until
    they're set. Railway redeploys once you deploy the staged changes.
 
-6. **Cloudflare** (burnoutfantasy.com zone):
-   - **DNS:** add the record Railway shows for `api-staging` under the api
-     service's Settings → Networking (a CNAME), **Proxied** (orange cloud). If
-     Railway asks for a TXT verification record, add that too.
+6. **Custom domain** (Railway dashboard): staging environment → `api` service →
+   Settings → Networking → **Custom Domain** → `api-staging.burnoutfantasy.com`,
+   target port **8080**. Railway then shows the DNS record to create.
+   Don't run `railway config pull` afterward: it would overwrite
+   `.railway/railway.ts`.
+
+7. **Cloudflare** (burnoutfantasy.com zone):
+   - **DNS:** add the record Railway showed for `api-staging` (a CNAME),
+     **Proxied** (orange cloud). If Railway asks for a TXT verification record,
+     add that too.
    - **SSL/TLS** mode: **Full**.
    - **Rules → Transform Rules → Modify Request Header**, new rule:
      - When: Hostname equals `api-staging.burnoutfantasy.com`
@@ -122,7 +138,7 @@ governance rule that code soaks in staging before production.
        from Cloudflare.
    - Visitor location headers (Managed Transforms): already on.
 
-7. **Check:**
+8. **Check:**
 
    ```
    curl https://api-staging.burnoutfantasy.com/healthz

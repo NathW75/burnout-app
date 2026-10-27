@@ -13,6 +13,10 @@
  *
  * Environments: staging deploys every push to main. Production waits for the
  * GitHub checks (CI and the blackout deploy gate) before it deploys.
+ *
+ * Custom domains can't be registered from this file (Railway rejects it). They
+ * are added in the dashboard: api-staging.burnoutfantasy.com (staging) and
+ * api.burnoutfantasy.com (production), both targeting port 8080 (PORT below).
  */
 import { defineRailway, github, postgres, redis, service } from 'railway/iac';
 
@@ -58,10 +62,9 @@ export default defineRailway((ctx, project) => {
     healthcheck: '/healthz', // checks Postgres and Redis
     healthcheckTimeout: 60,
     deploy: { restartPolicyType: 'ON_FAILURE', restartPolicyMaxRetries: 10 },
-    domains: [{ domain: production ? 'api.burnoutfantasy.com' : 'api-staging.burnoutfantasy.com', port: 8080 }],
     env: {
       ...common,
-      PORT: '8080', // the domain above targets this port
+      PORT: '8080', // the custom domain (added in the dashboard) targets this port
       CORS_ORIGINS: 'https://burnoutfantasy.com,https://www.burnoutfantasy.com',
       TRUST_PROXY: '1', // Railway's edge; Cloudflare is verified by EDGE_SHARED_SECRET instead
       EDGE_SHARED_SECRET: secret('EDGE_SHARED_SECRET'), // PRD-006 §10.4; must match the Cloudflare rule
