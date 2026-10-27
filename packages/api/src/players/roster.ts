@@ -52,6 +52,32 @@ export async function syncPlayers(ctx: ApiContext, players: ParsedPlayer[], opts
   });
 }
 
+/**
+ * Applies the injuries feed (§7.3): it lists every currently injured player,
+ * so listed players take its designation and anyone else still marked
+ * injured in our table has recovered (back to Active). An empty feed is
+ * treated as a glitch, not "everyone healthy", and changes nothing.
+ */
+export async function syncInjuries(ctx: ApiContext, injured: ParsedPlayer[]): Promise<{ updated: number; cleared: number; skipped: string | null }> {
+  if (injured.length === 0) return { updated: 0, cleared: 0, skipped: 'EMPTY_FEED' };
+  const now = ctx.now();
+  return ctx.db.transaction(async (tx) => {
+    const updated = await tx.query(
+      `UPDATE nfl_players p SET injury_status = u.status, roster_status = COALESCE(u.roster, p.roster_status), updated_at = $4
+         FROM unnest($1::text[], $2::text[], $3::text[]) AS u(id, status, roster)
+        WHERE p.msf_player_id = u.id AND (p.injury_status, p.roster_status) IS DISTINCT FROM (u.status, COALESCE(u.roster, p.roster_status))
+       RETURNING 1`,
+      [injured.map((p) => p.msfPlayerId), injured.map((p) => p.injuryStatus), injured.map((p) => p.rosterStatus), now]
+    );
+    const cleared = await tx.query(
+      `UPDATE nfl_players SET injury_status = 'Active', updated_at = $2
+        WHERE injury_status <> 'Active' AND NOT (msf_player_id = ANY ($1::text[])) RETURNING 1`,
+      [injured.map((p) => p.msfPlayerId), now]
+    );
+    return { updated: updated.length, cleared: cleared.length, skipped: null };
+  });
+}
+
 export interface ReresolveResult {
   checked: number;
   repointed: number;

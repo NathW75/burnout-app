@@ -1,6 +1,6 @@
 # PRD-006 — API, Accounts and Lineup Submission
 **Burnout League · packages/api**
-Version 1.1 · 2026-10-27
+Version 1.2 · 2026-10-27
 Status: APPROVED 2026-10-27 — scope and auth decisions locked by Nath (§3); rules calls Q1, Q2, Q4 resolved in v1.1
 
 ---
@@ -197,7 +197,9 @@ There are no image, headshot or URL columns, and a schema test enforces this (D8
 
 ### 7.3 Sync and re-resolve (PRD-001 §6.5)
 
-**Sync:** `syncPlayers(feed)` upserts `nfl_players` from the MSF `players` feed. It runs nightly at 3:00 AM ET and at Tuesday 11:59 PM ET.
+**Sync:** `syncPlayers(feed)` upserts `nfl_players` from the MSF `players` feed (`players.json`, no season parameter: current rosters, about 10,000 players including free agents with no team). It runs nightly at 3:00 AM ET and at Tuesday 11:59 PM ET. Roster status `INJURY_LIST` maps to IR.
+
+**Injuries:** `syncInjuries(feed)` applies the `injuries.json` feed every 15 minutes Wednesday–Sunday. That feed lists every currently injured player as flat player objects. Listed players take its designation; anyone else still marked injured has recovered and goes back to Active. An empty feed is treated as a glitch and changes nothing. Re-resolve runs after each injuries pass.
 
 **Re-resolve:** `reresolveSubmissions(season, week)` then runs. For every submission this week that is not locked and not voided, it re-derives the player's window from his current team:
 
@@ -403,7 +405,8 @@ The user can recompute it from their email.
 | Lock check (PRD-001), with the leaderboard `afterLock` hook | Every minute |
 | `payments.runJobs()` (PRD-004) | Every minute |
 | Scoring cycle (PRD-002): fetch the current week's games and gamelogs, ingest, evaluate burns for windows whose games are all Final, freeze due weeks with the leaderboard `afterFreeze` hook | Every 15 minutes during active windows, otherwise hourly |
-| Roster sync and re-resolve (§7.3) | 3:00 AM ET nightly, Tuesday 11:59 PM ET, and every 15 minutes Wednesday–Sunday for injury reports (Tech Summary §5) |
+| Roster sync and re-resolve (§7.3) | 3:00 AM ET nightly and Tuesday 11:59 PM ET |
+| Injury reports and re-resolve (§7.3) | Every 15 minutes Wednesday–Sunday (Tech Summary §5) |
 
 Each job:
 - runs under a Postgres advisory lock, so two workers never run it at once;
@@ -503,7 +506,7 @@ Every critical rule also gets a mutation check, as with PRD-001 to PRD-004.
 | Q2 | ~~Fullback eligibility.~~ **Resolved 2026-10-27:** FB eligible at RB and FLEX. | — |
 | Q3 | Projections feed for `projectedPoints` (MSF add-on or another source). Null until then. | Nath |
 | Q4 | ~~Paid entry to submit?~~ **Resolved 2026-10-27:** free play until the Week 4 cutoff, no prizes; late payers score for prizes from their paid week (§9.0, PRD-003 §3). | — |
-| Q5 | The `players` feed returned 403 on the current subscription. The job falls back to seasonal player stats (§7.3). Confirm which feeds the subscription includes, and send a sample to verify the parser. | Nath (fetch) |
+| Q5 | ~~Players feed shape.~~ **Resolved 2026-10-27:** `players`, `injuries` and `player_stats_totals` all return 200; the earlier 403 came from the season parameter. Parser verified against real samples (now test fixtures). | — |
 | Q6 | Identity-verification provider (PRD-004 Q10). | Nath |
 | Q7 | Supersedes Tech Summary §6.1 "JWT 24-hour". The Tech Summary should note that sessions are server-side and revocable. | Nath (doc) |
 
@@ -513,5 +516,6 @@ Every critical rule also gets a mutation check, as with PRD-001 to PRD-004.
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.2 | 2026-10-27 | Real MSF samples: `players.json` without a season parameter; `INJURY_LIST` → IR; separate 15-minute injuries job on the light `injuries.json` feed; Q5 resolved. |
 | 1.1 | 2026-10-27 | Rules calls: Out/IR unselectable and voided before lock; FB at RB/FLEX; free play through the Week 4 cutoff (§9.0); injury-report sync cadence; `players` feed 403 fallback. |
 | 1.0 | 2026-10-27 | First version, built against decisions D1–D5. From the build: signup returns 202 without a session (§6.1); the sign-in second factor counts as step-up (§6.2); PRD-001's validator gained a `fixedSlots` option for partial re-saves; the scoring job burns only windows whose games are all Final. |

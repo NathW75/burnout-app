@@ -5,13 +5,17 @@
  * are read. Everything else in the feed (officialImageSrc, social handles,
  * birth data, …) is dropped here and never reaches the database.
  *
- * Shape per the v2.1 docs: { lastUpdatedOn, players: [{ player: { id,
- * firstName, lastName, primaryPosition, currentTeam: { abbreviation } | null,
- * currentRosterStatus, currentInjury: { playingProbability } | null } }] }.
+ * Verified against real feeds (2026-10-27):
+ *   players.json  → { lastUpdatedOn, players: [{ player: {…}, teamAsOfDate }], references }
+ *                   ~10k players including free agents (currentTeam null).
+ *   injuries.json → { lastUpdatedOn, players: [ {…player fields…} ] } — flat, injured only.
+ * Player fields used: id, firstName, lastName, primaryPosition, currentTeam
+ * { abbreviation } | null, currentRosterStatus (ROSTER | INJURY_LIST | UFA |
+ * UNDRAFTED | ASSIGNED_TO_OTHER), currentInjury { playingProbability: OUT |
+ * QUESTIONABLE | … } | null.
  * The seasonal player stats feed (`{season}/player_stats_totals.json`,
  * array `playerStatsTotals`) carries the same player object plus `team`, so
  * it works as a fallback when the subscription doesn't include `players`.
- * PRD-006 Q5: confirm against a real sample before launch.
  */
 
 export const PLAYER_POSITIONS = new Set(['QB', 'RB', 'WR', 'TE', 'K', 'FB']);
@@ -44,7 +48,7 @@ const isObj = (v: unknown): v is Json => typeof v === 'object' && v !== null && 
 
 export function injuryFrom(rosterStatus: string | null, playingProbability: string | null): InjuryStatus {
   const roster = (rosterStatus ?? '').toUpperCase();
-  if (roster.includes('INJURED_RESERVE') || roster === 'IR') return 'IR';
+  if (roster === 'INJURY_LIST' || roster.includes('INJURED_RESERVE') || roster === 'IR') return 'IR';
   if (roster.includes('PUP') || roster.includes('PHYSICALLY_UNABLE')) return 'PUP';
   switch ((playingProbability ?? '').toUpperCase()) {
     case 'OUT': return 'Out';
@@ -59,8 +63,10 @@ export function parsePlayers(feed: unknown): { lastUpdatedOn: Date | null; playe
   if (!isObj(feed) || !list) throw new MsfPlayersFeedError('feed.players is not an array');
   const players: ParsedPlayer[] = [];
   list.forEach((entry, i) => {
-    if (!isObj(entry) || !isObj(entry.player)) throw new MsfPlayersFeedError(`players[${i}].player is not an object`);
-    const p = entry.player;
+    // players.json wraps each player ({ player, teamAsOfDate }); injuries.json lists player objects directly.
+    if (!isObj(entry)) throw new MsfPlayersFeedError(`players[${i}] is not an object`);
+    const p = isObj(entry.player) ? entry.player : 'primaryPosition' in entry || 'firstName' in entry ? entry : null;
+    if (!p) throw new MsfPlayersFeedError(`players[${i}].player is not an object`);
     const position = String(p.primaryPosition ?? p.position ?? '');
     if (!PLAYER_POSITIONS.has(position)) return; // only fantasy-relevant positions
     if (p.id === undefined || p.id === null) throw new MsfPlayersFeedError(`players[${i}] has no id`);

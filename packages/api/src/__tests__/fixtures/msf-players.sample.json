@@ -1,0 +1,364 @@
+{
+ "lastUpdatedOn": "2026-10-27T13:07:06.306Z",
+ "players": [
+  {
+   "player": {
+    "id": 14498,
+    "firstName": "Josh",
+    "lastName": "Allen",
+    "primaryPosition": "QB",
+    "alternatePositions": [],
+    "jerseyNumber": 17,
+    "currentTeam": {
+     "id": 48,
+     "abbreviation": "BUF"
+    },
+    "currentRosterStatus": "ROSTER",
+    "currentInjury": null,
+    "birthDate": "1996-05-21",
+    "officialImageSrc": "http://static.nfl.com/static/content/public/static/img/fantasy/transparent/200x200/ALL529264.png"
+   },
+   "teamAsOfDate": {
+    "id": 48,
+    "abbreviation": "BUF"
+   }
+  },
+  {
+   "player": {
+    "id": 79761,
+    "firstName": "Jordan",
+    "lastName": "Addison",
+    "primaryPosition": "WR",
+    "alternatePositions": [],
+    "jerseyNumber": 3,
+    "currentTeam": {
+     "id": 63,
+     "abbreviation": "MIN"
+    },
+    "currentRosterStatus": "ROSTER",
+    "currentInjury": null,
+    "birthDate": "2002-01-27",
+    "officialImageSrc": "https://static.www.nfl.com/image/private/t_headshot_desktop/league/zhyhkz6wzwhioemhqgbk"
+   },
+   "teamAsOfDate": {
+    "id": 63,
+    "abbreviation": "MIN"
+   }
+  },
+  {
+   "player": {
+    "id": 208082,
+    "firstName": "Cyrus",
+    "lastName": "Allen",
+    "primaryPosition": "WR",
+    "alternatePositions": [],
+    "jerseyNumber": 13,
+    "currentTeam": {
+     "id": 73,
+     "abbreviation": "KC"
+    },
+    "currentRosterStatus": "ROSTER",
+    "currentInjury": null,
+    "birthDate": "2003-02-11",
+    "officialImageSrc": null
+   },
+   "teamAsOfDate": {
+    "id": 73,
+    "abbreviation": "KC"
+   }
+  },
+  {
+   "player": {
+    "id": 208351,
+    "firstName": "Jackson",
+    "lastName": "Acker",
+    "primaryPosition": "FB",
+    "alternatePositions": [],
+    "jerseyNumber": 40,
+    "currentTeam": {
+     "id": 79,
+     "abbreviation": "SEA"
+    },
+    "currentRosterStatus": "ROSTER",
+    "currentInjury": null,
+    "birthDate": "2002-11-15",
+    "officialImageSrc": null
+   },
+   "teamAsOfDate": {
+    "id": 79,
+    "abbreviation": "SEA"
+   }
+  },
+  {
+   "player": {
+    "id": 112141,
+    "firstName": "Brandon",
+    "lastName": "Aubrey",
+    "primaryPosition": "K",
+    "alternatePositions": [],
+    "jerseyNumber": 17,
+    "currentTeam": {
+     "id": 52,
+     "abbreviation": "DAL"
+    },
+    "currentRosterStatus": "ROSTER",
+    "currentInjury": null,
+    "birthDate": "1995-03-14",
+    "officialImageSrc": "https://static.www.nfl.com/image/private/t_headshot_desktop/league/eyetj4hmpwnpx6okn1vi"
+   },
+   "teamAsOfDate": {
+    "id": 52,
+    "abbreviation": "DAL"
+   }
+  },
+  {
+   "player": {
+    "id": 207980,
+    "firstName": "Drew",
+    "lastName": "Allar",
+    "primaryPosition": "QB",
+    "alternatePositions": [],
+    "jerseyNumber": 16,
+    "currentTeam": {
+     "id": 59,
+     "abbreviation": "PIT"
+    },
+    "currentRosterStatus": "ROSTER",
+    "currentInjury": {
+     "description": "unknown",
+     "playingProbability": "OUT"
+    },
+    "birthDate": "2004-03-08",
+    "officialImageSrc": null
+   },
+   "teamAsOfDate": {
+    "id": 59,
+    "abbreviation": "PIT"
+   }
+  },
+  {
+   "player": {
+    "id": 207969,
+    "firstName": "Carson",
+    "lastName": "Beck",
+    "primaryPosition": "QB",
+    "alternatePositions": [],
+    "jerseyNumber": 19,
+    "currentTeam": {
+     "id": 76,
+     "abbreviation": "ARI"
+    },
+    "currentRosterStatus": "ROSTER",
+    "currentInjury": {
+     "description": "back",
+     "playingProbability": "OUT"
+    },
+    "birthDate": "2001-11-19",
+    "officialImageSrc": null
+   },
+   "teamAsOfDate": {
+    "id": 76,
+    "abbreviation": "ARI"
+   }
+  },
+  {
+   "player": {
+    "id": 6826,
+    "firstName": "Ameer",
+    "lastName": "Abdullah",
+    "primaryPosition": "RB",
+    "alternatePositions": [],
+    "jerseyNumber": 20,
+    "currentTeam": {
+     "id": 66,
+     "abbreviation": "JAX"
+    },
+    "currentRosterStatus": "ROSTER",
+    "currentInjury": {
+     "description": "unknown",
+     "playingProbability": "QUESTIONABLE"
+    },
+    "birthDate": "1993-06-13",
+    "officialImageSrc": "https://static.www.nfl.com/image/private/t_headshot_desktop/league/cvjebibvlvv8bclqyc8a"
+   },
+   "teamAsOfDate": {
+    "id": 66,
+    "abbreviation": "JAX"
+   }
+  },
+  {
+   "player": {
+    "id": 134296,
+    "firstName": "Erick",
+    "lastName": "All Jr.",
+    "primaryPosition": "TE",
+    "alternatePositions": [],
+    "jerseyNumber": 83,
+    "currentTeam": {
+     "id": 57,
+     "abbreviation": "CIN"
+    },
+    "currentRosterStatus": "ROSTER",
+    "currentInjury": {
+     "description": "knee",
+     "playingProbability": "QUESTIONABLE"
+    },
+    "birthDate": "2000-09-13",
+    "officialImageSrc": null
+   },
+   "teamAsOfDate": {
+    "id": 57,
+    "abbreviation": "CIN"
+   }
+  },
+  {
+   "player": {
+    "id": 79822,
+    "firstName": "Devon",
+    "lastName": "Achane",
+    "primaryPosition": "RB",
+    "alternatePositions": [],
+    "jerseyNumber": 28,
+    "currentTeam": {
+     "id": 49,
+     "abbreviation": "MIA"
+    },
+    "currentRosterStatus": "INJURY_LIST",
+    "currentInjury": {
+     "description": "knee",
+     "playingProbability": "OUT"
+    },
+    "birthDate": "2001-10-13",
+    "officialImageSrc": "https://static.www.nfl.com/image/private/t_headshot_desktop/league/ywxugcuxwj4msieu6n25"
+   },
+   "teamAsOfDate": {
+    "id": 49,
+    "abbreviation": "MIA"
+   }
+  },
+  {
+   "player": {
+    "id": 6924,
+    "firstName": "Davante",
+    "lastName": "Adams",
+    "primaryPosition": "WR",
+    "alternatePositions": [],
+    "jerseyNumber": 17,
+    "currentTeam": {
+     "id": 77,
+     "abbreviation": "LA"
+    },
+    "currentRosterStatus": "INJURY_LIST",
+    "currentInjury": {
+     "description": "hamstring",
+     "playingProbability": "OUT"
+    },
+    "birthDate": "1992-12-24",
+    "officialImageSrc": "https://static.www.nfl.com/image/private/t_headshot_desktop/league/grvqvmdzu2lsbgvqoxku"
+   },
+   "teamAsOfDate": {
+    "id": 77,
+    "abbreviation": "LA"
+   }
+  },
+  {
+   "player": {
+    "id": 47387,
+    "firstName": "Keshunn",
+    "lastName": "Abram",
+    "primaryPosition": "WR",
+    "alternatePositions": [],
+    "jerseyNumber": 86,
+    "currentTeam": null,
+    "currentRosterStatus": "UFA",
+    "currentInjury": null,
+    "birthDate": "1999-02-03",
+    "officialImageSrc": null
+   },
+   "teamAsOfDate": null
+  },
+  {
+   "player": {
+    "id": 208297,
+    "firstName": "Jackson",
+    "lastName": "Acker",
+    "primaryPosition": "FB",
+    "alternatePositions": [],
+    "jerseyNumber": 40,
+    "currentTeam": null,
+    "currentRosterStatus": "UFA",
+    "currentInjury": null,
+    "birthDate": "2002-11-15",
+    "officialImageSrc": null
+   },
+   "teamAsOfDate": null
+  },
+  {
+   "player": {
+    "id": 18675,
+    "firstName": "Brandon",
+    "lastName": "Aiyuk",
+    "primaryPosition": "WR",
+    "alternatePositions": [],
+    "jerseyNumber": 11,
+    "currentTeam": null,
+    "currentRosterStatus": "ROSTER",
+    "currentInjury": {
+     "description": "unknown",
+     "playingProbability": "OUT"
+    },
+    "birthDate": "1998-03-17",
+    "officialImageSrc": "https://static.www.nfl.com/image/private/t_headshot_desktop/league/mprcyhqhfgzi57ebelbz"
+   },
+   "teamAsOfDate": null
+  },
+  {
+   "player": {
+    "id": 79874,
+    "firstName": "Yasir",
+    "lastName": "Abdullah",
+    "primaryPosition": "LB",
+    "alternatePositions": [],
+    "jerseyNumber": 22,
+    "currentTeam": {
+     "id": 68,
+     "abbreviation": "ATL"
+    },
+    "currentRosterStatus": "INJURY_LIST",
+    "currentInjury": {
+     "description": "hamstring",
+     "playingProbability": "OUT"
+    },
+    "birthDate": "2000-04-12",
+    "officialImageSrc": "https://static.www.nfl.com/image/private/t_headshot_desktop/league/wqmlizy6iw6wqtft4wv0"
+   },
+   "teamAsOfDate": {
+    "id": 68,
+    "abbreviation": "ATL"
+   }
+  },
+  {
+   "player": {
+    "id": 208063,
+    "firstName": "Keith",
+    "lastName": "Abney II",
+    "primaryPosition": "CB",
+    "alternatePositions": [],
+    "jerseyNumber": 6,
+    "currentTeam": {
+     "id": 61,
+     "abbreviation": "DET"
+    },
+    "currentRosterStatus": "ROSTER",
+    "currentInjury": null,
+    "birthDate": "2005-01-11",
+    "officialImageSrc": null
+   },
+   "teamAsOfDate": {
+    "id": 61,
+    "abbreviation": "DET"
+   }
+  }
+ ],
+ "references": {}
+}

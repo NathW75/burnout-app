@@ -11,7 +11,7 @@ import { createScoringStore, parseGamelogs, parseGames } from '@burnout/scoring-
 import type { Redis } from 'ioredis';
 import type { ApiContext, Log } from './context';
 import { parsePlayers } from './players/msf-players';
-import { reresolveSubmissions, syncPlayers } from './players/roster';
+import { reresolveSubmissions, syncInjuries, syncPlayers } from './players/roster';
 import type { SqlDatabase } from './sql';
 
 /** MSF v2.1 pull API. Only the worker calls it (§7.4). */
@@ -51,7 +51,7 @@ export interface JobsDeps {
   apiContext: ApiContext;
 }
 
-export type JobName = 'locks' | 'payments' | 'scoring' | 'roster';
+export type JobName = 'locks' | 'payments' | 'scoring' | 'roster' | 'injuries';
 
 export function createJobs(deps: JobsDeps) {
   const { db, season, now, log } = deps;
@@ -133,7 +133,7 @@ export function createJobs(deps: JobsDeps) {
       let raw: unknown;
       let source = 'players';
       try {
-        raw = await deps.msf.get(`players.json?season=${encodeURIComponent(season)}`);
+        raw = await deps.msf.get('players.json'); // current rosters; a season parameter returned 403 (2026-10-27)
       } catch (err) {
         if (!(err instanceof MsfHttpError && err.status === 403)) throw err;
         source = 'player_stats_totals';
@@ -145,6 +145,15 @@ export function createJobs(deps: JobsDeps) {
       const reresolve = week ? await reresolveSubmissions(deps.apiContext, season, week) : null;
       // The stats fallback only lists players with stats, so it can't be treated as a complete roster.
       return { source, ...sync, week, reresolve };
+    },
+
+    /** Injury reports (Tech Summary §5): light feed, every 15 minutes Wednesday–Sunday. */
+    async injuries() {
+      const feed = parsePlayers(await deps.msf.get('injuries.json'));
+      const sync = await syncInjuries(deps.apiContext, feed.players);
+      const week = await currentWeek();
+      const reresolve = week ? await reresolveSubmissions(deps.apiContext, season, week) : null;
+      return { ...sync, week, reresolve };
     },
   };
 
@@ -181,7 +190,7 @@ export function dueJobs(at: Date, opts: { windowsActive: boolean }): JobName[] {
   const due: JobName[] = ['locks', 'payments'];
   const et = etParts(at);
   if (opts.windowsActive ? et.minute % 15 === 0 : et.minute === 0) due.push('scoring');
-  const injuryDays = ['Wed', 'Thu', 'Fri', 'Sat', 'Sun'].includes(et.weekday) && et.minute % 15 === 0; // injury reports (Tech Summary §5)
-  if ((et.hour === 3 && et.minute === 0) || (et.weekday === 'Tue' && et.hour === 23 && et.minute === 59) || injuryDays) due.push('roster');
+  if ((et.hour === 3 && et.minute === 0) || (et.weekday === 'Tue' && et.hour === 23 && et.minute === 59)) due.push('roster');
+  if (['Wed', 'Thu', 'Fri', 'Sat', 'Sun'].includes(et.weekday) && et.minute % 15 === 0) due.push('injuries'); // Tech Summary §5
   return due;
 }

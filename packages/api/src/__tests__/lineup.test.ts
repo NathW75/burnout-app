@@ -9,7 +9,7 @@ import { createPostgresBurnStore, evaluateAndFireLocks } from '@burnout/burn-eng
 import { describeDbRedis, SEASON } from '@burnout/test-support';
 import { createJobs, MsfHttpError, type MsfFetcher } from '../jobs';
 import { lineupChecksum } from '../lineups/service';
-import { reresolveSubmissions, syncPlayers } from '../players/roster';
+import { reresolveSubmissions, syncInjuries, syncPlayers } from '../players/roster';
 import { account, buildWeek, createWorld, LINEUP, PLAYERS, relogin, stepUp, submitLineup, WINDOWS, type Account, type World } from './harness';
 
 const silent = () => {};
@@ -227,6 +227,31 @@ describeDbRedis('PRD-006 lineups, players, payments routes (HTTP, Postgres + Red
     expect(b).toBe(0);
   });
 
+  it('injuries feed: listed players take its designation, recovered players go back to Active, and Out picks are voided', async () => {
+    const a = await account(w);
+    await submitLineup(w, a);
+    await w.t.sql(`UPDATE nfl_players SET injury_status = 'Out' WHERE msf_player_id = 'rbSF'`); // was Out, now healed
+    const injured = [
+      { msfPlayerId: 'wrPHI', firstName: 'Wade', lastName: 'Phi', position: 'WR', team: 'PHI', rosterStatus: 'ROSTER', injuryStatus: 'Out' as const },
+      { msfPlayerId: 'teSF', firstName: 'Ty', lastName: 'Sfo', position: 'TE', team: 'SF', rosterStatus: 'INJURY_LIST', injuryStatus: 'IR' as const },
+      { msfPlayerId: 'kMIA', firstName: 'Kai', lastName: 'Mia', position: 'K', team: 'MIA', rosterStatus: 'ROSTER', injuryStatus: 'Questionable' as const },
+    ];
+    expect(await syncInjuries(w.ctx, injured)).toEqual({ updated: 3, cleared: 1, skipped: null });
+    const status = await w.t.sql<{ msf_player_id: string; injury_status: string }>(
+      `SELECT msf_player_id, injury_status FROM nfl_players WHERE msf_player_id IN ('rbSF', 'wrPHI', 'teSF', 'kMIA') ORDER BY msf_player_id`);
+    expect(status.map((s) => [s.msf_player_id, s.injury_status])).toEqual([['kMIA', 'Questionable'], ['rbSF', 'Active'], ['teSF', 'IR'], ['wrPHI', 'Out']]);
+    expect(await syncInjuries(w.ctx, [])).toEqual({ updated: 0, cleared: 0, skipped: 'EMPTY_FEED' }); // a blank feed changes nothing
+
+    const msf: MsfFetcher = { async get() { return JSON.parse(readFileSync(join(__dirname, 'fixtures/msf-injuries.sample.json'), 'utf8')); } };
+    const jobs = createJobs({ db: w.t.db, payments: w.payments, msf, season: SEASON, now: w.clock.get, log: silent, apiContext: w.ctx });
+    // The real sample names none of our test players: everyone injured here recovers, so nothing new is voided.
+    await reresolveSubmissions(w.ctx, SEASON, 8);
+    const r = (await jobs.run('injuries')) as { cleared: number; reresolve: { voided: number } };
+    expect(r.cleared).toBe(3);
+    const after = await rows(a.userId);
+    expect(after.filter((x) => x.void_reason === 'PLAYER_INACTIVE').map((x) => x.slot_key).sort()).toEqual(['te', 'wr3']); // voided by the earlier pass
+  });
+
   it('AC10: with no schedule for the week, re-resolve does nothing rather than void everything', async () => {
     const a = await account(w);
     await submitLineup(w, a);
@@ -369,7 +394,7 @@ describeDbRedis('PRD-006 lineups, players, payments routes (HTTP, Postgres + Red
     const jobs = createJobs({ db: w.t.db, payments: w.payments, msf, season: SEASON, now: w.clock.get, log: silent, apiContext: w.ctx });
 
     expect(await jobs.run('roster')).toMatchObject({ week: 8, reresolve: { repointed: 1 } });
-    expect(calls).toEqual([`players.json?season=${SEASON}`]);
+    expect(calls).toEqual(['players.json']);
     expect((await rows(a.userId)).find((r) => r.slot_key === 'wr2')!.game_window_id).toBe(win.snf);
 
     w.clock.set(new Date(WINDOWS.tnf.getTime() + 20_000));
