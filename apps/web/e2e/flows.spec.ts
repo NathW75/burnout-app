@@ -152,8 +152,13 @@ test('a window that locks during Gate 2 is rejected at Gate 3 and the user is se
   await signUp(page);
   await fillLineup(page);
   await page.getByRole('button', { name: 'REVIEW LINEUP' }).click();
+  await expect(page.getByRole('heading', { name: 'Review Week 8' })).toBeVisible();
   await page.getByRole('button', { name: 'CONTINUE' }).click();
-  for (const b of await page.getByRole('checkbox').all()) await b.check();
+  // Wait for Gate 2 itself: its checkboxes don't exist until the screen has rendered.
+  await expect(page.getByRole('heading', { name: 'Before you lock in' })).toBeVisible();
+  const boxes = page.getByRole('checkbox');
+  await expect(boxes).toHaveCount(3);
+  for (let i = 0; i < 3; i++) await boxes.nth(i).check();
   await page.getByRole('button', { name: 'CONTINUE' }).click();
   await expect(page.getByRole('heading', { name: 'Lock in Week 8' })).toBeVisible();
 

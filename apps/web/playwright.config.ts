@@ -13,7 +13,8 @@ export default defineConfig({
   fullyParallel: false,
   workers: 1, // one shared database, and the stale-lock test moves a window
   retries: process.env.CI ? 1 : 0,
-  reporter: process.env.CI ? [['list'], ['html', { open: 'never' }]] : 'list',
+  // 'github' puts each failure on the run's summary page as an annotation.
+  reporter: process.env.CI ? [['list'], ['github'], ['html', { open: 'never' }]] : 'list',
   timeout: 60_000,
   use: {
     baseURL: WEB,
