@@ -65,3 +65,5 @@ export function errorText(err: unknown): string {
   }
   return 'Something went wrong. Try again.';
 }
+
+export const isNotFound = (err: unknown): boolean => err instanceof ApiError && err.status === 404;

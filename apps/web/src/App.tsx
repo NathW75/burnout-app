@@ -12,7 +12,7 @@ import { PickerPage } from './lineup/Picker';
 import { useClockSync } from './lib/useClock';
 import { ThisWeekPage } from './pages/ThisWeek';
 
-// Loaded on demand (PRD-007 §9): the gates, the authenticator setup (QR encoder), receipts, rules and account.
+// Loaded on demand (PRD-007 §9): the gates, the authenticator setup (QR encoder), receipts, rules, account, standings, burned roster and inbox.
 const Setup2FAPage = lazy(() => import('./auth/Setup2FA').then((m) => ({ default: m.Setup2FAPage })));
 const Gate1Page = lazy(() => import('./lineup/Gates').then((m) => ({ default: m.Gate1Page })));
 const Gate2Page = lazy(() => import('./lineup/Gates').then((m) => ({ default: m.Gate2Page })));
@@ -20,6 +20,10 @@ const Gate3Page = lazy(() => import('./lineup/Gates').then((m) => ({ default: m.
 const ReceiptPage = lazy(() => import('./pages/Receipt').then((m) => ({ default: m.ReceiptPage })));
 const HelpPage = lazy(() => import('./pages/Help').then((m) => ({ default: m.HelpPage })));
 const AccountPage = lazy(() => import('./pages/Account').then((m) => ({ default: m.AccountPage })));
+const StandingsPage = lazy(() => import('./pages/Standings').then((m) => ({ default: m.StandingsPage })));
+const ManagerPage = lazy(() => import('./pages/Manager').then((m) => ({ default: m.ManagerPage })));
+const BurnedPage = lazy(() => import('./pages/Burned').then((m) => ({ default: m.BurnedPage })));
+const InboxPage = lazy(() => import('./pages/Inbox').then((m) => ({ default: m.InboxPage })));
 
 function NotFound() {
   useScreen('not_found', 'Not found');
@@ -61,6 +65,10 @@ export function AppRoutes() {
         <Route path="/receipts/:id" element={<ReceiptPage />} />
         <Route path="/help" element={<HelpPage />} />
         <Route path="/account" element={<AccountPage />} />
+        <Route path="/board" element={<StandingsPage />} />
+        <Route path="/board/:handle" element={<ManagerPage />} />
+        <Route path="/burned" element={<BurnedPage />} />
+        <Route path="/inbox" element={<InboxPage />} />
       </Route>
       <Route path="*" element={<NotFound />} />
     </Routes>

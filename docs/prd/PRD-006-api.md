@@ -1,6 +1,6 @@
 # PRD-006 — API, Accounts and Lineup Submission
 **Burnout League · packages/api**
-Version 1.8 · 2026-10-28
+Version 1.9 · 2026-10-28
 Status: APPROVED 2026-10-27 — scope and auth decisions locked by Nath (§3); rules calls Q1, Q2, Q4 resolved in v1.1
 
 ---
@@ -386,9 +386,9 @@ The user can recompute it from their email.
 | `GET /v1/seasons/:season/weeks/:week/windows` | `{ windows: [{ id, label, scheduledEt, status, games: [{ away, home }] }] }` in kickoff order |
 | `GET /v1/seasons/:season/leaderboard?offset&limit` | Season field board: everyone with a confirmed lineup, ranked on season centipoints with `RANK()` (ties share a rank, display order by handle), my row pinned as `me`. Handles only. Cached in Redis for 30 s; `ETag` / `304` |
 | `GET /v1/seasons/:season/leaderboard/me` | My field row (or `null`) and the field size |
-| `GET /v1/seasons/:season/weeks/:week/managers/:handle/lineup` | Post-lock reveal: another manager's **locked, non-voided** slots only, filtered in SQL; the rest come back `HIDDEN` with no player. My own lineup in full (`SUBMITTED`, `LOCKED`, `VOIDED`, `EMPTY`) |
+| `GET /v1/seasons/:season/weeks/:week/managers/:handle/lineup` | Post-lock reveal: another manager's **locked, non-voided** slots only, filtered in SQL; the rest come back `HIDDEN` with no player. My own lineup in full (`SUBMITTED`, `LOCKED`, `VOIDED`, `EMPTY`). `LOCKED` slots carry `burned` |
 | `GET /v1/me/burns?season=` | Every burned player: week, slot, name, position, team, points, window, burned time |
-| `GET /v1/me/notifications?before&limit` | Inbox, newest first, with `unread` and `nextBefore` |
+| `GET /v1/me/notifications?before&limit` | Inbox, newest first, with `unread`, `players` (`{ [playerId]: { name, position, team } }` for players the notices name) and `nextBefore` (an opaque time-and-id cursor; a bare timestamp is also accepted) |
 | `POST /v1/me/notifications/read` | `{ ids }` or `{ all: true }`; my items only. Read state (`read_at`) is separate from delivery (`dispatched_at`) |
 | `GET /v1/me/receipts?season=` | Receipt summaries `{ id, week, confirmedAt, sha256 }`, newest first |
 
@@ -620,6 +620,7 @@ Every critical rule also gets a mutation check, as with PRD-001 to PRD-004.
 |---------|------|---------|
 | 1.7 | 2026-10-28 | §7.5: one person, one player. Duplicate MSF IDs for the same person become aliases of one kept ID; aliases can't be picked (DB-enforced); burns and stats follow the person; admin review and override. Roster sync also runs at worker startup. |
 | 1.8 | 2026-10-28 | §11: scoring works newest week first, retries a refused MSF read once, and skips only the week whose feed stays refused. |
+| 1.9 | 2026-10-28 | §10.2.1: notices return the named players' names; the inbox cursor includes the id so notices sharing a timestamp never drop at a page edge; reveal `LOCKED` slots say whether the player has burned. |
 | 1.6 | 2026-10-27 | PRD-007 §8: D3 amended (a second factor for all use, §6.9; admin factor reset §6.7); Turnstile on sign-up; web app reads (§10.2.1); feedback and its worker tagging; `read_at`, `feedback`. |
 | 1.5 | 2026-10-27 | §11.6: season schedule import. One window per exact kickoff; frozen windows fixed (enforced by a trigger); picks re-resolved after changes; review list for decisions the import won't make; backfill through the normal jobs; pools close at the Week 3 lock at publish. |
 | 1.4 | 2026-10-27 | Free play is two weeks: the paid-entry cutoff moves from the Week 4 lock to the Week 3 lock (§9.0, Q4; PRD-003 §3, PRD-004 D7). |

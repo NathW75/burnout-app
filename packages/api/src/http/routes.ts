@@ -170,8 +170,8 @@ export function buildRouter(ctx: ApiContext): Router {
   }));
 
   r.get('/me/notifications', ah(async (req, res) => {
-    const q = z.object({ before: z.coerce.date().optional(), limit: z.coerce.number().int().min(1).max(100).default(30) }).parse(req.query);
-    res.json(await views.myNotifications(ctx, session(req).userId, q.before ?? null, q.limit));
+    const q = z.object({ before: z.string().max(80).optional(), limit: z.coerce.number().int().min(1).max(100).default(30) }).parse(req.query);
+    res.json(await views.myNotifications(ctx, session(req).userId, views.parseNoticeCursor(q.before), q.limit));
   }));
 
   r.post('/me/notifications/read', ah(async (req, res) => {

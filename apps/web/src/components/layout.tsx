@@ -5,9 +5,10 @@
 import { useEffect, type ReactNode } from 'react';
 import { Link, NavLink } from 'react-router';
 import { setCurrentScreen } from '../api/client';
+import { useUnread } from '../api/hooks';
 import { clockET } from '../lib/format';
 import { useServerNow } from '../lib/useClock';
-import { BackIcon, FlameIcon, HelpIcon, HomeIcon, LineupIcon, UserIcon } from './icons';
+import { BackIcon, BellIcon, BoardIcon, FlameIcon, HomeIcon, LineupIcon, UserIcon } from './icons';
 
 /** Names the screen for X-Current-Screen and the document title. */
 export function useScreen(slug: string, title: string): void {
@@ -32,19 +33,42 @@ export function Wordmark() {
   return (
     <span className="flex items-center gap-2 font-mono text-[13px] font-medium tracking-[1px] text-type">
       <FlameIcon width={16} height={16} className="text-line" />
-      BURNOUT LEAGUE
+      BURNOUT<span className="max-[379px]:hidden"> LEAGUE</span>
     </span>
+  );
+}
+
+/** The inbox bell with its unread count (PRD-007 §6.6). The count is text, not just a dot. */
+export function InboxBell() {
+  const inbox = useUnread();
+  const n = inbox.data?.unread ?? 0;
+  return (
+    <NavLink
+      to="/inbox"
+      aria-label={n ? `Inbox, ${n} unread` : 'Inbox'}
+      className={({ isActive }) => `relative -mr-2 flex size-11 items-center justify-center no-underline ${isActive ? 'text-line' : 'text-type hover:text-line'}`}
+    >
+      <BellIcon />
+      {n > 0 && (
+        <span aria-hidden="true" className="tnum absolute top-[6px] right-[4px] min-w-[18px] rounded-full bg-pencil px-[5px] text-center font-mono text-[11px] leading-[18px] font-medium text-white">
+          {n > 99 ? '99+' : n}
+        </span>
+      )}
+    </NavLink>
   );
 }
 
 /** Top bar for the main tabs. */
 export function AppHeader() {
   return (
-    <header className="sticky top-0 z-10 flex items-center justify-between border-b border-line bg-graphite px-4 py-[14px]">
+    <header className="sticky top-0 z-10 flex items-center justify-between gap-2 border-b border-line bg-graphite py-[6px] pr-4 pl-4">
       <Link to="/" className="no-underline" aria-label="Burnout League, This Week">
         <Wordmark />
       </Link>
-      <OfficialClock />
+      <div className="flex items-center gap-2">
+        <OfficialClock />
+        <InboxBell />
+      </div>
     </header>
   );
 }
@@ -65,13 +89,14 @@ export function SubHeader({ title, back, backLabel }: { title: string; back: str
 const tabs = [
   { to: '/', label: 'WEEK', icon: HomeIcon, end: true },
   { to: '/lineup', label: 'LINEUP', icon: LineupIcon, end: false },
-  { to: '/help', label: 'RULES', icon: HelpIcon, end: false },
+  { to: '/board', label: 'BOARD', icon: BoardIcon, end: false },
+  { to: '/burned', label: 'BURNED', icon: FlameIcon, end: false },
   { to: '/account', label: 'ACCOUNT', icon: UserIcon, end: false },
 ];
 
 export function BottomNav() {
   return (
-    <nav aria-label="Main" className="sticky bottom-0 z-10 mt-auto grid grid-cols-4 border-t border-rule bg-graphite pb-[env(safe-area-inset-bottom)]">
+    <nav aria-label="Main" className="sticky bottom-0 z-10 mt-auto grid grid-cols-5 border-t border-rule bg-graphite pb-[env(safe-area-inset-bottom)]">
       {tabs.map(({ to, label, icon: Icon, end }) => (
         <NavLink
           key={to}

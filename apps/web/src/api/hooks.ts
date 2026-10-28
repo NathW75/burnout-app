@@ -2,11 +2,11 @@
  * Server state (TanStack Query). The server is the authority for every rule:
  * these hooks only fetch and cache what it says (PRD-007 §1).
  */
-import { QueryCache, QueryClient, useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, QueryCache, QueryClient, useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import { serverClock } from '../lib/clock';
 import { api, ApiError } from './client';
-import type { Burn, FieldMe, GameWindow, Lineup, Me, Notifications, Pool, Receipt, SeasonCurrent } from './types';
+import type { Burn, FieldBoard, FieldMe, GameWindow, Lineup, Me, Notifications, Pool, Receipt, Reveal, SeasonCurrent } from './types';
 
 export const qk = {
   me: ['me'] as const,
@@ -16,7 +16,10 @@ export const qk = {
   pool: (season: string, week: number) => ['pool', season, week] as const,
   burns: (season: string) => ['burns', season] as const,
   fieldMe: (season: string) => ['fieldMe', season] as const,
+  fieldBoard: (season: string, offset: number) => ['fieldBoard', season, offset] as const,
+  reveal: (season: string, week: number, handle: string) => ['reveal', season, week, handle.toLowerCase()] as const,
   notifications: ['notifications'] as const,
+  inbox: ['notifications', 'inbox'] as const,
   receipt: (id: string) => ['receipt', id] as const,
 };
 
@@ -101,8 +104,58 @@ export function useFieldMe(season: string | undefined) {
   return useQuery({ queryKey: qk.fieldMe(season ?? ''), queryFn: () => api<FieldMe>(`/seasons/${season}/leaderboard/me`), enabled: !!season });
 }
 
+/** Rows per page of the field board. */
+export const BOARD_PAGE = 50;
+
+/**
+ * One page of the season field board (PRD-007 §6.5, §9). While a window is
+ * live it polls every 60 seconds; the API sends an ETag with `no-cache`, so
+ * the browser revalidates with If-None-Match and a 304 costs almost nothing.
+ */
+export function useFieldBoard(season: string | undefined, offset: number, live: boolean) {
+  return useQuery({
+    queryKey: qk.fieldBoard(season ?? '', offset),
+    queryFn: () => api<FieldBoard>(`/seasons/${season}/leaderboard?offset=${offset}&limit=${BOARD_PAGE}`),
+    enabled: !!season,
+    placeholderData: keepPreviousData,
+    refetchInterval: live ? 60_000 : false,
+    refetchIntervalInBackground: false,
+  });
+}
+
+/** A manager's locked picks for a week. Never cached past the screen: what's revealed changes at each lock. */
+export function useReveal(season: string | undefined, week: number | null, handle: string | undefined) {
+  return useQuery({
+    queryKey: qk.reveal(season ?? '', week ?? 0, handle ?? ''),
+    queryFn: () => api<Reveal>(`/seasons/${season}/weeks/${week}/managers/${encodeURIComponent(handle!)}/lineup`),
+    enabled: !!season && !!week && !!handle,
+    staleTime: 0,
+    gcTime: 0,
+  });
+}
+
+/** The full inbox, newest first, a page at a time (PRD-007 §6.6). */
+export function useInbox() {
+  return useInfiniteQuery({
+    queryKey: qk.inbox,
+    queryFn: ({ pageParam }) => api<Notifications>(`/me/notifications?limit=30${pageParam ? `&before=${encodeURIComponent(pageParam)}` : ''}`),
+    initialPageParam: null as string | null,
+    getNextPageParam: (last) => last.nextBefore,
+  });
+}
+
+/** Marks some notices, or all, as read; every inbox view refreshes. */
+export function useMarkRead() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (sel: { ids: string[] } | { all: true }) => api<{ marked: number }>('/me/notifications/read', { body: sel }),
+    onSettled: () => qc.invalidateQueries({ queryKey: qk.notifications }),
+  });
+}
+
 export function useUnread() {
-  return useQuery({ queryKey: qk.notifications, queryFn: () => api<Notifications>('/me/notifications?limit=5') });
+  // The bell and This Week share this. Checked every minute while the app is open, so a lock or burn shows up unprompted.
+  return useQuery({ queryKey: qk.notifications, queryFn: () => api<Notifications>('/me/notifications?limit=5'), refetchInterval: 60_000 });
 }
 
 export function useReceipt(id: string | undefined) {

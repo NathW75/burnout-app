@@ -148,6 +148,63 @@ test('sign in again: password, then a code', async ({ page, context }) => {
   await expect(page).toHaveURL(/\/lineup$/);
 });
 
+test('after a lock and a burn: burned roster, inbox with read state, standings, and a reveal that shows locked picks only', async ({ page }) => {
+  const acc = await signUp(page);
+  // Last week through the real lock and scoring jobs: three picks lock, the game goes Final, they burn.
+  const r = await fetch(`${API}/__e2e/history`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ handle: acc.handle }) });
+  expect(r.status).toBe(200);
+  const jobs = (await r.json()) as { locks: { windowsLocked: number }; scoring: { weeks: Array<{ week: number; burns?: number }> } };
+  expect(jobs.scoring.weeks.find((w) => w.week === 7)?.burns).toBeGreaterThanOrEqual(3);
+
+  // Burned roster (§6.4).
+  await page.goto('/burned');
+  await expect(page.getByRole('heading', { name: 'Burned' })).toBeVisible();
+  const week7 = page.getByRole('list', { name: 'Burned in Week 7' });
+  await expect(week7.getByRole('listitem')).toHaveCount(3);
+  await expect(week7.getByText('Quinn Kay')).toBeVisible();
+  await expect(week7.getByText('QB · KC · Sunday Early · 1:00 PM')).toBeVisible();
+  await noPlayerImages(page);
+  await noSeriousA11yIssues(page, 'burned roster');
+
+  // Inbox (§6.6): lock and burn notices name the players; read state per item and for all.
+  await expect(page.getByRole('link', { name: /^Inbox, \d+ unread$/ })).toBeVisible();
+  await page.getByRole('link', { name: /^Inbox/ }).click();
+  const notices = page.getByRole('list', { name: 'Notices' });
+  await expect(notices.getByText('Quinn Kay, Ray Dent and Wes Kay are burned: their games went Final.')).toBeVisible();
+  await expect(notices.getByText(/^Sunday Early · 1:00 PM locked with /)).toBeVisible();
+  await expect(notices.getByText('NEW').first()).toBeVisible();
+  await noSeriousA11yIssues(page, 'inbox');
+  await page.getByRole('button', { name: 'MARK ALL READ' }).click();
+  await expect(page.getByText('All read')).toBeVisible();
+  await expect(notices.getByText('NEW')).toHaveCount(0);
+  await expect(page.getByRole('link', { name: 'Inbox', exact: true })).toBeVisible();
+
+  // Standings (§6.5): the field with my row marked.
+  await page.getByRole('link', { name: 'BOARD' }).click();
+  const table = page.getByRole('table');
+  await expect(table.getByRole('row').filter({ hasText: acc.handle }).getByText('YOU')).toBeVisible();
+  await expect(table.getByRole('link', { name: 'rival_e2e' })).toBeVisible();
+  await noSeriousA11yIssues(page, 'standings');
+
+  // Reveal: the rival's Thursday pick is locked and shown; the Sunday pick isn't locked and never reaches the page.
+  const revealed = page.waitForResponse((res) => /\/managers\/rival_e2e\/lineup$/.test(new URL(res.url()).pathname) && res.request().method() === 'GET');
+  await table.getByRole('link', { name: 'rival_e2e' }).click();
+  const body = await (await revealed).text();
+  expect(body).toContain('wrKC');
+  expect(body).not.toContain('wrDAL');
+  const slots = page.getByRole('list', { name: 'rival_e2e, Week 8' });
+  await expect(slots.getByText('Wes Kay')).toBeVisible();
+  await expect(slots.getByText('Walt Dal')).toHaveCount(0);
+  await expect(slots.getByText('Hidden until its window locks')).toHaveCount(8);
+  await noPlayerImages(page);
+  await noSeriousA11yIssues(page, 'reveal');
+  // Last week: the rival's locked pick from Week 7.
+  await page.getByRole('combobox').selectOption('7');
+  const w7 = page.getByRole('list', { name: 'rival_e2e, Week 7' });
+  await expect(w7.getByText('Ray Dent')).toHaveClass(/line-through/);
+  await expect(w7.getByText('RB1 · BURNED')).toBeVisible();
+});
+
 test('a window that locks during Gate 2 is rejected at Gate 3 and the user is sent back with the reason (runs last)', async ({ page }) => {
   await signUp(page);
   await fillLineup(page);

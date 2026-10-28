@@ -1,11 +1,12 @@
 /** This Week (PRD-007 §6.2, approved mockup "Main"). */
 import { Link } from 'react-router';
-import { useBurns, useFieldMe, useLineup, useRefetchAtLocks, useUnread, useWindows } from '../api/hooks';
+import { useBurns, useFieldMe, useLineup, useMe, useRefetchAtLocks, useUnread, useWindows } from '../api/hooks';
 import type { GameWindow, LineupSlot, Notification } from '../api/types';
 import { ErrorNote, Loading, Panel, SectionTitle, TabPage, useScreen } from '../components/layout';
 import { useCurrentWeek } from '../lineup/context';
 import { nextLock } from '../lineup/shared';
 import { errorText } from '../lib/errors';
+import { noticeView, type NoticeContext } from '../lib/notices';
 import { countdown, dateLineET, points, shortName, timeET, dayET } from '../lib/format';
 import { anyWindowOpen, SLOT_LABEL, SLOT_ORDER, slotState, VOID_TEXT, windowFor } from '../lib/slots';
 import { useServerNow } from '../lib/useClock';
@@ -19,6 +20,7 @@ export function ThisWeekPage() {
   const burns = useBurns(season);
   const field = useFieldMe(season);
   const inbox = useUnread();
+  const meQ = useMe();
   useRefetchAtLocks(season, week, (windows.data ?? []).map((w) => Date.parse(w.scheduledEt)));
 
   const err = query.error ?? windows.error ?? lineup.error;
@@ -43,6 +45,7 @@ export function ThisWeekPage() {
   const open = anyWindowOpen(windows.data, now);
   const filled = lineup.data.slots.filter((s) => s.playerId && !s.voidReason).length;
   const unread = (inbox.data?.items ?? []).filter((n) => !n.read).slice(0, 3);
+  const noticeCtx: NoticeContext = { players: inbox.data?.players ?? {}, currentWeek: week, myHandle: meQ.data?.handle ?? null };
 
   return (
     <TabPage>
@@ -78,10 +81,10 @@ export function ThisWeekPage() {
         <Panel className="mx-4 mt-3 flex flex-col gap-[10px]">
           <div className="flex items-center justify-between">
             <h2 className="m-0 font-mono text-[12px] font-medium tracking-[1px] text-muted">SINCE YOUR LAST VISIT</h2>
-            <span className="text-[13px] text-muted">{inbox.data!.unread} unread</span>
+            <Link to="/inbox" className="text-[13px]">{inbox.data!.unread} unread · Inbox</Link>
           </div>
           {unread.map((n) => (
-            <InboxLine key={n.id} n={n} />
+            <InboxLine key={n.id} n={n} ctx={noticeCtx} />
           ))}
         </Panel>
       )}
@@ -89,7 +92,7 @@ export function ThisWeekPage() {
       <section className="flex flex-col gap-[10px] px-4 pt-6">
         <div className="flex flex-col gap-1">
           <SectionTitle>THIS WEEK’S LOCKS</SectionTitle>
-          <span className="text-[12px] text-muted">Locks at scheduled kickoff, not actual kickoff. All times ET.</span>
+          <span className="text-[12px] text-muted">Locks at scheduled kickoff, not actual kickoff. All times ET. <Link to="/help">Rules</Link></span>
         </div>
         <ol className="m-0 flex list-none flex-col overflow-hidden rounded-sm border border-rule p-0" aria-label="Game windows">
           {windows.data.map((w, i) => (
@@ -107,6 +110,11 @@ export function ThisWeekPage() {
           })}
         </ul>
         {open && !freePlayOver && <Link to="/lineup" className="btn-primary mt-2">EDIT LINEUP</Link>}
+        {(burns.data?.length ?? 0) > 0 && (
+          <Link to="/burned" className="self-start text-[13px]">
+            {burns.data!.length} burned this season · Burned roster
+          </Link>
+        )}
       </section>
     </TabPage>
   );
@@ -191,43 +199,17 @@ function SlotTile({ s, windows, burnPts }: { s: LineupSlot; windows: GameWindow[
   }
 }
 
-/** One inbox notice in plain words (the full inbox is patch b). */
-export function noticeText(n: Notification): { tag: string; tone: string; text: string } {
-  const p = n.payload as Record<string, unknown>;
-  const slot = typeof p.slot === 'string' && p.slot in SLOT_LABEL ? SLOT_LABEL[p.slot as keyof typeof SLOT_LABEL] : null;
-  const name = typeof p.playerName === 'string' ? shortName(p.playerName) : null;
-  const count = Array.isArray(p.players) ? p.players.length : 0;
-  const players = count === 1 ? '1 player' : `${count} players`;
-  switch (n.kind) {
-    case 'BURN':
-      return { tag: 'BURNED', tone: 'text-pencil', text: `${players} burned: their games went Final.` };
-    case 'LOCK':
-      return { tag: 'LOCKED', tone: 'text-bulb', text: `${typeof p.windowLabel === 'string' ? p.windowLabel : 'A window'} locked with ${players} of yours.` };
-    case 'SUBMISSION_VOIDED':
-      return {
-        tag: 'VOIDED',
-        tone: 'text-bulb',
-        text: `${name ?? 'Your pick'} was voided${p.reason === 'PLAYER_INACTIVE' ? `: listed ${typeof p.injuryStatus === 'string' ? p.injuryStatus : 'Out'} before his lock` : p.reason === 'PLAYER_NO_GAME' ? ': no game this week' : p.reason === 'PLAYER_MERGED' ? ': he was listed twice and is already in your lineup' : ''}. Not burned.${slot ? ` ${slot} is open.` : ''}`,
-      };
-    case 'SUBMISSION_REPOINTED':
-      return { tag: 'MOVED', tone: 'text-bulb', text: `${name ?? 'Your pick'} changed teams. ${slot ?? 'His slot'} now locks with ${typeof p.newWindowLabel === 'string' ? p.newWindowLabel : 'his new game'}.` };
-    case 'SLOT_REOPENED':
-      return { tag: 'REOPENED', tone: 'text-bulb', text: `${slot ?? 'A slot'} reopened after a game disruption.` };
-    case 'LINEUP_RECEIPT':
-      return { tag: 'CONFIRMED', tone: 'text-line', text: typeof p.week === 'number' ? `Week ${p.week} lineup confirmed.` : 'Lineup confirmed.' };
-    case 'SCORE_CORRECTION':
-      return { tag: 'SCORE', tone: 'text-muted', text: 'A stat correction changed your points.' };
-    default:
-      return { tag: n.kind.replace(/_/g, ' '), tone: 'text-muted', text: 'New notice.' };
-  }
-}
-
-function InboxLine({ n }: { n: Notification }) {
-  const t = noticeText(n);
-  return (
-    <div className="flex items-start gap-[10px]">
+function InboxLine({ n, ctx }: { n: Notification; ctx: NoticeContext }) {
+  const t = noticeView(n, ctx);
+  const body = (
+    <>
       <span className={`mt-[2px] flex-none font-mono text-[11px] font-medium ${t.tone}`}>{t.tag}</span>
-      <p className="m-0 text-[14px] leading-[1.4]">{t.text}</p>
-    </div>
+      <span className="text-[14px] leading-[1.4] text-type">{t.text}</span>
+    </>
+  );
+  return t.to ? (
+    <Link to={t.to} className="flex items-start gap-[10px] no-underline hover:underline">{body}</Link>
+  ) : (
+    <div className="flex items-start gap-[10px]">{body}</div>
   );
 }

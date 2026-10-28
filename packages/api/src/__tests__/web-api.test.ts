@@ -217,7 +217,7 @@ describeDbRedis('PRD-007 §8 web app API additions (HTTP, Postgres + Redis)', ()
     const post = await bob.client.get(url('AMY')); // handles match case-insensitively
     expect(post.body.handle).toBe('amy');
     const bySlot = Object.fromEntries(post.body.slots.map((s: { slotKey: string }) => [s.slotKey, s]));
-    expect(bySlot.rb1).toMatchObject({ state: 'LOCKED', player: { playerId: 'rbDEN', name: 'Ray Dent', team: 'DEN', position: 'RB' }, windowLabel: 'tnf', pointsX100: 0 });
+    expect(bySlot.rb1).toMatchObject({ state: 'LOCKED', player: { playerId: 'rbDEN', name: 'Ray Dent', team: 'DEN', position: 'RB' }, windowLabel: 'tnf', pointsX100: 0, burned: false });
     expect(bySlot.wr1).toMatchObject({ state: 'LOCKED', player: { playerId: 'wrKC' } });
     expect(post.body.slots.filter((s: { state: string }) => s.state === 'HIDDEN')).toHaveLength(7);
     const raw = JSON.stringify(post.body);
@@ -300,6 +300,40 @@ describeDbRedis('PRD-007 §8 web app API additions (HTTP, Postgres + Redis)', ()
     expect(n).toBe(0);
     expect((await amy.client.post('/v1/me/notifications/read', {})).status).toBe(400);
     expect((await amy.client.post('/v1/me/notifications/read', { all: false })).status).toBe(400);
+  });
+
+  it('§8.3 inbox: notices sharing a timestamp page without loss; players named in a notice come with name, position and team', async () => {
+    const amy = await account(w);
+    const at = new Date(Date.UTC(2026, 9, 25, 18, 0));
+    // Five notices in one instant (one transaction can write several), and one older.
+    for (let n = 1; n <= 5; n++) {
+      await w.t.sql(`INSERT INTO notification_queue (user_id, kind, payload, created_at) VALUES ($1, 'BURN', $2, $3)`, [amy.userId, { n, players: [{ playerId: 'wrKC' }, { playerId: 'rbDEN' }] }, at]);
+    }
+    await w.t.sql(`INSERT INTO notification_queue (user_id, kind, payload, created_at) VALUES ($1, 'SUBMISSION_VOIDED', $2, $3)`, [amy.userId, { n: 0, playerId: 'qbKC', slot: 'qb' }, new Date(at.getTime() - 60_000)]);
+    const seen: number[] = [];
+    let cursor: string | null = null;
+    let pages = 0;
+    do {
+      const res: { body: { items: Array<{ payload: { n: number } }>; nextBefore: string | null; players: Record<string, unknown> } } =
+        await amy.client.get(`/v1/me/notifications?limit=2${cursor ? `&before=${encodeURIComponent(cursor)}` : ''}`);
+      seen.push(...res.body.items.map((i) => i.payload.n));
+      cursor = res.body.nextBefore;
+      pages++;
+    } while (cursor && pages < 10);
+    expect(seen.sort()).toEqual([0, 1, 2, 3, 4, 5]);
+    expect(new Set(seen).size).toBe(6);
+
+    const all = await amy.client.get('/v1/me/notifications');
+    expect(all.body.players).toEqual({
+      wrKC: { name: 'Wes Kay', position: 'WR', team: 'KC' },
+      rbDEN: { name: 'Ray Dent', position: 'RB', team: 'DEN' },
+      qbKC: expect.objectContaining({ name: expect.any(String), position: 'QB' }),
+    });
+    // A bare timestamp still works as a cursor; nonsense is a 400.
+    const bare = await amy.client.get(`/v1/me/notifications?before=${encodeURIComponent(at.toISOString())}`);
+    expect(bare.body.items.map((i: { payload: { n: number } }) => i.payload.n)).toEqual([0]);
+    expect((await amy.client.get('/v1/me/notifications?before=yesterday')).status).toBe(400);
+    expect((await amy.client.get(`/v1/me/notifications?before=${encodeURIComponent(at.toISOString() + '|nope')}`)).status).toBe(400);
   });
 
   it('§8.3 GET /me/receipts: one summary per confirmed lineup with its checksum, newest first, mine only', async () => {

@@ -100,6 +100,18 @@ export interface FieldRow {
   isMe: boolean;
 }
 
+/** One page of the season field board (PRD-007 §8.1). */
+export interface FieldBoard {
+  season: string;
+  /** The week "this week's points" refers to: the latest week with a locked window. */
+  week: number;
+  version: string;
+  fieldSize: number;
+  offset: number;
+  rows: FieldRow[];
+  me: FieldRow | null;
+}
+
 export interface FieldMe {
   season: string;
   week: number;
@@ -127,10 +139,40 @@ export interface Notification {
   read: boolean;
 }
 
+/** Text-only player details for the players a notice names (NIL: no images). */
+export interface NoticePlayer {
+  name: string;
+  position: string;
+  team: string | null;
+}
+
 export interface Notifications {
   unread: number;
   items: Notification[];
+  /** Keyed by player id, for every player the returned notices name. */
+  players: Record<string, NoticePlayer>;
+  /** Opaque cursor for the next (older) page. */
   nextBefore: string | null;
+}
+
+/** Another manager's lineup for one week: locked picks only (PRD-007 §8.1, PRD-003 §6). */
+export type RevealSlot =
+  | { slotKey: SlotKey; state: 'HIDDEN' | 'EMPTY' }
+  | { slotKey: SlotKey; state: 'LOCKED'; player: RevealPlayer; windowLabel: string | null; pointsX100: number; burned: boolean }
+  | { slotKey: SlotKey; state: 'SUBMITTED'; player: RevealPlayer; windowLabel: string | null }
+  | { slotKey: SlotKey; state: 'VOIDED'; player: RevealPlayer };
+
+export interface RevealPlayer {
+  playerId: string;
+  name: string | null;
+  team: string | null;
+  position: string | null;
+}
+
+export interface Reveal {
+  handle: string;
+  week: number;
+  slots: RevealSlot[];
 }
 
 export interface ReviewResponse {

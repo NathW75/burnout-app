@@ -7,7 +7,7 @@
  */
 import { createHash } from 'node:crypto';
 import type { ApiContext } from '../context';
-import { notFound } from '../errors';
+import { HttpError, notFound } from '../errors';
 
 const SLOT_ORDER = ['qb', 'rb1', 'rb2', 'wr1', 'wr2', 'wr3', 'te', 'flex', 'k'] as const;
 
@@ -160,10 +160,11 @@ export async function fieldReveal(ctx: ApiContext, viewer: string, season: strin
   if (!target) throw notFound('No such manager');
   const own = target.id === viewer;
   const subs = await ctx.db.query<{
-    slot_key: string; player_id: string; locked: boolean; voided: boolean; points_x100: number | null;
+    slot_key: string; player_id: string; locked: boolean; voided: boolean; burned: boolean; points_x100: number | null;
     name: string | null; team: string | null; position: string | null; window_label: string | null;
   }>(
-    `SELECT s.slot_key, s.player_id, (s.locked_at IS NOT NULL) AS locked, (s.void_reason IS NOT NULL) AS voided, sc.points_x100,
+    `SELECT s.slot_key, s.player_id, (s.locked_at IS NOT NULL) AS locked, (s.void_reason IS NOT NULL) AS voided,
+            EXISTS (SELECT 1 FROM burn_records b WHERE b.submission_id = s.id) AS burned, sc.points_x100,
             p.first_name || ' ' || p.last_name AS name, p.team, p.position, w.label AS window_label
        FROM season_submissions s
        LEFT JOIN player_game_scores sc ON sc.season = s.season AND sc.player_id = s.player_id AND sc.game_window_id = s.game_window_id
@@ -181,7 +182,7 @@ export async function fieldReveal(ctx: ApiContext, viewer: string, season: strin
       const s = bySlot.get(slotKey);
       if (!s) return { slotKey, state: own ? 'EMPTY' : 'HIDDEN' };
       const player = { playerId: s.player_id, name: s.name, team: s.team, position: s.position };
-      if (s.locked && !s.voided) return { slotKey, state: 'LOCKED', player, windowLabel: s.window_label, pointsX100: s.points_x100 ?? 0 };
+      if (s.locked && !s.voided) return { slotKey, state: 'LOCKED', player, windowLabel: s.window_label, pointsX100: s.points_x100 ?? 0, burned: s.burned };
       if (s.voided) return { slotKey, state: 'VOIDED', player };
       return { slotKey, state: 'SUBMITTED', player, windowLabel: s.window_label };
     }),
@@ -212,21 +213,62 @@ export async function myBurns(ctx: ApiContext, userId: string, season: string) {
   }));
 }
 
-export async function myNotifications(ctx: ApiContext, userId: string, before: Date | null, limit: number) {
+/** Player ids a notice names: `playerId`, or each of `players[].playerId` (LOCK, BURN). */
+export function noticePlayerIds(payload: unknown): string[] {
+  if (typeof payload !== 'object' || payload === null) return [];
+  const p = payload as Record<string, unknown>;
+  const ids = new Set<string>();
+  if (typeof p.playerId === 'string') ids.add(p.playerId);
+  if (Array.isArray(p.players)) {
+    for (const x of p.players) {
+      if (typeof x === 'object' && x !== null && typeof (x as Record<string, unknown>).playerId === 'string') ids.add((x as Record<string, string>).playerId);
+    }
+  }
+  return [...ids];
+}
+
+/**
+ * Inbox page cursor: the last item's time and id. Two notices can share a
+ * timestamp (one transaction), so the time alone could skip one at a page edge.
+ * A bare timestamp is still accepted.
+ */
+export function parseNoticeCursor(raw: string | undefined): { at: Date; id: string | null } | null {
+  if (!raw) return null;
+  const [t, id] = raw.split('|');
+  const at = new Date(t);
+  if (Number.isNaN(at.getTime())) throw new HttpError(400, 'VALIDATION', 'before is not a valid cursor');
+  if (id !== undefined && !/^[0-9a-f-]{36}$/i.test(id)) throw new HttpError(400, 'VALIDATION', 'before is not a valid cursor');
+  return { at, id: id ?? null };
+}
+
+export async function myNotifications(ctx: ApiContext, userId: string, before: { at: Date; id: string | null } | null, limit: number) {
   const rows = await ctx.db.query<{ id: string; kind: string; payload: object; created_at: Date; read_at: Date | null }>(
     `SELECT id::text AS id, kind, payload, created_at, read_at FROM notification_queue
-      WHERE user_id = $1::uuid AND ($2::timestamptz IS NULL OR created_at < $2::timestamptz)
-      ORDER BY created_at DESC, id DESC LIMIT $3`,
-    [userId, before, limit]
+      WHERE user_id = $1::uuid
+        AND ($2::timestamptz IS NULL OR created_at < $2::timestamptz OR (created_at = $2::timestamptz AND $3::uuid IS NOT NULL AND id < $3::uuid))
+      ORDER BY created_at DESC, id DESC LIMIT $4`,
+    [userId, before?.at ?? null, before?.id ?? null, limit]
   );
   const [{ unread }] = await ctx.db.query<{ unread: number }>(
     `SELECT count(*)::int AS unread FROM notification_queue WHERE user_id = $1::uuid AND read_at IS NULL`,
     [userId]
   );
+  // Names for the players the notices mention (text only: name, position, team; PRD-007 §5.1).
+  const ids = [...new Set(rows.flatMap((r) => noticePlayerIds(r.payload)))];
+  const players: Record<string, { name: string; position: string; team: string | null }> = {};
+  if (ids.length) {
+    const ps = await ctx.db.query<{ id: string; name: string; position: string; team: string | null }>(
+      `SELECT msf_player_id AS id, first_name || ' ' || last_name AS name, position, team FROM nfl_players WHERE msf_player_id = ANY ($1::text[])`,
+      [ids]
+    );
+    for (const p of ps) players[p.id] = { name: p.name, position: p.position, team: p.team };
+  }
+  const last = rows.at(-1);
   return {
     unread,
     items: rows.map((r) => ({ id: r.id, kind: r.kind, payload: r.payload, createdAt: r.created_at, read: r.read_at !== null })),
-    nextBefore: rows.length === limit ? rows.at(-1)!.created_at : null,
+    players,
+    nextBefore: rows.length === limit && last ? `${last.created_at.toISOString()}|${last.id}` : null,
   };
 }
 

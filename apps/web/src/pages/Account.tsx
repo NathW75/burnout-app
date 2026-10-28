@@ -3,7 +3,7 @@
  * sessions and receipts arrive in patch (b) (PRD-007 §6.7).
  */
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useNavigate } from 'react-router';
+import { Link, useNavigate } from 'react-router';
 import { api } from '../api/client';
 import { useMe } from '../api/hooks';
 import { ErrorNote, SectionTitle, TabPage, useScreen } from '../components/layout';
@@ -41,6 +41,10 @@ export function AccountPage() {
             <dd className="m-0 text-[15px]">{me.data?.mfaEnrolled ? 'Authenticator app' : 'Not set up'}</dd>
           </div>
         </dl>
+      </section>
+      <section className="flex flex-col gap-3 px-4 pt-6">
+        <SectionTitle>RULES AND HELP</SectionTitle>
+        <Link to="/help" className="btn-outline min-h-12 no-underline">THE RULES</Link>
       </section>
       <section className="flex flex-col gap-3 px-4 pt-6">
         <SectionTitle>SIGN OUT</SectionTitle>

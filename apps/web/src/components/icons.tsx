@@ -44,3 +44,9 @@ export const SearchIcon = (p: SVGProps<SVGSVGElement>) => (
 export const LockIcon = (p: SVGProps<SVGSVGElement>) => (
   <svg {...base({ width: 12, height: 12, strokeWidth: 2.5, ...p })}><rect x="5" y="11" width="14" height="10" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" /></svg>
 );
+export const BoardIcon = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)}><path d="M4 20V10M10 20V4M16 20v-7M22 20H2" /></svg>
+);
+export const BellIcon = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)}><path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4zM10 21h4" /></svg>
+);

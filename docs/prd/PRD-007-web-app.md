@@ -1,6 +1,6 @@
 # PRD-007 — Web App (Player Portal)
 **Burnout League · apps/web**
-*Status: v1.4 — **APPROVED 2026-10-27** (Nath), decisions Q1–Q7 in §14; mockups approved on the landing-page design system (§11); API additions (§8) built; web app patch (a) built.*
+*Status: v1.5 — **APPROVED 2026-10-27** (Nath), decisions Q1–Q7 in §14; mockups approved on the landing-page design system (§11); API additions (§8) built; web app patch (a) built; patch (b) part 1 (standings, burned roster, inbox) built 2026-10-28.*
 *Author: Build thread · 2026-10-27*
 
 ---
@@ -144,19 +144,26 @@ A user who stops partway resumes at the step they left on their next sign-in (th
 
 **Submit:** "Review lineup" starts the three gates (§7). Only open slots can change; the API keeps locked slots fixed. **Every slot that hasn't locked needs a player to submit** (PRD-006 §9, `SLOT_EMPTY`): the button stays off and names the slots to fill. An empty slot happens only when a confirmed pick is voided later, and it then scores 0 and burns nothing. A draft pick whose window has since locked, or who is now listed Out, is flagged and must be replaced before review.
 
+### 6.2.1 Navigation (as built, v1.5)
+
+- **Bottom tabs:** WEEK, LINEUP, BOARD (standings), BURNED, ACCOUNT.
+- **Header:** wordmark, official clock, and an inbox bell with the unread count as text (`Inbox, 3 unread` for screen readers). Below 380px the wordmark shortens to BURNOUT so all three fit at 360px.
+- **Rules** moved from a tab to Account, and stay linked from every screen that states a rule (This Week's locks, the builder, the gates, the burned roster, the reveal).
+
 ### 6.4 Burned roster
 
-A chronological list of every burned player: week, slot, points that week, and the window it burned in. It's read-only reflection. Charts are Phase B.
+Every burned player, grouped by week (newest week first; within a week, in the order they burned): slot, name, position and team, the window he burned in, and his points. A summary shows how many have burned and the points they scored. It's read-only reflection. Charts are Phase B.
 
 ### 6.5 Standings
 
 - **Season field leaderboard (§8.1):** rank, handle, season points, this week's points. My row is pinned and paging is server-side. Ties share a rank, with display order by handle (PRD-003 §4).
-- **Reveal:** tapping a manager shows their **locked** players for a chosen week, and nothing for windows that haven't locked.
+- **Reveal:** tapping a manager shows their **locked** players for a chosen week (a picker lists weeks with a lock), and nothing for windows that haven't locked. Locked players who have since burned show as burned. A manager's own lineup is shown in full, with picks not yet locked marked "hidden from others".
+- The board polls every 60 seconds while a window this week is locked and not yet Final, and shows when it last updated.
 - **Paid pool boards** (PRD-003) appear here in Phase B, when the user has entries.
 
 ### 6.6 Inbox
 
-In-app notices from the same events that queue emails. Read state is per item, with "mark all read." Each item links to the slot or week it concerns.
+In-app notices from the same events that queue emails, newest first, 30 at a time with "older notices". Read state is per item (opening one marks it read), with "mark all read"; unread items carry a NEW tag, not just a color. Notices name the players they're about (name, position, team; text only). Each item links to what it concerns: burns to the burned roster, this week's locks and moves to This Week, voids and reopened slots to the builder, receipts to the receipt, and an older week's notices to that week's lineup.
 
 ### 6.7 Account
 
@@ -211,7 +218,10 @@ These endpoints follow PRD-006 conventions (session auth, `/v1`, zod validation,
 ### 8.3 Burns, inbox, receipts
 
 - `GET /v1/me/burns`: `[{ week, slot, playerId, name, position, team, pointsX100, burnedAt, windowLabel }]`.
-- `GET /v1/me/notifications?before&limit` (with `unread` and `nextBefore`) and `POST /v1/me/notifications/read` (`{ ids }` or `{ all: true }`, the caller's items only). A new `read_at` column on `notification_queue`; delivery state (`dispatched_at`) stays separate from read state.
+- `GET /v1/me/notifications?before&limit` (with `unread`, `players` and `nextBefore`) and `POST /v1/me/notifications/read` (`{ ids }` or `{ all: true }`, the caller's items only). A new `read_at` column on `notification_queue`; delivery state (`dispatched_at`) stays separate from read state.
+  - `players` (v1.5): `{ [playerId]: { name, position, team } }` for every player the returned notices name, so the inbox can say who locked or burned.
+  - `nextBefore` (v1.5) is an opaque cursor (time and id). Several notices can share a timestamp, so a time-only cursor could skip one at a page edge. A bare timestamp is still accepted.
+- The reveal's `LOCKED` slots carry `burned` (v1.5).
 - `GET /v1/me/receipts`: receipt summaries `{ id, week, confirmedAt, sha256 }`, newest first.
 
 ### 8.4 Sign-up protection (Q6)
@@ -322,10 +332,10 @@ Mockups (approved): the "Burnout League — Web App Mockups" canvas.
 - [ ] An expired or stale confirmation can never submit. The user is returned to an up-to-date builder with the reason.
 - [ ] After a lock, the slot shows as locked without a manual refresh.
 - [ ] The receipt shows the checksum, and the help page explains how to recompute it.
-- [ ] The field leaderboard ranks ties per PRD-003, and my row is always visible.
-- [ ] The reveal never shows a slot whose window hasn't locked (asserted against API responses and the DOM).
+- [x] The field leaderboard ranks ties per PRD-003, and my row is always visible.
+- [x] The reveal never shows a slot whose window hasn't locked (asserted against API responses and the DOM).
 - [ ] No player images, team logos or real names appear anywhere (automated scan of rendered routes).
-- [ ] The inbox shows lock, burn, void and re-point notices with read state.
+- [x] The inbox shows lock, burn, void and re-point notices with read state.
 - [x] Sign-up isn't complete without a confirmed authenticator. Until then, **the API refuses every route except the setup steps** (server-enforced and tested against every route). *(API side done; the app's backup-code acknowledgment is part of the web build.)*
 - [ ] Replacing the authenticator, regenerating backup codes, session revoke and sign-out-everywhere all work. No auth data is in `localStorage`.
 - [ ] axe reports no serious or critical issues on any route.
@@ -352,7 +362,7 @@ Mockups (approved): the "Burnout League — Web App Mockups" canvas.
 1. ~~Approve this PRD (with Q1–Q7).~~ Done 2026-10-27.
 2. ~~Mockups of the three key screens, for sign-off.~~ Done 2026-10-27.
 3. ~~API additions (§8), shipped as their own patch with tests.~~ Built 2026-10-27.
-4. Web app Phase A, as two patches: (a) accounts, This Week, lineup and gates, with a short rules page and a basic account page; built 2026-10-27. (b) standings, burned roster, inbox, full account (security, sessions, receipts), feedback, and the light theme.
+4. Web app Phase A, as two patches: (a) accounts, This Week, lineup and gates, with a short rules page and a basic account page; built 2026-10-27. (b) in two parts: **part 1**, standings with the reveal, the burned roster and the inbox, built 2026-10-28; **part 2**, the full account (security, sessions, receipts), the feedback button and the light theme.
 5. Cloudflare setup: the deploy workflow, `wrangler.jsonc` and headers ship in patch (a); the runbook is `docs/deploy/CLOUDFLARE-APP.md` (API token and two GitHub secrets). Turnstile widgets created 2026-10-27.
 6. Testers invited once SendGrid domain authentication is done (verification emails must arrive).
 
@@ -364,6 +374,7 @@ Depends on: PRD-001, PRD-003, PRD-004 (Phase B), PRD-006, `SPEC-feedback-system.
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.5 | 2026-10-28 | Patch (b) part 1 built: §6.2.1 navigation (BOARD and BURNED tabs, inbox bell, Rules under Account); §6.4 burned roster grouped by week; §6.5 reveal week picker, burned state and live polling; §6.6 inbox names players, links each notice, NEW tag. §8.3: notices return player names; the inbox cursor includes the id. Acceptance: field board, reveal and inbox checked off. |
 | 1.4 | 2026-10-27 | §6.3: every open slot must be filled to submit (as the API already required), stale draft picks are flagged. §4, §12, §15: as built in web app patch (a). |
 | 1.3 | 2026-10-27 | §7: Gate 2 (CONTINUE lime and untappable until all three are ticked, then red with white text) and Gate 3 (red center fills 0→100% with the ring) as approved in the mockups. §8, §10: as built (response shapes, Turnstile fails closed, 30-second field cache with ETag, feedback limits and tagging). Corrected the PRD-006 decision reference to D3. Added to the repo. |
 | 1.2 | 2026-10-27 | §11: the visual design follows the live landing page's system (newsprint grays, lime/red/amber accents, DM Mono + IBM Plex Sans), replacing the brand-guide palette; mockups approved. |
