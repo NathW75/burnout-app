@@ -53,7 +53,14 @@ export function AccountPage() {
       <section className="flex flex-col gap-3 px-4 pt-6">
         <SectionTitle>NOTIFICATIONS</SectionTitle>
         <ul className="m-0 flex list-none flex-col overflow-hidden rounded-sm border border-rule p-0" aria-label="Notifications">
-          <Row to="/account/notifications" title="Email notices" detail="Locks, burns, lineup changes and receipts" last />
+          <Row to="/account/notifications" title="Email and push" detail="Locks, burns, lineup changes and receipts" last />
+        </ul>
+      </section>
+
+      <section className="flex flex-col gap-3 px-4 pt-6">
+        <SectionTitle>CONNECTIONS</SectionTitle>
+        <ul className="m-0 flex list-none flex-col overflow-hidden rounded-sm border border-rule p-0" aria-label="Connections">
+          <Row to="/account/connector" title="AI connector" detail="Use your own AI assistant with your data, read-only" last />
         </ul>
       </section>
 

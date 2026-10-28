@@ -13,6 +13,7 @@ import { listIdentities, setIdentity } from '../players/identity';
 import { getPool } from '../players/pool';
 import * as views from '../season/views';
 import * as invites from '../auth/invites';
+import * as mcpCreds from '../mcp/credentials';
 import * as devices from '../notify/devices';
 import * as notifyPrefs from '../notify/preferences';
 import { notifyStats } from '../notify/dispatcher';
@@ -198,6 +199,24 @@ export function buildRouter(ctx: ApiContext): Router {
     const groups = z.object({ locks_burns: z.boolean(), lineup_changes: z.boolean(), receipts: z.boolean() }).partial().strict().optional();
     const b = body(z.object({ emailNotifications: z.enum(['on', 'off']).optional(), email: groups, push: groups }).strict(), req);
     res.json(await notifyPrefs.setPreferences(ctx, session(req).userId, b));
+  }));
+
+  // ── AI connector credentials (PRD-011 §5.2, §8) ─────────────────────────
+  r.get('/me/mcp', ah(async (req, res) => {
+    res.set('Cache-Control', 'no-store').json(await mcpCreds.listCredentials(ctx, session(req).userId));
+  }));
+
+  r.post('/me/mcp/tokens', ah(async (req, res) => {
+    const s = session(req);
+    if (!auth.hasFreshStepUp(ctx, s)) throw new HttpError(403, 'STEP_UP_REQUIRED', 'Confirm with your second factor');
+    const b = body(z.object({ label: z.string().trim().max(60).nullish() }).strict(), req);
+    const out = await mcpCreds.createPersonalToken(ctx, s.userId, b.label || null);
+    res.status(201).set('Cache-Control', 'no-store').json(out);
+  }));
+
+  r.delete('/me/mcp/tokens/:id', ah(async (req, res) => {
+    await mcpCreds.revokePersonalToken(ctx, session(req).userId, uuid.parse(req.params.id));
+    res.json({ revoked: true });
   }));
 
   // ── web push (PRD-008 §9) ────────────────────────────────────────────────

@@ -56,6 +56,7 @@ model User {
   invitesCreated      InviteCode[] @relation("InviteCreator")
   inviteUsed          InviteCode?  @relation("InviteUser")
   pushSubscriptions   PushSubscription[]
+  mcpCredentials      McpCredential[]
 
   @@map("users")
 }
@@ -296,6 +297,26 @@ model PushSubscription {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("push_subscriptions")
+}
+
+/// PRD-011 §5, §9: AI connector credentials. SHA-256 of the token only; the
+/// active-by-user partial index is raw SQL in the migration.
+model McpCredential {
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId     String    @map("user_id") @db.Uuid
+  kind       String    @db.VarChar(16)
+  grantId    String?   @map("grant_id") @db.Uuid
+  tokenHash  String    @unique @map("token_hash") @db.Char(64)
+  label      String?   @db.VarChar(60)
+  scope      String    @default("burnout.read") @db.VarChar(40)
+  expiresAt  DateTime  @map("expires_at") @db.Timestamptz
+  lastUsedAt DateTime? @map("last_used_at") @db.Timestamptz
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  revokedAt  DateTime? @map("revoked_at") @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("mcp_credentials")
 }
 
 /// PRD-008 §6: per-user notification choices. No row = the default.

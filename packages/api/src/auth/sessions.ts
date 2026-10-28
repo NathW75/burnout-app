@@ -150,9 +150,13 @@ export async function revokeSessions(
           `UPDATE sessions SET revoked_at = $2 WHERE user_id = $1::uuid AND revoked_at IS NULL AND id IS DISTINCT FROM $3::uuid RETURNING token_hash`,
           [scope.userId, now, scope.exceptSessionId ?? null]
         );
-  // Signed out everywhere (logout-all, password reset, suspension): no device keeps getting this account's push (PRD-008 §9).
-  if ('userId' in scope && !('sessionId' in scope) && !scope.exceptSessionId) {
-    await q.query(`UPDATE push_subscriptions SET revoked_at = $2 WHERE user_id = $1::uuid AND revoked_at IS NULL`, [scope.userId, now]);
+  if ('userId' in scope && !('sessionId' in scope)) {
+    // Signed out everywhere, a password change or reset, or a suspension: every AI connector credential goes too (PRD-011 §5.3).
+    await q.query(`UPDATE mcp_credentials SET revoked_at = $2 WHERE user_id = $1::uuid AND revoked_at IS NULL`, [scope.userId, now]);
+    // Signed out everywhere (logout-all, password reset, suspension): no device keeps getting this account's push (PRD-008 §9).
+    if (!scope.exceptSessionId) {
+      await q.query(`UPDATE push_subscriptions SET revoked_at = $2 WHERE user_id = $1::uuid AND revoked_at IS NULL`, [scope.userId, now]);
+    }
   }
   await dropCache(ctx, rows.map((r) => r.token_hash));
   return rows.length;

@@ -1,6 +1,6 @@
 # PRD-006 — API, Accounts and Lineup Submission
 **Burnout League · packages/api**
-Version 1.13 · 2026-10-28
+Version 1.14 · 2026-10-28
 Status: APPROVED 2026-10-27 — scope and auth decisions locked by Nath (§3); rules calls Q1, Q2, Q4 resolved in v1.1
 
 ---
@@ -403,6 +403,10 @@ The user can recompute it from their email.
 | `POST /v1/me/notifications/read` | `{ ids }` or `{ all: true }`; my items only. Read state (`read_at`) is separate from delivery (`dispatched_at`) |
 | `GET /v1/me/notification-preferences` | PRD-008 §6, §9: `{ emailNotifications, email: { locks_burns, lineup_changes, receipts }, push: { …same groups } }` (emailNotifications is on or off and doesn't affect push); no stored choice = the default (on) |
 | `PUT /v1/me/notification-preferences` | Any of `emailNotifications`, `email.{group}` and `push.{group}`; groups are stored per kind and channel |
+| `GET /v1/me/mcp` | PRD-011 §5.2: active personal connector tokens `{ tokens: [{ id, label, createdAt, expiresAt, lastUsedAt }], maxTokens }`; never the token itself |
+| `POST /v1/me/mcp/tokens` | `{ label? }` → 201 `{ token, credential }`, the token shown once. Step-up (403 `STEP_UP_REQUIRED`); at most 5 active (409 `MCP_TOKEN_LIMIT`); 90 days; audited |
+| `DELETE /v1/me/mcp/tokens/:id` | Revoke one of your tokens (404 otherwise); audited. Password change or reset, sign out everywhere and suspension revoke them all |
+| `POST /mcp` | Not under `/v1`: the AI connector (PRD-011). Only connector bearer tokens; sessions are never accepted there, and connector tokens are never accepted under `/v1` |
 | `GET /v1/push/config` | Public. PRD-008 §9: `{ enabled, publicKey }`; enabled only when `NOTIFY_PUSH=on` and the VAPID key is set |
 | `POST /v1/me/push-subscriptions` | `{ endpoint, keys: { p256dh, auth } }` → 201 `{ subscribed, devices }`. Endpoint must be https on a known push service (400 `PUSH_ENDPOINT_NOT_ALLOWED`); 409 `PUSH_OFF` when push is off. Upsert by endpoint: a browser that changes accounts moves |
 | `DELETE /v1/me/push-subscriptions` | `{ endpoint }` → `{ removed, devices }`; only the owner's device. Signing out everywhere (logout-all, password reset, suspension) also turns off every device |
@@ -643,6 +647,7 @@ Every critical rule also gets a mutation check, as with PRD-001 to PRD-004.
 |---------|------|---------|
 | 1.7 | 2026-10-28 | §7.5: one person, one player. Duplicate MSF IDs for the same person become aliases of one kept ID; aliases can't be picked (DB-enforced); burns and stats follow the person; admin review and override. Roster sync also runs at worker startup. |
 | 1.8 | 2026-10-28 | §11: scoring works newest week first, retries a refused MSF read once, and skips only the week whose feed stays refused. |
+| 1.14 | 2026-10-28 | PRD-011 part 1: connector token routes (`/v1/me/mcp`), the `/mcp` endpoint and its credential boundary; revoking sessions user-wide also revokes connector tokens; `MCP_TOKEN_CREATED` / `MCP_TOKEN_REVOKED` audit events. |
 | 1.13 | 2026-10-28 | D1 limits changed (Nath): signed in until you sign out, 90-day idle (each visit restarts it) and 1-year hard limit, were 24 h and 30 days. Step-up for money, security and admin unchanged. §5 and AC3 updated. |
 | 1.12 | 2026-10-28 | PRD-008 Phase 2: push config, device subscriptions, push preference groups; signing out everywhere revokes push devices; the `push` worker job; `push_subscriptions` and `notification_queue` push columns. |
 | 1.11 | 2026-10-28 | §6.10: invite-only sign-up (per-person single-use codes, optional email lock, expiry and revoke), `invite_codes`, `SIGNUP_INVITE_ONLY`. |

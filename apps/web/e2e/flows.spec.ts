@@ -395,6 +395,43 @@ test('push (PRD-008 §9): the service worker registers, the manifest loads, and 
   await page.evaluate(() => localStorage.removeItem('bl:theme'));
 });
 
+test('AI connector (PRD-011): make a token after a fresh code, use it on /mcp from outside the browser, revoke it; axe passes', async ({ page, request }) => {
+  test.setTimeout(90_000);
+  const acc = await signUp(page);
+  await page.goto('/account');
+  await page.getByRole('list', { name: 'Connections' }).getByRole('link', { name: /AI connector/ }).click();
+  await expect(page.getByRole('heading', { name: 'AI connector', exact: true })).toBeVisible();
+  await expect(page.getByText(`${API}/mcp`)).toBeVisible();
+  await noSeriousA11yIssues(page, 'ai connector');
+  await stepUpIfAsked(page, acc.secret, page.getByRole('button', { name: 'MAKE TOKEN' }));
+  await page.getByLabel('Name (optional)').fill('e2e client');
+  await page.getByRole('button', { name: 'MAKE TOKEN' }).click();
+  const token = (await page.locator('code').filter({ hasText: /^bl_mcp_/ }).textContent())!.trim();
+  expect(token).toMatch(/^bl_mcp_[0-9a-f]{64}$/);
+  await noSeriousA11yIssues(page, 'ai connector with a token');
+
+  // A developer client: a 2025-11-25 initialize, then a tool call.
+  const headers = { Authorization: `Bearer ${token}`, Accept: 'application/json, text/event-stream', 'Content-Type': 'application/json' };
+  const body = (res: { text: () => Promise<string> }) => res.text().then((t) => JSON.parse(t.startsWith('event:') ? /^data: (.*)$/m.exec(t)![1] : t));
+  const init = await request.post(`${API}/mcp`, { headers, data: { jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-11-25', capabilities: {}, clientInfo: { name: 'e2e', version: '1' } } } });
+  expect(init.status()).toBe(200);
+  expect((await body(init)).result.serverInfo.name).toBe('burnout-league');
+  const pool = await request.post(`${API}/mcp`, { headers: { ...headers, 'MCP-Protocol-Version': '2025-11-25' }, data: { jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: 'get_my_pool', arguments: { limit: 5 } } } });
+  const result = (await body(pool)).result;
+  expect(result.structuredContent.summary.total_available).toBeGreaterThan(0);
+  expect(JSON.stringify(result)).not.toContain(acc.email);
+
+  // It shows as used, then revoking it ends it.
+  await page.reload();
+  const tokens = page.getByRole('list', { name: 'Tokens' });
+  await expect(tokens.getByText('e2e client')).toBeVisible();
+  await expect(tokens.getByText(/Last used/)).toBeVisible();
+  await tokens.getByRole('button', { name: 'Revoke e2e client' }).click();
+  await expect(page.getByText('No tokens yet.')).toBeVisible();
+  const after = await request.post(`${API}/mcp`, { headers, data: { jsonrpc: '2.0', id: 3, method: 'initialize', params: { protocolVersion: '2025-11-25', capabilities: {}, clientInfo: { name: 'e2e', version: '1' } } } });
+  expect(after.status()).toBe(401);
+});
+
 test('a window that locks during Gate 2 is rejected at Gate 3 and the user is sent back with the reason (runs last)', async ({ page }) => {
   await signUp(page);
   await fillLineup(page);

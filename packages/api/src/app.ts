@@ -8,6 +8,7 @@ import express, { type Express } from 'express';
 import helmet from 'helmet';
 import type { Redis } from 'ioredis';
 import { createLeaderboardService } from '@burnout/leaderboard';
+import { mcpRouter } from './mcp/server';
 import type { PaymentsService } from '@burnout/payments';
 import { SecretBox } from './auth/crypto';
 import { redisRateLimiter, type RateLimiter } from './auth/rate-limit';
@@ -84,6 +85,8 @@ export function createApp(deps: CreateAppDeps): { app: Express; ctx: ApiContext 
 
   app.use(express.json({ limit: '100kb' }));
   app.use(ipRateLimit(ctx, 'ip', 300, 60));
+  // The AI connector (PRD-011) takes only its own bearer credentials: it sits before session auth and CSRF.
+  app.use('/mcp', mcpRouter(ctx));
   app.use(authResolver(ctx));
   app.use(csrf(ctx));
   app.use('/v1', buildRouter(ctx));

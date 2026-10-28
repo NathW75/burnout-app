@@ -30,6 +30,7 @@ const BackupCodesPage = lazy(() => import('./account/Security').then((m) => ({ d
 const SessionsPage = lazy(() => import('./account/Sessions').then((m) => ({ default: m.SessionsPage })));
 const ReceiptsPage = lazy(() => import('./account/Sessions').then((m) => ({ default: m.ReceiptsPage })));
 const NotificationsPage = lazy(() => import('./account/Notifications').then((m) => ({ default: m.NotificationsPage })));
+const ConnectorPage = lazy(() => import('./account/Connector').then((m) => ({ default: m.ConnectorPage })));
 const UnsubscribePage = lazy(() => import('./account/Notifications').then((m) => ({ default: m.UnsubscribePage })));
 const InvitesPage = lazy(() => import('./admin/Invites').then((m) => ({ default: m.InvitesPage })));
 const FeedbackAdminPage = lazy(() => import('./admin/Feedback').then((m) => ({ default: m.FeedbackAdminPage })));
@@ -74,6 +75,7 @@ export function AppRoutes() {
         <Route path="/receipts/:id" element={<ReceiptPage />} />
         <Route path="/help" element={<HelpPage />} />
         <Route path="/account" element={<AccountPage />} />
+        <Route path="/account/connector" element={<ConnectorPage />} />
         <Route path="/account/password" element={<PasswordPage />} />
         <Route path="/account/authenticator" element={<AuthenticatorPage />} />
         <Route path="/account/backup-codes" element={<BackupCodesPage />} />

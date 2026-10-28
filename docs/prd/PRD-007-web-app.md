@@ -1,6 +1,6 @@
 # PRD-007 — Web App (Player Portal)
 **Burnout League · apps/web**
-*Status: v1.8 — **APPROVED 2026-10-27** (Nath), decisions Q1–Q7 in §14; mockups approved on the landing-page design system (§11); API additions (§8) built; web app patch (a) built; patch (b) built 2026-10-28 in two parts (standings, burned roster, inbox; then account, feedback, light theme). Phase A screens complete. Push notifications (PRD-008 §9) built 2026-10-28.*
+*Status: v1.9 — **APPROVED 2026-10-27** (Nath), decisions Q1–Q7 in §14; mockups approved on the landing-page design system (§11); API additions (§8) built; web app patch (a) built; patch (b) built 2026-10-28 in two parts (standings, burned roster, inbox; then account, feedback, light theme). Phase A screens complete. Push notifications (PRD-008 §9) built 2026-10-28.*
 *Author: Build thread · 2026-10-27*
 
 ---
@@ -174,7 +174,7 @@ In-app notices from the same events that queue emails, newest first, 30 at a tim
   - sessions: list with device and last seen, revoke one, sign out everywhere
 - **Receipts:** every confirmed lineup's receipt with its checksum, recomputable per PRD-006 §9.4.
 
-**As built (v1.6):** Account lists Profile (handle with an inline change, two changes a season per PRD-003; email), Security (Password, Authenticator app, Backup codes, Sessions, each its own screen), Notifications (email and push, PRD-008 §6 and §9: push on/off for this device, push switches, iPhone Home Screen guidance), Lineups (Receipts), Appearance (Dark, Light, Match device), Rules and Sign out. A public `/unsubscribe` page confirms the email's unsubscribe link. The app ships a web manifest, Home Screen icons and a notifications-only service worker (`sw.js`, no caching); signing out turns push off for that device first.
+**As built (v1.6):** Account lists Profile (handle with an inline change, two changes a season per PRD-003; email), Security (Password, Authenticator app, Backup codes, Sessions, each its own screen), Notifications (email and push, PRD-008 §6 and §9: push on/off for this device, push switches, iPhone Home Screen guidance), AI connector (PRD-011: personal tokens for your own AI assistant, read-only), Lineups (Receipts), Appearance (Dark, Light, Match device), Rules and Sign out. A public `/unsubscribe` page confirms the email's unsubscribe link. The app ships a web manifest, Home Screen icons and a notifications-only service worker (`sw.js`, no caching); signing out turns push off for that device first.
 - Password: current, new and repeat; other sessions are signed out and this one stays.
 - Replace authenticator and new backup codes ask for a fresh code first (step-up), in place, and ask again if the server says it's stale. New codes are shown once with download, copy and an "I've saved these" tick.
 - Sessions: device named from the browser (e.g. "Chrome on Android"), last active and signed-in times ET, "This device", sign out any other device, and sign out everywhere.
@@ -396,6 +396,7 @@ Depends on: PRD-001, PRD-003, PRD-004 (Phase B), PRD-006, `SPEC-feedback-system.
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.9 | 2026-10-28 | §6.7: Account gains CONNECTIONS → AI connector (PRD-011 §8): connector tokens, made after a fresh code and shown once; the notifications row reads "Email and push". |
 | 1.8 | 2026-10-28 | §10.1: the admin feedback screen (moved up from Phase B) and an email to admins for each new piece of feedback, for the Week 8 testers. |
 | 1.7 | 2026-10-28 | §6.7: Account → Notifications gains push (PRD-008 §9): this device on/off, push switches, iPhone Home Screen guidance. Web manifest, Home Screen icons, notifications-only service worker; CSP `worker-src`/`manifest-src`; sign-out turns push off for the device. |
 | 1.6 | 2026-10-28 | Patch (b) part 2 built: §6.7 account as built (handle change, password, replace authenticator and new backup codes behind step-up, sessions with revoke and sign out everywhere, receipts, appearance); §10 feedback button as built; §11 light theme as built (dark default; chalk-based cool neutrals instead of the landing page's cream; text-safe accents) and the new favicon. Acceptance: account security checked off. |
