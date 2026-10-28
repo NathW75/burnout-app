@@ -68,6 +68,7 @@ export function AccountPage() {
         <section className="flex flex-col gap-3 px-4 pt-6">
           <SectionTitle>ADMIN</SectionTitle>
           <ul className="m-0 flex list-none flex-col overflow-hidden rounded-sm border border-rule p-0" aria-label="Admin">
+            <Row to="/admin/feedback" title="Feedback" detail="What testers sent from the feedback button" />
             <Row to="/admin/invites" title="Invites" detail="Make sign-up codes for testers" last />
           </ul>
         </section>

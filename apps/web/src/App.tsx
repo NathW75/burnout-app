@@ -32,6 +32,7 @@ const ReceiptsPage = lazy(() => import('./account/Sessions').then((m) => ({ defa
 const NotificationsPage = lazy(() => import('./account/Notifications').then((m) => ({ default: m.NotificationsPage })));
 const UnsubscribePage = lazy(() => import('./account/Notifications').then((m) => ({ default: m.UnsubscribePage })));
 const InvitesPage = lazy(() => import('./admin/Invites').then((m) => ({ default: m.InvitesPage })));
+const FeedbackAdminPage = lazy(() => import('./admin/Feedback').then((m) => ({ default: m.FeedbackAdminPage })));
 
 function NotFound() {
   useScreen('not_found', 'Not found');
@@ -80,6 +81,7 @@ export function AppRoutes() {
         <Route path="/account/receipts" element={<ReceiptsPage />} />
         <Route path="/account/notifications" element={<NotificationsPage />} />
         <Route path="/admin/invites" element={<InvitesPage />} />
+        <Route path="/admin/feedback" element={<FeedbackAdminPage />} />
         <Route path="/board" element={<StandingsPage />} />
         <Route path="/board/:handle" element={<ManagerPage />} />
         <Route path="/burned" element={<BurnedPage />} />

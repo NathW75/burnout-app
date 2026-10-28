@@ -7,6 +7,7 @@
  */
 import { z } from 'zod';
 import type { ApiContext, Log } from '../context';
+import type { Mailer } from '../mailer';
 import { notFound, tooMany } from '../errors';
 import type { SqlDatabase } from '../sql';
 
@@ -161,4 +162,75 @@ export async function classifyPending(db: SqlDatabase, classify: FeedbackClassif
     }
   }
   return { claimed: items.length, tagged, failed };
+}
+
+// ── alerts to admins (PRD-007 §10.1) ─────────────────────────────────────────
+
+export const ALERT_MAX_ATTEMPTS = 5;
+/** How long an alert waits for the tag before going out untagged. */
+export const ALERT_TAG_WAIT_MS = 2 * 60_000;
+
+const etFmt = new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+
+/** The alert for one item: what the tester said, where, and the AI's read when there is one. */
+export function renderFeedbackAlert(item: { handle: string | null; displayName: string; screen: string; body: string; submittedAt: Date; tags: Tags | null }, appBaseUrl: string) {
+  const who = item.handle ?? item.displayName;
+  const t = item.tags;
+  const label = t ? `${t.category.replace('_', ' ')}${t.severity ? ` · ${t.severity}` : ''}` : 'new';
+  const oneLine = item.body.replace(/\s+/g, ' ').trim();
+  const gist = t?.summary ?? (oneLine.length > 60 ? `${oneLine.slice(0, 59)}…` : oneLine);
+  return {
+    subject: `Feedback (${label}) from ${who}: ${gist}`.slice(0, 160),
+    text: [
+      `${who} sent feedback from ${item.screen} at ${etFmt.format(item.submittedAt)} ET.`,
+      ...(t ? ['', `Category: ${t.category.replace('_', ' ')}${t.severity ? `, ${t.severity}` : ''}`, `Summary: ${t.summary}`] : []),
+      '',
+      'What they wrote:',
+      item.body,
+      '',
+      `Review it: ${appBaseUrl.replace(/\/$/, '')}/admin/feedback`,
+    ].join('\n'),
+  };
+}
+
+/**
+ * Emails every active admin about each new item, once. It waits for the tag
+ * (up to ALERT_TAG_WAIT_MS) when tagging is on. A failed send is retried on the
+ * next run, up to ALERT_MAX_ATTEMPTS; the item stays on the admin page either way.
+ */
+export async function alertAdmins(
+  db: SqlDatabase,
+  mailer: Mailer,
+  opts: { now: () => Date; log: Log; appBaseUrl: string; tagging: boolean; limit?: number }
+) {
+  const now = opts.now();
+  const admins = await db.query<{ email: string }>(
+    `SELECT email FROM users WHERE role = 'admin' AND status = 'active' AND email_verified_at IS NOT NULL ORDER BY created_at`
+  );
+  return db.transaction(async (tx) => {
+    const items = await tx.query<{ id: string; handle: string | null; display_name: string; screen: string; body: string; submitted_at: Date; tags: Tags | null }>(
+      `SELECT f.id::text AS id, u.handle, u.display_name, f.screen, f.body, f.submitted_at, f.tags
+         FROM feedback f JOIN users u ON u.id = f.user_id
+        WHERE f.admin_alerted_at IS NULL AND f.admin_alert_attempts < $1
+          AND (NOT $2::boolean OR f.classified_at IS NOT NULL OR f.classify_attempts >= $3 OR f.submitted_at <= $4::timestamptz - make_interval(secs => $5))
+        ORDER BY f.submitted_at, f.id LIMIT $6
+        FOR UPDATE OF f SKIP LOCKED`,
+      [ALERT_MAX_ATTEMPTS, opts.tagging, CLASSIFY_MAX_ATTEMPTS, now, ALERT_TAG_WAIT_MS / 1000, opts.limit ?? 20]
+    );
+    let sent = 0;
+    let failed = 0;
+    for (const it of items) {
+      const mail = renderFeedbackAlert({ handle: it.handle, displayName: it.display_name, screen: it.screen, body: it.body, submittedAt: it.submitted_at, tags: it.tags }, opts.appBaseUrl);
+      try {
+        for (const a of admins) await mailer.sendAdmin({ to: a.email, ...mail });
+        await tx.query(`UPDATE feedback SET admin_alerted_at = $2, admin_alert_attempts = admin_alert_attempts + 1 WHERE id = $1::uuid`, [it.id, now]);
+        sent++;
+      } catch (err) {
+        await tx.query(`UPDATE feedback SET admin_alert_attempts = admin_alert_attempts + 1 WHERE id = $1::uuid`, [it.id]);
+        failed++;
+        opts.log('warn', 'feedback alert failed', { id: it.id, error: err instanceof Error ? err.message : String(err) });
+      }
+    }
+    return { items: items.length, sent, failed, admins: admins.length };
+  });
 }

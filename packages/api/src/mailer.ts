@@ -23,8 +23,16 @@ export interface NoticeMail {
   noticeIds: string[];
 }
 
+/** A plain-text email to the team (feedback alerts, PRD-007 §10.1). Never to players. */
+export interface AdminMail {
+  to: string;
+  subject: string;
+  text: string;
+}
+
 export interface Mailer {
   send(msg: MailMessage): Promise<void>;
+  sendAdmin(msg: AdminMail): Promise<void>;
   /** Sends a notice email; returns the provider's message id when it gives one. */
   sendNotice(msg: NoticeMail): Promise<{ id: string | null }>;
 }
@@ -41,6 +49,9 @@ export class MailSendError extends Error {
 export class MemoryMailer implements Mailer {
   readonly sent: MailMessage[] = [];
   readonly notices: NoticeMail[] = [];
+  readonly admin: AdminMail[] = [];
+  /** Tests set this to make admin sends fail. */
+  failAdmin: MailSendError | null = null;
   /** Tests set this to make the next notice sends fail. */
   failNotices: MailSendError | null = null;
   async send(msg: MailMessage): Promise<void> {
@@ -50,6 +61,10 @@ export class MemoryMailer implements Mailer {
     if (this.failNotices) throw this.failNotices;
     this.notices.push(msg);
     return { id: `mem-${this.notices.length}` };
+  }
+  async sendAdmin(msg: AdminMail): Promise<void> {
+    if (this.failAdmin) throw this.failAdmin;
+    this.admin.push(msg);
   }
   last(template: MailTemplate, to?: string): MailMessage | undefined {
     return [...this.sent].reverse().find((m) => m.template === template && (!to || m.to === to));
@@ -109,6 +124,29 @@ export class SendGridMailer implements Mailer {
     }
     if (!res.ok) throw new MailSendError(res.status, res.status >= 400 && res.status < 500 && res.status !== 429);
     return { id: res.headers.get('x-message-id') };
+  }
+
+  async sendAdmin(msg: AdminMail): Promise<void> {
+    const m = /^\s*(.*?)\s*<([^>]+)>\s*$/.exec(this.noticeFrom);
+    const from = m ? { name: m[1], email: m[2] } : { email: this.noticeFrom };
+    let res: Response;
+    try {
+      res = await fetch('https://api.sendgrid.com/v3/mail/send', {
+        method: 'POST',
+        headers: { authorization: `Bearer ${this.apiKey}`, 'content-type': 'application/json' },
+        body: JSON.stringify({
+          personalizations: [{ to: [{ email: msg.to }] }],
+          from,
+          subject: msg.subject,
+          content: [{ type: 'text/plain', value: msg.text }],
+          tracking_settings: { click_tracking: { enable: false, enable_text: false }, open_tracking: { enable: false }, subscription_tracking: { enable: false } },
+          categories: ['admin'],
+        }),
+      });
+    } catch {
+      throw new MailSendError(0, false);
+    }
+    if (!res.ok) throw new MailSendError(res.status, res.status >= 400 && res.status < 500 && res.status !== 429);
   }
 
   async send(msg: MailMessage): Promise<void> {

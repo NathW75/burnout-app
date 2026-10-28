@@ -48,7 +48,7 @@ in the repo, in chat or in project docs.
 | `MSF_API_KEY` | worker | Your (rotated) MySportsFeeds key. |
 | `SENDGRID_API_KEY` | both | SendGrid key. Unset means emails aren't sent; a warning is logged. |
 | `TURNSTILE_SECRET_KEY` | api | Cloudflare Turnstile **secret key** for the sign-up widget (Cloudflare → Turnstile → the `burnoutfantasy.com` widget). Unset means sign-up has no bot check; a warning is logged. |
-| `ANTHROPIC_API_KEY` | worker | Optional. Tags feedback (PRD-007 §10). Empty means feedback is stored untagged. |
+| `ANTHROPIC_API_KEY` | worker | Optional. Tags feedback with a category, severity and summary (PRD-007 §10). Empty means feedback is stored and emailed to admins untagged. |
 | `VAPID_PUBLIC_KEY` | both | Web push key pair, public half (PRD-008 §9). Not secret, but kept beside its private half so the pair can't drift. |
 | `VAPID_PRIVATE_KEY` | worker | Web push key pair, private half. Unset (or the public half unset) means push is off; a warning is logged. |
 

@@ -1,6 +1,6 @@
 # PRD-007 — Web App (Player Portal)
 **Burnout League · apps/web**
-*Status: v1.7 — **APPROVED 2026-10-27** (Nath), decisions Q1–Q7 in §14; mockups approved on the landing-page design system (§11); API additions (§8) built; web app patch (a) built; patch (b) built 2026-10-28 in two parts (standings, burned roster, inbox; then account, feedback, light theme). Phase A screens complete. Push notifications (PRD-008 §9) built 2026-10-28.*
+*Status: v1.8 — **APPROVED 2026-10-27** (Nath), decisions Q1–Q7 in §14; mockups approved on the landing-page design system (§11); API additions (§8) built; web app patch (a) built; patch (b) built 2026-10-28 in two parts (standings, burned roster, inbox; then account, feedback, light theme). Phase A screens complete. Push notifications (PRD-008 §9) built 2026-10-28.*
 *Author: Build thread · 2026-10-27*
 
 ---
@@ -273,11 +273,16 @@ The spec is kept, with these changes to fit what's built:
 - **Auth:** it uses the session (cookie or bearer) and the CSRF header, not JWT. An enrollment-only session may send feedback, so a tester stuck in sign-up can say so.
 - **Route:** `POST /v1/feedback { body }`, not `/api/feedback`. The body is trimmed and must be 1–2,000 characters; any other field is rejected. The user comes from the session and the screen from `X-Current-Screen` (a readable slug, otherwise stored as `unknown`). 10 per user per hour.
 - **AI tagging:** a worker job, not a Bull queue. It runs every 15 seconds (so tags land within the spec's 30 seconds), calls the Anthropic Messages API with `FEEDBACK_MODEL` (default `claude-haiku-5-5`), validates the reply against the spec's JSON shape, and writes `tags`. The feedback text is fenced in the prompt as untrusted input and never logged. Each item gets 3 attempts. Without `ANTHROPIC_API_KEY`, feedback is stored untagged.
-- **Admin:** `GET /v1/admin/feedback` (filters: reviewed, category, severity, before) and `POST /v1/admin/feedback/:id/review`, admin + step-up. The admin screen is Phase B.
+- **Admin:** `GET /v1/admin/feedback` (filters: reviewed, category, severity, before) and `POST /v1/admin/feedback/:id/review`, admin + step-up. The admin screen was moved up from Phase B for the Week 8 testers (2026-10-28, §10.1).
 
 The floating button sits on every signed-in screen and sends the current route in `X-Current-Screen`. The 2,000-character limit and the spec's acceptance criteria otherwise stand.
 
 **As built (v1.6):** a round button bottom right that measures and sits just above whatever bar is pinned to the bottom (the tabs, the lineup footer, a gate footer); screens have extra bottom padding so their last rows scroll clear of it. It opens a bottom sheet on phones and a side drawer from 768px: one text box with a counter, SEND FEEDBACK, a short "Sent" confirmation that closes itself, and on failure "Couldn't send" with the reason and the text kept. It shows on sign-up steps after sign-in (so a stuck tester can say so) and never on signed-out screens.
+
+### 10.1 Reading feedback (built 2026-10-28, for the Week 8 testers)
+
+- **Account → Admin → Feedback** (`/admin/feedback`, admin + a fresh code): newest first, unreviewed by default (UNREVIEWED / ALL) and by category. Each item shows the category and severity (or NOT TAGGED), the model's one-line summary, the full text, who sent it (handle), the screen, and the time in ET, with MARK REVIEWED / MARK UNREVIEWED. 30 at a time, then OLDER.
+- **An email per item** to every active, verified admin, so feedback is seen the day it arrives. The worker sends it on the 15-second feedback loop: right away when tagging is off; when tagging is on, once the item is tagged, or untagged after 2 minutes if the model is slow or down. Subject: `Feedback (<category · severity>, or new) from <handle>: <summary, or the first words>`; the body has the full text, the screen, the time and a link to the admin screen. Never the tester's email address. Plain text, no tracking, from `NOTIFY_FROM`. Each item is emailed once (`feedback.admin_alerted_at`); a failed send is retried on later runs, up to 5 tries. Feedback that existed before this shipped isn't emailed.
 
 ---
 
@@ -391,6 +396,7 @@ Depends on: PRD-001, PRD-003, PRD-004 (Phase B), PRD-006, `SPEC-feedback-system.
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.8 | 2026-10-28 | §10.1: the admin feedback screen (moved up from Phase B) and an email to admins for each new piece of feedback, for the Week 8 testers. |
 | 1.7 | 2026-10-28 | §6.7: Account → Notifications gains push (PRD-008 §9): this device on/off, push switches, iPhone Home Screen guidance. Web manifest, Home Screen icons, notifications-only service worker; CSP `worker-src`/`manifest-src`; sign-out turns push off for the device. |
 | 1.6 | 2026-10-28 | Patch (b) part 2 built: §6.7 account as built (handle change, password, replace authenticator and new backup codes behind step-up, sessions with revoke and sign out everywhere, receipts, appearance); §10 feedback button as built; §11 light theme as built (dark default; chalk-based cool neutrals instead of the landing page's cream; text-safe accents) and the new favicon. Acceptance: account security checked off. |
 | 1.5 | 2026-10-28 | Patch (b) part 1 built: §6.2.1 navigation (BOARD and BURNED tabs, inbox bell, Rules under Account); §6.4 burned roster grouped by week; §6.5 reveal week picker, burned state and live polling; §6.6 inbox names players, links each notice, NEW tag. §8.3: notices return player names; the inbox cursor includes the id. Acceptance: field board, reveal and inbox checked off. |

@@ -10,6 +10,7 @@ import {
   anthropicClassifier, buildClassifierRequest, classifyPending, cleanScreen, CLASSIFY_MAX_ATTEMPTS, FEEDBACK_RATE, parseTags, type Tags,
 } from '../feedback/service';
 import { createJobs } from '../jobs';
+import { MailSendError } from '../mailer';
 import { account, buildWeek, Client, createWorld, LINEUP, PASSWORD, stepUp, submitLineup, WINDOWS, type Account, type World } from './harness';
 
 const silent = () => {};
@@ -432,10 +433,61 @@ describeDbRedis('PRD-007 §8 web app API additions (HTTP, Postgres + Redis)', ()
 
     const msf = { get: async () => ({}) };
     const without = createJobs({ db: w.t.db, payments: w.payments, msf, season: SEASON, now: w.clock.get, log: silent, apiContext: w.ctx });
-    expect(await without.run('feedback')).toEqual({ skipped: 'NO_CLASSIFIER' });
+    expect(await without.run('feedback')).toMatchObject({ tagging: { skipped: 'NO_CLASSIFIER' } });
     await a.client.post('/v1/feedback', { body: 'third' });
     const withIt = createJobs({ db: w.t.db, payments: w.payments, msf, season: SEASON, now: w.clock.get, log: silent, apiContext: w.ctx, classifier });
-    expect(await withIt.run('feedback')).toEqual({ claimed: 1, tagged: 1, failed: 0 });
+    expect(await withIt.run('feedback')).toMatchObject({ tagging: { claimed: 1, tagged: 1, failed: 0 } });
+  });
+
+  it('§10.1 alerts: each new item emails every active admin once, tagged when tagging is on (or untagged after 2 minutes); retries, then gives up', async () => {
+    const tester = await account(w, { handle: 'tester1' });
+    const boss = await account(w, { handle: 'boss', admin: true });
+    const boss2 = await account(w, { handle: 'boss2', admin: true });
+    await w.t.sql(`UPDATE users SET status = 'suspended' WHERE id = $1`, [boss2.userId]); // suspended admins get nothing
+    const msf = { get: async () => ({}) };
+    const jobsWith = (classifier?: (i: { body: string; screen: string }) => Promise<Tags>) =>
+      createJobs({ db: w.t.db, payments: w.payments, msf, season: SEASON, now: w.clock.get, log: silent, apiContext: w.ctx, classifier });
+
+    // No tagging: the alert goes at once, untagged, to the one active admin.
+    await tester.client.post('/v1/feedback', { body: 'The countdown froze\nat 0:00' }).set('X-Current-Screen', 'this_week');
+    expect(await jobsWith().run('feedback')).toMatchObject({ alerts: { items: 1, sent: 1, failed: 0, admins: 1 } });
+    expect(w.mailer.admin).toHaveLength(1);
+    const m = w.mailer.admin[0];
+    expect(m.to).toBe(boss.email);
+    expect(m.subject).toBe('Feedback (new) from tester1: The countdown froze at 0:00');
+    expect(m.text).toContain('tester1 sent feedback from this_week at');
+    expect(m.text).toContain('What they wrote:\nThe countdown froze\nat 0:00');
+    expect(m.text).toContain('Review it: https://burnoutfantasy.com/admin/feedback');
+    expect(m.text).not.toContain(tester.email); // the tester's email stays private
+    expect((await jobsWith().run('feedback'))).toMatchObject({ alerts: { items: 0 } }); // once only
+
+    // Tagging on: waits for the tag, then says what the model made of it.
+    const classify = async () => TAGS;
+    w.clock.advanceMs(1000);
+    await tester.client.post('/v1/feedback', { body: 'love it' });
+    const r = await jobsWith(classify).run('feedback');
+    expect(r).toMatchObject({ tagging: { tagged: 2 }, alerts: { items: 1, sent: 1 } }); // the first item is tagged too, but never alerted twice
+    expect(w.mailer.admin[1].subject).toBe(`Feedback (bug · high) from tester1: ${TAGS.summary}`);
+    expect(w.mailer.admin[1].text).toContain(`Summary: ${TAGS.summary}`);
+
+    // Tagging on but the model is down: untagged after 2 minutes, not before.
+    const down = async (): Promise<Tags> => { throw new Error('down'); };
+    await tester.client.post('/v1/feedback', { body: 'third' });
+    expect(await jobsWith(down).run('feedback')).toMatchObject({ alerts: { items: 0 } });
+    w.clock.advanceMs(119_000);
+    expect(await jobsWith(down).run('feedback')).toMatchObject({ alerts: { items: 0 } }); // 1:59: still waiting for the tag
+    w.clock.advanceMs(2_000);
+    expect(await jobsWith(down).run('feedback')).toMatchObject({ alerts: { items: 1, sent: 1 } });
+    expect(w.mailer.admin[2].subject).toBe('Feedback (new) from tester1: third');
+
+    // SendGrid refusing: retried on later runs, then given up after 5 tries; the item is still on the admin page.
+    w.mailer.failAdmin = new MailSendError(503, false);
+    await tester.client.post('/v1/feedback', { body: 'fourth' });
+    for (let i = 0; i < 5; i++) expect(await jobsWith().run('feedback')).toMatchObject({ alerts: { items: 1, failed: 1 } });
+    expect(await jobsWith().run('feedback')).toMatchObject({ alerts: { items: 0 } });
+    w.mailer.failAdmin = null;
+    const [f] = await w.t.sql<{ admin_alerted_at: Date | null; admin_alert_attempts: number }>(`SELECT admin_alerted_at, admin_alert_attempts FROM feedback WHERE body = 'fourth'`);
+    expect(f).toEqual({ admin_alerted_at: null, admin_alert_attempts: 5 });
   });
 });
 

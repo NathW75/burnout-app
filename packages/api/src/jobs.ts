@@ -10,7 +10,7 @@ import type { PaymentsService } from '@burnout/payments';
 import { createScoringStore, parseGamelogs, parseGames, type GameStatus } from '@burnout/scoring-engine';
 import type { Redis } from 'ioredis';
 import type { ApiContext, Log } from './context';
-import { classifyPending, type FeedbackClassifier } from './feedback/service';
+import { alertAdmins, classifyPending, type FeedbackClassifier } from './feedback/service';
 import { checkStalled, runNotify, runPush, type NotifyConfig } from './notify/dispatcher';
 import type { PushSender } from './notify/push';
 import { aliasMap, normalizeStatLines, resolveIdentities } from './players/identity';
@@ -70,6 +70,12 @@ export function msfRetryable(err: unknown): boolean {
 }
 
 export type JobName = 'locks' | 'payments' | 'scoring' | 'roster' | 'injuries' | 'schedule' | 'feedback' | 'notify' | 'push';
+
+/** Nothing tagged and nothing alerted: the 15-second loop stays quiet. */
+function feedbackIdle(result: object): boolean {
+  const r = result as { tagging?: { claimed?: number; skipped?: string }; alerts?: { items?: number } };
+  return (r.tagging?.skipped !== undefined || r.tagging?.claimed === 0) && r.alerts?.items === 0;
+}
 
 /** Regular-season weeks, for the week-by-week schedule fallback. */
 export const REGULAR_SEASON_WEEKS = 18;
@@ -251,9 +257,11 @@ export function createJobs(deps: JobsDeps) {
     },
 
     /** Runs on its own 15-second loop in the worker, so tags land within 30 seconds (feedback spec AC4). */
+    /** Tags new feedback (when ANTHROPIC_API_KEY is set), then emails admins about it (PRD-007 §10.1). */
     async feedback() {
-      if (!deps.classifier) return { skipped: 'NO_CLASSIFIER' };
-      return classifyPending(db, deps.classifier, now, log);
+      const tagging = deps.classifier ? await classifyPending(db, deps.classifier, now, log) : { skipped: 'NO_CLASSIFIER' };
+      const alerts = await alertAdmins(db, deps.apiContext.mailer, { now, log, appBaseUrl: deps.apiContext.config.appBaseUrl, tagging: !!deps.classifier });
+      return { tagging, alerts };
     },
   };
 
@@ -268,7 +276,7 @@ export function createJobs(deps: JobsDeps) {
       });
       // The 15-second feedback loop stays quiet when there was nothing to tag.
       const idle =
-        (name === 'feedback' && result !== null && (result as { claimed?: number }).claimed === 0) ||
+        (name === 'feedback' && result !== null && feedbackIdle(result)) ||
         ((name === 'notify' || name === 'push') && result !== null && (result as { users?: number }).users === 0 && Object.keys((result as { skipped?: object }).skipped ?? {}).length === 0);
       if (!idle) log('info', `job ${name}`, { job: name, ms: Date.now() - started, result: result ?? 'skipped (held elsewhere)' });
       return result;

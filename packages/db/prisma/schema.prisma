@@ -313,7 +313,7 @@ model NotificationPreference {
 }
 
 /// PRD-007 §8.5 / SPEC-feedback-system.md. Body length 1–2000 is a CHECK in the
-/// migration; the partial index on unclassified rows and the GIN index on tags are raw SQL.
+/// migration; the partial indexes on unclassified and not-yet-alerted rows and the GIN index on tags are raw SQL.
 model Feedback {
   id               String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   userId           String    @map("user_id") @db.Uuid
@@ -323,6 +323,8 @@ model Feedback {
   tags             Json?
   classifiedAt     DateTime? @map("classified_at") @db.Timestamptz
   classifyAttempts Int       @default(0) @map("classify_attempts") @db.SmallInt
+  adminAlertedAt   DateTime? @map("admin_alerted_at") @db.Timestamptz
+  adminAlertAttempts Int     @default(0) @map("admin_alert_attempts") @db.SmallInt
   reviewed         Boolean   @default(false)
   reviewedAt       DateTime? @map("reviewed_at") @db.Timestamptz
   reviewedBy       String?   @map("reviewed_by") @db.Uuid

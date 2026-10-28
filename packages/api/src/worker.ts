@@ -65,7 +65,8 @@ async function main() {
     void tick();
     setInterval(() => void tick(), 60_000);
   }, startIn);
-  if (classifier) {
+  // Feedback: tag it (with a key) and email admins about it, every 15 seconds (PRD-007 §10).
+  {
     let tagging = false;
     setInterval(() => {
       if (tagging) return;
