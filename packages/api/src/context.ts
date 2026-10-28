@@ -40,6 +40,8 @@ export interface ApiConfig {
   currentSeason: string;
   /** Cloudflare Turnstile secret for sign-up (PRD-007 §8.4). null = not checked (local and tests only). */
   turnstileSecret: string | null;
+  /** Sign-up needs a single-use invite code (PRD-006 §6.10). SIGNUP_INVITE_ONLY=on. */
+  signupInviteOnly: boolean;
 }
 
 export const DEFAULT_API_CONFIG: ApiConfig = {
@@ -63,6 +65,7 @@ export const DEFAULT_API_CONFIG: ApiConfig = {
   edgeSecret: null,
   currentSeason: '2026-2027-regular',
   turnstileSecret: null,
+  signupInviteOnly: false,
 };
 
 export type Log = (level: 'info' | 'warn' | 'error', message: string, meta?: object) => void;

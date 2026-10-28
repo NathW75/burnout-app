@@ -12,6 +12,7 @@ import * as lineups from '../lineups/service';
 import { listIdentities, setIdentity } from '../players/identity';
 import { getPool } from '../players/pool';
 import * as views from '../season/views';
+import * as invites from '../auth/invites';
 import * as notifyPrefs from '../notify/preferences';
 import { notifyStats } from '../notify/dispatcher';
 import { verifyUnsubscribeToken } from '../notify/unsubscribe';
@@ -69,8 +70,13 @@ export function buildRouter(ctx: ApiContext): Router {
   const clearCookie = (res: Response) => res.clearCookie(ctx.config.cookieName, { ...cookieOpts(), maxAge: undefined });
 
   // ── auth ────────────────────────────────────────────────────────────────
+  // Public: what the sign-up form must ask for (PRD-006 §6.10).
+  r.get('/auth/signup-config', (_req, res) => {
+    res.set('Cache-Control', 'no-store').json({ inviteOnly: ctx.config.signupInviteOnly });
+  });
+
   r.post('/auth/signup', ipRateLimit(ctx, 'signup', 10, 60), ah(async (req, res) => {
-    const { turnstileToken, ...b } = body(z.object({ email, password: z.string(), handle: z.string(), turnstileToken: z.string().max(2048).optional() }), req);
+    const { turnstileToken, ...b } = body(z.object({ email, password: z.string(), handle: z.string(), turnstileToken: z.string().max(2048).optional(), inviteCode: z.string().max(40).optional() }), req);
     // Bot check first (PRD-007 §8.4): a failed token never reaches account creation.
     if (ctx.verifyTurnstile && !(turnstileToken && (await ctx.verifyTurnstile(turnstileToken, req.ip)))) {
       throw new HttpError(400, 'TURNSTILE_FAILED', 'Please complete the check and try again');
@@ -437,6 +443,28 @@ export function buildRouter(ctx: ApiContext): Router {
     const playerId = z.string().min(1).max(50).parse(req.params.id);
     const b = body(z.object({ canonicalId: z.string().min(1).max(50).nullable(), reason: z.string().min(3).max(500) }).strict(), req);
     res.json(await setIdentity(ctx, s, playerId, b.canonicalId, b.reason));
+  }));
+
+  // ── invites (PRD-006 §6.10) ────────────────────────────────────────────
+  r.post('/admin/invites', ah(async (req, res) => {
+    const s = adminSession(ctx, req);
+    const b = body(z.object({
+      email: email.nullable().optional(),
+      note: z.string().trim().max(200).nullable().optional(),
+      expiresInDays: z.number().int().min(1).max(90).nullable().optional(),
+    }).strict(), req);
+    res.status(201).json(await invites.createInvite(ctx, s, { expiresInDays: 14, ...b }));
+  }));
+
+  r.get('/admin/invites', ah(async (req, res) => {
+    adminSession(ctx, req);
+    res.json({ inviteOnly: ctx.config.signupInviteOnly, invites: await invites.listInvites(ctx) });
+  }));
+
+  r.post('/admin/invites/:id/revoke', ah(async (req, res) => {
+    const s = adminSession(ctx, req);
+    if (!(await invites.revokeInvite(ctx, s, uuid.parse(req.params.id)))) throw notFound('No active invite with that id');
+    res.json({ revoked: true });
   }));
 
   r.get('/admin/notifications/stats', ah(async (req, res) => {

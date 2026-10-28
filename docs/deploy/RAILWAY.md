@@ -56,6 +56,15 @@ Generate a random value in cmd (once per variable, per environment):
 node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
 ```
 
+**Invite-only sign-up (PRD-006 §6.10).** `SIGNUP_INVITE_ONLY` on the api
+(staging: on; production: off) makes sign-up need a single-use code. An admin
+makes codes in the app under Account → Admin → Invites. Make at least one
+admin **before** turning it on, or nobody can get in:
+
+```sql
+UPDATE users SET role = 'admin' WHERE handle = 'YourHandle';
+```
+
 **Notice emails (PRD-008).** The worker emails lock, burn, lineup-change and
 receipt notices when `NOTIFY_EMAIL=on` (staging: on; production: off until
 SendGrid's domain is authenticated). They come from `NOTIFY_FROM`

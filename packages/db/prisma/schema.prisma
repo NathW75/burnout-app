@@ -53,6 +53,8 @@ model User {
   feedback            Feedback[] @relation("FeedbackAuthor")
   feedbackReviewed    Feedback[] @relation("FeedbackReviewer")
   notificationPrefs   NotificationPreference[]
+  invitesCreated      InviteCode[] @relation("InviteCreator")
+  inviteUsed          InviteCode?  @relation("InviteUser")
 
   @@map("users")
 }
@@ -251,6 +253,25 @@ model NotificationQueue {
   @@index([dispatchedAt, createdAt], name: "idx_notification_queue_pending")
   @@index([userId, createdAt(sort: Desc)], name: "idx_notification_queue_user_created")
   @@map("notification_queue")
+}
+
+/// Invite-only sign-up (PRD-006 §6.10): single-use codes, stored hashed.
+model InviteCode {
+  id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  codeHash  String    @unique @map("code_hash") @db.Char(64)
+  email     String?
+  note      String?   @db.VarChar(200)
+  createdBy String    @map("created_by") @db.Uuid
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  expiresAt DateTime? @map("expires_at") @db.Timestamptz
+  usedAt    DateTime? @map("used_at") @db.Timestamptz
+  usedBy    String?   @unique @map("used_by") @db.Uuid
+  revokedAt DateTime? @map("revoked_at") @db.Timestamptz
+
+  creator User  @relation("InviteCreator", fields: [createdBy], references: [id], onDelete: Restrict)
+  user    User? @relation("InviteUser", fields: [usedBy], references: [id], onDelete: SetNull)
+
+  @@map("invite_codes")
 }
 
 /// PRD-008 §6: per-user notification choices. No row = the default.

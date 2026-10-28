@@ -1,5 +1,5 @@
 /** Sign up, verify, sign in, reset (PRD-007 §6.1). */
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router';
 import { api, isApiError } from '../api/client';
@@ -21,11 +21,16 @@ export function SignUpPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [handle, setHandle] = useState('');
+  const [params] = useSearchParams();
+  // Invite links carry the code (PRD-006 §6.10): /signup?invite=7KX2M-QW9TD
+  const [invite, setInvite] = useState(() => params.get('invite') ?? '');
+  const config = useQuery({ queryKey: ['signup-config'], queryFn: () => api<{ inviteOnly: boolean }>('/auth/signup-config'), staleTime: 60_000 });
+  const inviteOnly = config.data?.inviteOnly ?? false;
   const [token, setToken] = useState<string | null>(null);
   const [widgetError, setWidgetError] = useState(false);
   const ts = useRef<TurnstileHandle>(null);
   const signup = useMutation({
-    mutationFn: () => api('/auth/signup', { body: { email, password, handle, ...(token ? { turnstileToken: token } : {}) } }),
+    mutationFn: () => api('/auth/signup', { body: { email, password, handle, ...(token ? { turnstileToken: token } : {}), ...(inviteOnly ? { inviteCode: invite.trim() } : {}) } }),
     onSettled: () => ts.current?.reset(), // a token works once
   });
 
@@ -49,17 +54,30 @@ export function SignUpPage() {
   return (
     <AuthLayout
       title="Start him. Lose him."
-      intro="Create your account. Sign-up has four steps: account, verify your email, set up an authenticator, save your backup codes."
+      intro={`Create your account. Sign-up has four steps: account, verify your email, set up an authenticator, save your backup codes.${inviteOnly ? ' Testing is invite-only for now: you’ll need the code you were sent.' : ''}`}
       steps={<SignupSteps current={1} />}
     >
       <form onSubmit={submit} className="flex flex-col gap-4" noValidate>
+        {inviteOnly && (
+          <TextField
+            label="Invite code"
+            autoComplete="off"
+            autoCapitalize="characters"
+            spellCheck={false}
+            required
+            maxLength={20}
+            hint="10 letters and numbers, like 7KX2M-QW9TD. Each code works once."
+            value={invite}
+            onChange={(e) => setInvite(e.target.value)}
+          />
+        )}
         <TextField label="Email" type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
         <TextField label="Password" type="password" autoComplete="new-password" required minLength={12} maxLength={128} hint={PASSWORD_HINT} value={password} onChange={(e) => setPassword(e.target.value)} />
         <TextField label="Handle" autoComplete="nickname" required minLength={3} maxLength={20} pattern="[A-Za-z0-9_]{3,20}" hint={HANDLE_HINT} value={handle} onChange={(e) => setHandle(e.target.value)} />
         <Turnstile ref={ts} onToken={setToken} onError={() => setWidgetError(true)} />
         {widgetError && <ErrorNote>The human check didn’t load. Reload the page, or turn off anything blocking challenges.cloudflare.com.</ErrorNote>}
         <ErrorNote>{signup.isError ? errorText(signup.error) : null}</ErrorNote>
-        <SubmitButton busy={signup.isPending} disabled={needsToken && !token}>CREATE ACCOUNT</SubmitButton>
+        <SubmitButton busy={signup.isPending} disabled={(needsToken && !token) || (inviteOnly && invite.replace(/[\s-]/g, '').length !== 10)}>CREATE ACCOUNT</SubmitButton>
       </form>
       <p className="m-0 text-[14px] text-muted">
         Already have an account? <Link to="/login">Sign in</Link>

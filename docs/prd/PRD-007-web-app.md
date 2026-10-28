@@ -89,7 +89,7 @@ The server is the authority for every rule. The web app never decides a lock, a 
 
 ### 6.1 Sign up, verify, sign in
 
-- **Sign up:** email, password (PRD-006 length rules), handle. It always shows "check your email" (the API answers 202 either way). Cloudflare Turnstile is on the form (Q6).
+- **Sign up:** email, password (PRD-006 length rules), handle. It always shows "check your email" (the API answers 202 either way). Cloudflare Turnstile is on the form (Q6). While sign-up is invite-only (PRD-006 §6.10), the form also asks for the invite code, filled in from the invite link; admins make codes under Account → Admin → Invites.
 - **Verify:** the link opens `/verify?token=…`, which calls the API and then signs in.
 - **Sign in:** password, then a code (TOTP or backup code). Every account has a factor (§6.1.1). A "remember this device" option is out of scope.
 - **Reset password:** request, email link, set new password. Afterward, other sessions are signed out (the API does this).

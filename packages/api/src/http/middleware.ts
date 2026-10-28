@@ -138,6 +138,7 @@ export const ENROLLMENT_ROUTES: ReadonlySet<string> = new Set([
   'POST /auth/password/reset-request', 'POST /auth/password/reset',
   'POST /auth/mfa/totp/setup', 'POST /auth/mfa/totp/confirm',
   'GET /me', 'GET /time', 'POST /feedback',
+  'GET /auth/signup-config', 'POST /notifications/unsubscribe', // public: answer any session the same way
 ]);
 
 /** Router-level 2FA gate: runs before any handler, so no route can answer an enrollment-only session. */

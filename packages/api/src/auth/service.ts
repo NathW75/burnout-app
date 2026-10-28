@@ -11,6 +11,7 @@ import { audit } from './audit';
 import { randomToken, sha256Hex } from './crypto';
 import { createSession, invalidateUserSessions, revokeSessions, updateSession, type SessionInfo } from './sessions';
 import { newTotpSecret, otpauthUrl, verifyTotp } from './totp';
+import { findInvite, spendInvite } from './invites';
 
 export const PASSWORD_MIN = 12;
 export const PASSWORD_MAX = 128;
@@ -59,7 +60,7 @@ async function issueToken(q: SqlRunner, ctx: ApiContext, userId: string, purpose
  * account gets a verification email; an existing one gets an "account exists"
  * email. The client signs in with /auth/login afterwards.
  */
-export async function signup(ctx: ApiContext, req: { email: string; password: string; handle: string }): Promise<void> {
+export async function signup(ctx: ApiContext, req: { email: string; password: string; handle: string; inviteCode?: string }): Promise<void> {
   checkPassword(req.password);
   try {
     validateHandle(req.handle);
@@ -76,6 +77,8 @@ export async function signup(ctx: ApiContext, req: { email: string; password: st
     [req.handle, now]
   );
   if (taken) throw new HttpError(409, 'HANDLE_TAKEN', 'That handle is taken.');
+  // Invite-only (PRD-006 §6.10): checked before anything about the email is decided, so a bad code says nothing about accounts.
+  const invite = ctx.config.signupInviteOnly ? await findInvite(ctx.db, ctx, req.inviteCode, email) : null;
   const [existing] = await ctx.db.query<{ id: string }>(`SELECT id::text AS id FROM users WHERE email = $1`, [email]);
   if (existing) {
     await ctx.mailer.send({ to: email, template: 'account_exists', data: { link: `${ctx.config.appBaseUrl}/reset-password` } });
@@ -87,6 +90,7 @@ export async function signup(ctx: ApiContext, req: { email: string; password: st
        VALUES ($1, $2, $3, $4, $4) ON CONFLICT (email) DO NOTHING RETURNING id::text AS id`,
       [email, hash, req.handle, now]
     );
+    if (u && invite) await spendInvite(tx, ctx, invite.id, u.id); // single use: a lost race rolls the account back
     return u?.id ?? null;
   });
   if (!userId) return; // lost a race with an identical signup

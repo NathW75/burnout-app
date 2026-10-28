@@ -25,6 +25,7 @@ async function main() {
       appBaseUrl: process.env.APP_BASE_URL ?? 'https://burnoutfantasy.com',
       currentSeason: process.env.CURRENT_SEASON ?? '2026-2027-regular',
       turnstileSecret: process.env.TURNSTILE_SECRET_KEY || null,
+      signupInviteOnly: process.env.SIGNUP_INVITE_ONLY === 'on',
     },
   });
   const port = Number(process.env.PORT ?? 3000);

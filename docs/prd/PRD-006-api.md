@@ -1,6 +1,6 @@
 # PRD-006 — API, Accounts and Lineup Submission
 **Burnout League · packages/api**
-Version 1.10 · 2026-10-28
+Version 1.11 · 2026-10-28
 Status: APPROVED 2026-10-27 — scope and auth decisions locked by Nath (§3); rules calls Q1, Q2, Q4 resolved in v1.1
 
 ---
@@ -187,6 +187,17 @@ Events with no known user are recorded under the system user (all-zero UUID).
 - The test suite enumerates every route from the router, so a new route can't skip the gate.
 
 ---
+
+
+### 6.10 Invite-only sign-up (decided 2026-10-28)
+
+While testing, sign-up can require a per-person, single-use invite code (Nath: "invite code to limit via allow list").
+
+- **Setting:** `SIGNUP_INVITE_ONLY` (`on` in staging; production decided before launch). `GET /v1/auth/signup-config` (public) tells the form `{ inviteOnly }`.
+- **Codes:** 10 characters from Crockford base32 (no I, L, O, U), shown as `7KX2M-QW9TD`, 50 bits. Stored only as a SHA-256 hash; the code is shown once, when made. Input is forgiving: case, spaces and dashes are ignored, O reads as 0 and I or L as 1.
+- **Rules:** a code works once; it can be tied to one email (case-insensitive); it can expire (default 14 days, 1–90, or none) and be revoked while unused. A bad, used, expired, revoked or wrong-email code is `400 INVITE_INVALID`, decided before anything about the email, so it reveals nothing about accounts. An email that already has an account gets the usual "you already have an account" email and the code is **not** spent. The code is spent in the same transaction that creates the account; two sign-ups racing for one code create one account.
+- **Admin:** `POST /v1/admin/invites { email?, note?, expiresInDays? }` → `{ id, code, link, email, expiresAt }` (the link is `/signup?invite=CODE`); `GET /v1/admin/invites` (no codes; status active, used, revoked or expired, and who used it); `POST /v1/admin/invites/:id/revoke`. Admin + step-up; creation and revocation are audited (`ADMIN_ACTION`).
+- **Web:** the sign-up form shows an "Invite code" field when invite-only and fills it from the link; Account → Admin → Invites (admins only).
 
 ## 7. NFL Players and Roster Sync
 
@@ -394,6 +405,10 @@ The user can recompute it from their email.
 | `PUT /v1/me/notification-preferences` | Any of `emailNotifications` and `email.{group}`; groups are stored per kind |
 | `POST /v1/notifications/unsubscribe?token=` | Public, no session (RFC 8058 one-click; mail providers post a form body). The signed token's only power is turning optional email off. 400 `TOKEN_INVALID` for a bad token; 30/min per IP |
 | `GET /v1/admin/notifications/stats` | Admin + step-up: last 24 hours by kind and result, oldest pending notice |
+| `GET /v1/auth/signup-config` | Public: `{ inviteOnly }` (§6.10) |
+| `POST /v1/admin/invites` | Admin + step-up: a single-use invite code, shown once (§6.10) |
+| `GET /v1/admin/invites` | Admin + step-up: invites with status and who used them (no codes) |
+| `POST /v1/admin/invites/:id/revoke` | Admin + step-up: revoke an unused invite |
 | `GET /v1/me/receipts?season=` | Receipt summaries `{ id, week, confirmedAt, sha256 }`, newest first |
 
 ### 10.3 Leaderboard
@@ -625,6 +640,7 @@ Every critical rule also gets a mutation check, as with PRD-001 to PRD-004.
 |---------|------|---------|
 | 1.7 | 2026-10-28 | §7.5: one person, one player. Duplicate MSF IDs for the same person become aliases of one kept ID; aliases can't be picked (DB-enforced); burns and stats follow the person; admin review and override. Roster sync also runs at worker startup. |
 | 1.8 | 2026-10-28 | §11: scoring works newest week first, retries a refused MSF read once, and skips only the week whose feed stays refused. |
+| 1.11 | 2026-10-28 | §6.10: invite-only sign-up (per-person single-use codes, optional email lock, expiry and revoke), `invite_codes`, `SIGNUP_INVITE_ONLY`. |
 | 1.10 | 2026-10-28 | PRD-008 Phase 1: notification preferences, one-click unsubscribe, admin stats; the `notify` worker job; `notification_queue` dispatch columns, `notification_preferences`, `users.email_notifications`. |
 | 1.9 | 2026-10-28 | §10.2.1: notices return the named players' names; the inbox cursor includes the id so notices sharing a timestamp never drop at a page edge; reveal `LOCKED` slots say whether the player has burned. |
 | 1.6 | 2026-10-27 | PRD-007 §8: D3 amended (a second factor for all use, §6.9; admin factor reset §6.7); Turnstile on sign-up; web app reads (§10.2.1); feedback and its worker tagging; `read_at`, `feedback`. |

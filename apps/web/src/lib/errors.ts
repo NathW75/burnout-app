@@ -13,6 +13,7 @@ const MESSAGES: Record<string, string> = {
   HANDLE_RESERVED: 'That handle is reserved. Try another.',
   HANDLE_RESERVED_WORD: 'That handle isn’t allowed. Try another.',
   HANDLE_CHANGE_LIMIT: 'You’ve used both handle changes for this season.',
+  INVITE_INVALID: 'That invite code isn’t valid. Check it, or ask for a new one. Each code works once.',
   TURNSTILE_FAILED: 'We couldn’t confirm you’re human. Complete the check and try again.',
   INVALID_CODE: 'That code didn’t work. Codes change every 30 seconds; use the current one.',
   MFA_NOT_PENDING: 'Your sign-in timed out. Start again.',

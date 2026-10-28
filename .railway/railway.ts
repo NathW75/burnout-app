@@ -76,6 +76,8 @@ export default defineRailway((ctx, project) => {
       TRUST_PROXY: '1', // Railway's edge; Cloudflare is verified by EDGE_SHARED_SECRET instead
       EDGE_SHARED_SECRET: secret('EDGE_SHARED_SECRET'), // PRD-006 §10.4; must match the Cloudflare rule
       TURNSTILE_SECRET_KEY: secret('TURNSTILE_SECRET_KEY'), // PRD-007 §8.4: sign-up bot check
+      // Invite-only sign-up (PRD-006 §6.10): on for staging testers; production decided before launch.
+      SIGNUP_INVITE_ONLY: production ? 'off' : 'on',
     },
   });
 
