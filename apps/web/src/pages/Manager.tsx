@@ -53,7 +53,7 @@ export function ManagerPage() {
   return (
     <Page>
       <SubHeader title={handle} back="/board" backLabel="Back to standings" />
-      <main className="flex flex-1 flex-col gap-4 p-4">
+      <main className="flex flex-1 flex-col gap-4 p-4 pb-24">
         <div className="flex items-end justify-between gap-3">
           <h1 className="m-0 font-mono text-[30px] leading-none font-medium break-all">{own ? 'Your lineup' : handle}</h1>
           {weeks.length > 0 && (
@@ -85,7 +85,7 @@ function SlotRow({ s, last }: { s: RevealSlot; last: boolean }) {
       return (
         <li className={`${row} bg-paper`}>
           <div className="flex min-w-0 flex-col gap-[2px]">
-            <span className={`font-mono text-[11px] ${s.burned ? 'text-pencil' : 'text-bulb'}`}>{label} · {s.burned ? 'BURNED' : 'LOCKED'}</span>
+            <span className={`font-mono text-[11px] ${s.burned ? 'text-pencil' : 'text-live'}`}>{label} · {s.burned ? 'BURNED' : 'LOCKED'}</span>
             <span className={`truncate text-[15px] font-semibold ${s.burned ? 'text-pencil line-through decoration-1' : ''}`}>{s.player.name ?? s.player.playerId}</span>
             <span className="text-[12px] text-muted">{meta(s.player)}{s.windowLabel ? ` · ${s.windowLabel}` : ''}</span>
           </div>
@@ -106,7 +106,7 @@ function SlotRow({ s, last }: { s: RevealSlot; last: boolean }) {
       return (
         <li className={`${row} bg-transparent`}>
           <div className="flex min-w-0 flex-col gap-[2px]">
-            <span className="font-mono text-[11px] text-bulb">{label} · VOIDED</span>
+            <span className="font-mono text-[11px] text-live">{label} · VOIDED</span>
             <span className="truncate text-[15px] font-semibold">{s.player.name ?? s.player.playerId}</span>
             <span className="text-[12px] text-muted">Voided before his lock. Not burned.</span>
           </div>

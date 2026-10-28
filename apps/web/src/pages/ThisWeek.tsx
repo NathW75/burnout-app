@@ -55,7 +55,7 @@ export function ThisWeekPage() {
           <h1 className="m-0 font-mono text-[52px] leading-none font-medium tracking-[-1px]">Week {week}</h1>
           {me && (
             <div className="flex flex-col items-end gap-[2px]">
-              <span className="font-mono text-[30px] leading-none font-medium text-line">#{me.rank}</span>
+              <span className="font-mono text-[30px] leading-none font-medium text-accent">#{me.rank}</span>
               <span className="text-[12px] text-muted">of {field.data!.fieldSize} managers</span>
             </div>
           )}
@@ -135,7 +135,7 @@ function WindowRow({ w, now, slots, windows, isNext, last }: { w: GameWindow; no
     right = (
       <div className="flex flex-col items-end gap-1">
         <span className="bg-bulb px-[6px] py-[2px] font-mono text-[11px] font-medium text-ink">NEXT LOCK</span>
-        <span role="timer" aria-label={`Locks ${dayET(w.scheduledEt)} ${timeET(w.scheduledEt)} ET`} className="tnum font-mono text-[18px] font-medium text-bulb">{countdown(t - now, w.scheduledEt)}</span>
+        <span role="timer" aria-label={`Locks ${dayET(w.scheduledEt)} ${timeET(w.scheduledEt)} ET`} className="tnum font-mono text-[18px] font-medium text-live">{countdown(t - now, w.scheduledEt)}</span>
       </div>
     );
   else right = <span role="timer" aria-label={`Locks ${dayET(w.scheduledEt)} ${timeET(w.scheduledEt)} ET`} className="tnum font-mono text-[13px] text-muted">{countdown(t - now, w.scheduledEt)}</span>;
@@ -166,16 +166,16 @@ function SlotTile({ s, windows, burnPts }: { s: LineupSlot; windows: GameWindow[
       );
     case 'LOCKED':
       return (
-        <li className={`${box} border border-bulb bg-bulb/14`}>
-          <span className="font-mono text-[11px] text-bulb">{label} · LIVE</span>
+        <li className={`${box} border border-live bg-bulb/14`}>
+          <span className="font-mono text-[11px] text-live">{label} · LIVE</span>
           <span className="text-[13px] font-semibold">{shortName(s.name)}</span>
           <span className="text-[11px] text-muted">Locked {when}</span>
         </li>
       );
     case 'VOIDED':
       return (
-        <li className={`${box} border border-dashed border-bulb bg-transparent`}>
-          <span className="font-mono text-[11px] text-bulb">{label} · OPEN</span>
+        <li className={`${box} border border-dashed border-live bg-transparent`}>
+          <span className="font-mono text-[11px] text-live">{label} · OPEN</span>
           <span className="text-[13px] font-semibold">Voided</span>
           <span className="text-[11px] text-muted">{shortName(s.name)}: {VOID_TEXT[s.voidReason!].split('.')[0]}</span>
         </li>

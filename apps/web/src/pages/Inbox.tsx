@@ -71,11 +71,11 @@ export function InboxPage() {
 function Item({ n, ctx, onOpen }: { n: Notification; ctx: NoticeContext; onOpen: () => void }) {
   const v = noticeView(n, ctx);
   const when = `${dayET(n.createdAt)}, ${dateFmt.format(new Date(n.createdAt))} · ${timeET(n.createdAt)} ET${v.week !== null ? ` · Week ${v.week}` : ''}`;
-  const box = `flex flex-col gap-1 rounded-sm border px-[14px] py-3 ${n.read ? 'border-rule bg-paper' : 'border-line/60 border-l-[3px] border-l-line bg-line/5'}`;
+  const box = `flex flex-col gap-1 rounded-sm border px-[14px] py-3 ${n.read ? 'border-rule bg-paper' : 'border-accent/60 border-l-[3px] border-l-accent bg-line/5'}`;
   const content = (
     <>
       <span className="flex items-center gap-2 font-mono text-[11px] font-medium">
-        {!n.read && <span className="text-line">NEW</span>}
+        {!n.read && <span className="text-accent">NEW</span>}
         <span className={v.tone}>{v.tag}</span>
       </span>
       <span className="text-[14px] leading-[1.45] text-type">{v.text}</span>
@@ -93,7 +93,7 @@ function Item({ n, ctx, onOpen }: { n: Notification; ctx: NoticeContext; onOpen:
     <li className={box}>
       {content}
       {!n.read && (
-        <button type="button" className="mt-1 self-start font-mono text-[12px] text-line underline" onClick={onOpen}>Mark read</button>
+        <button type="button" className="mt-1 self-start font-mono text-[12px] text-accent underline" onClick={onOpen}>Mark read</button>
       )}
     </li>
   );

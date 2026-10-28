@@ -9,6 +9,7 @@ import { useMe } from '../api/hooks';
 import type { Me } from '../api/types';
 import { ErrorNote, Loading, Page } from '../components/layout';
 import { errorText } from '../lib/errors';
+import { FeedbackButton } from '../components/Feedback';
 
 /** Only same-app paths: never another origin, never a protocol-relative URL. */
 export function safeNext(raw: string | null | undefined): string {
@@ -23,7 +24,7 @@ export function nextStep(me: Me | null | undefined): '/login' | '/verify-pending
   return null;
 }
 
-function Gate({ allow }: { allow: (me: Me | null, next: string) => string | null }) {
+function Gate({ allow, feedback = false }: { allow: (me: Me | null, next: string) => string | null; feedback?: boolean }) {
   const me = useMe();
   const loc = useLocation();
   const next = safeNext(new URLSearchParams(loc.search).get('next'));
@@ -40,17 +41,22 @@ function Gate({ allow }: { allow: (me: Me | null, next: string) => string | null
     const back = to === '/login' ? `?next=${encodeURIComponent(loc.pathname + loc.search)}` : '';
     return <Navigate to={`${to}${back}`} replace />;
   }
-  return <Outlet />;
+  return (
+    <>
+      <Outlet />
+      {feedback && me.data && <FeedbackButton />}
+    </>
+  );
 }
 
 /** Signed in, verified, with an authenticator: the whole app. */
 export function RequireAccount() {
-  return <Gate allow={(me) => nextStep(me)} />;
+  return <Gate allow={(me) => nextStep(me)} feedback />;
 }
 
 /** Signed in (any sign-up step): verify-pending and setup. */
 export function RequireSignedIn() {
-  return <Gate allow={(me) => (me ? null : '/login')} />;
+  return <Gate allow={(me) => (me ? null : '/login')} feedback />;
 }
 
 /** Sign-in and sign-up screens: a finished account goes straight in. */

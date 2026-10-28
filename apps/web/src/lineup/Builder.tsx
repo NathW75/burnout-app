@@ -66,7 +66,7 @@ export function BuilderPage() {
   return (
     <Page>
       <SubHeader title={`WEEK ${week} LINEUP`} back="/" backLabel="Back to This Week" />
-      <main className={`flex flex-1 flex-col gap-[14px] px-4 pt-[14px] ${open && !freePlayOver ? 'pb-28' : 'pb-6'}`}>
+      <main className={`flex flex-1 flex-col gap-[14px] px-4 pt-[14px] ${open && !freePlayOver ? 'pb-28' : 'pb-24'}`}>
         <ErrorNote>{flash}</ErrorNote>
         {freePlayOver && <ErrorNote>Free play ended after Week {elig.freePlayThroughWeek}. Enter a pool to keep playing this season.</ErrorNote>}
         {!open && <Notice>Every window this week has locked. Your lineup is set; next week opens when its schedule is final.</Notice>}
@@ -75,7 +75,7 @@ export function BuilderPage() {
             <ClockIcon className="flex-none text-muted" />
             <p className="m-0 text-[13px] leading-[1.4]">
               Each slot locks at its game’s <b>scheduled</b> kickoff. Next lock:{' '}
-              <b className="tnum text-bulb">
+              <b className="tnum text-live">
                 {dayTimeET(next.scheduledEt)} ET · {countdown(Date.parse(next.scheduledEt) - now, next.scheduledEt)}
               </b>
             </p>
@@ -106,7 +106,7 @@ export function BuilderPage() {
         </ol>
 
         <section className="mt-1 flex flex-col gap-2 rounded-sm border border-rule px-[14px] py-3">
-          <h2 className="m-0 font-mono text-[12px] font-medium tracking-[1px] text-muted"><span className="text-line">///</span> HOW SLOTS WORK</h2>
+          <h2 className="m-0 font-mono text-[12px] font-medium tracking-[1px] text-muted"><span className="text-accent">///</span> HOW SLOTS WORK</h2>
           <p className="m-0 text-[13px] leading-[1.5]">
             Start him, lose him. A player in your lineup when his window locks is <b>burned</b> once his game goes Final. An empty slot scores 0 and burns nothing. <Link to="/help">The rules</Link>
           </p>
@@ -114,7 +114,7 @@ export function BuilderPage() {
       </main>
 
       {open && !freePlayOver && (
-        <div className="sticky bottom-0 flex items-center justify-between gap-3 border-t border-rule bg-graphite px-4 pt-[14px] pb-[max(18px,env(safe-area-inset-bottom))]">
+        <div data-bottom-bar className="sticky bottom-0 flex items-center justify-between gap-3 border-t border-rule bg-chrome px-4 pt-[14px] pb-[max(18px,env(safe-area-inset-bottom))]">
           <div className="flex flex-col gap-[2px]">
             <span className="text-[14px] font-semibold">{changes === 0 ? 'No changes' : `${changes} change${changes === 1 ? '' : 's'} not submitted`}</span>
             <span className="text-[12px] text-muted">
@@ -181,7 +181,7 @@ function SlotRow({ server, draftValue, effectiveId, card, state, burnPts, canEdi
   if (state === 'LOCKED') {
     return (
       <li className={`${row} border border-rule bg-bulb/14${ring}`}>
-        <span className={`${labelCls} text-bulb`}>{label}</span>
+        <span className={`${labelCls} text-live`}>{label}</span>
         <div className="flex min-w-0 flex-1 flex-col gap-[2px]">
           <span className="text-[15px] font-semibold">{shortName(server.name)}</span>
           <span className="text-[12px] text-muted">{[matchup(server.team, server.scheduledEt, windows), server.scheduledEt ? `locked ${dayTimeET(server.scheduledEt)} ET` : null].filter(Boolean).join(' · ')}</span>
@@ -199,13 +199,13 @@ function SlotRow({ server, draftValue, effectiveId, card, state, burnPts, canEdi
     const pos = isNew ? card?.position : server.position;
     const game = isNew && card ? cardMatchup(card) : matchup(team, sched, windows);
     return (
-      <li className={`${row} border ${isNew ? 'border-line bg-line/8' : 'border-rule bg-paper'}${ring}`}>
-        <span className={`${labelCls} ${isNew ? 'text-line' : 'text-muted'}`}>{label}</span>
+      <li className={`${row} border ${isNew ? 'border-accent bg-line/8' : 'border-rule bg-paper'}${ring}`}>
+        <span className={`${labelCls} ${isNew ? 'text-accent' : 'text-muted'}`}>{label}</span>
         <div className="flex min-w-0 flex-1 flex-col gap-[2px]">
           <span className="text-[15px] font-semibold">
             {shortName(name)}
             {pos === 'FB' && <span className="ml-1 text-[12px] font-medium text-muted">FB</span>}
-            {isNew && <span className="ml-1 font-mono text-[11px] font-medium text-line">· NEW</span>}
+            {isNew && <span className="ml-1 font-mono text-[11px] font-medium text-accent">· NEW</span>}
           </span>
           {isNew && card && !card.selectable ? (
             <span className="text-[12px] text-pencil">{card.unavailableReason === 'INACTIVE' ? `Now listed ${card.injuryStatus}. Pick someone else.` : 'His window locked. Pick someone else.'}</span>
@@ -228,8 +228,8 @@ function SlotRow({ server, draftValue, effectiveId, card, state, burnPts, canEdi
   const voided = state === 'VOIDED' && draftValue === undefined;
   const cleared = draftValue === null && server.playerId && !server.voidReason;
   return (
-    <li className={`${row} border border-dashed ${voided ? 'border-bulb' : 'border-frame'}${ring}`}>
-      <span className={`${labelCls} ${voided ? 'text-bulb' : 'text-muted'}`}>{label}</span>
+    <li className={`${row} border border-dashed ${voided ? 'border-live' : 'border-frame'}${ring}`}>
+      <span className={`${labelCls} ${voided ? 'text-live' : 'text-muted'}`}>{label}</span>
       <div className="flex min-w-0 flex-1 flex-col gap-[2px]">
         <span className={`text-[15px] font-semibold ${voided ? '' : 'text-muted'}`}>{voided ? 'Open' : 'Empty'}</span>
         <span className="text-[12px] text-muted">

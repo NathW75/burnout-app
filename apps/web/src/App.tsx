@@ -24,6 +24,11 @@ const StandingsPage = lazy(() => import('./pages/Standings').then((m) => ({ defa
 const ManagerPage = lazy(() => import('./pages/Manager').then((m) => ({ default: m.ManagerPage })));
 const BurnedPage = lazy(() => import('./pages/Burned').then((m) => ({ default: m.BurnedPage })));
 const InboxPage = lazy(() => import('./pages/Inbox').then((m) => ({ default: m.InboxPage })));
+const PasswordPage = lazy(() => import('./account/Security').then((m) => ({ default: m.PasswordPage })));
+const AuthenticatorPage = lazy(() => import('./account/Security').then((m) => ({ default: m.AuthenticatorPage })));
+const BackupCodesPage = lazy(() => import('./account/Security').then((m) => ({ default: m.BackupCodesPage })));
+const SessionsPage = lazy(() => import('./account/Sessions').then((m) => ({ default: m.SessionsPage })));
+const ReceiptsPage = lazy(() => import('./account/Sessions').then((m) => ({ default: m.ReceiptsPage })));
 
 function NotFound() {
   useScreen('not_found', 'Not found');
@@ -65,6 +70,11 @@ export function AppRoutes() {
         <Route path="/receipts/:id" element={<ReceiptPage />} />
         <Route path="/help" element={<HelpPage />} />
         <Route path="/account" element={<AccountPage />} />
+        <Route path="/account/password" element={<PasswordPage />} />
+        <Route path="/account/authenticator" element={<AuthenticatorPage />} />
+        <Route path="/account/backup-codes" element={<BackupCodesPage />} />
+        <Route path="/account/sessions" element={<SessionsPage />} />
+        <Route path="/account/receipts" element={<ReceiptsPage />} />
         <Route path="/board" element={<StandingsPage />} />
         <Route path="/board/:handle" element={<ManagerPage />} />
         <Route path="/burned" element={<BurnedPage />} />

@@ -77,7 +77,7 @@ export function PickerPage() {
 
   return (
     <Page>
-      <header className="sticky top-0 z-10 flex items-center gap-2 border-b border-line bg-graphite px-4 py-[10px]">
+      <header className="sticky top-0 z-10 flex items-center gap-2 border-b border-accent bg-chrome px-4 py-[10px]">
         <Link to="/lineup" aria-label="Back to lineup" className="-ml-3 flex size-11 items-center justify-center text-type">
           <BackIcon />
         </Link>
@@ -97,7 +97,7 @@ export function PickerPage() {
           {['ALL', ...openTimes].map((t) => {
             const on = win === t;
             return (
-              <button key={t} type="button" aria-pressed={on} onClick={() => setWin(t)} className={`min-h-9 rounded-sm border px-3 font-mono text-[12px] font-medium ${on ? 'border-line bg-line text-ink' : 'border-frame bg-transparent text-type'}`}>
+              <button key={t} type="button" aria-pressed={on} onClick={() => setWin(t)} className={`min-h-9 rounded-sm border px-3 font-mono text-[12px] font-medium ${on ? 'border-accent bg-line text-ink' : 'border-frame bg-transparent text-type'}`}>
                 {t === 'ALL' ? 'ALL OPEN' : chipLabel(t)}
               </button>
             );
@@ -121,7 +121,7 @@ export function PickerPage() {
       {burnedCount > 0 && (
         <div className="mx-4 mt-[14px] mb-6 flex items-center justify-between rounded-sm border border-rule px-[14px] py-3">
           <label htmlFor="show-burned" className="text-[14px]">Show players I’ve burned ({burnedCount})</label>
-          <input id="show-burned" type="checkbox" checked={showBurned} onChange={(e) => setShowBurned(e.target.checked)} className="size-[22px] accent-line" />
+          <input id="show-burned" type="checkbox" checked={showBurned} onChange={(e) => setShowBurned(e.target.checked)} className="size-[22px] accent-accent" />
         </div>
       )}
     </Page>
@@ -157,7 +157,7 @@ function PlayerRow({ p, why, onSelect }: { p: PlayerCard; why: Why | null; onSel
           {CAUTION_STATUSES.has(p.injuryStatus) && (
             <>
               {' · '}
-              <b className="text-bulb">{p.injuryStatus}</b>
+              <b className="text-live">{p.injuryStatus}</b>
             </>
           )}
           {p.position === 'FB' && ' · FB counts at RB and FLEX'}

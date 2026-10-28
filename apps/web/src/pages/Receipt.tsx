@@ -17,7 +17,7 @@ export function ReceiptPage() {
   return (
     <Page>
       <SubHeader title="RECEIPT" back="/" backLabel="Back to This Week" />
-      <main className="flex flex-1 flex-col gap-4 px-4 pt-5 pb-8">
+      <main className="flex flex-1 flex-col gap-4 px-4 pt-5 pb-24">
         {receipt.isPending && <Loading />}
         {receipt.isError && <ErrorNote>{errorText(receipt.error)}</ErrorNote>}
         {r && (

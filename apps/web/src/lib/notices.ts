@@ -75,7 +75,7 @@ export function noticeView(n: Notification, ctx: NoticeContext): NoticeView {
     case 'LOCK': {
       const label = str(p.windowLabel) ?? 'A window';
       return {
-        tag: 'LOCKED', tone: 'text-bulb', week,
+        tag: 'LOCKED', tone: 'text-live', week,
         text: who ? `${label} locked with ${who}.` : `${label} locked with ${count} of yours.`,
         to: current ? '/' : pastLineup,
       };
@@ -87,26 +87,26 @@ export function noticeView(n: Notification, ctx: NoticeContext): NoticeView {
         : p.reason === 'PLAYER_MERGED' ? ': he was listed twice and is already in your lineup'
         : '';
       return {
-        tag: 'VOIDED', tone: 'text-bulb', week,
+        tag: 'VOIDED', tone: 'text-live', week,
         text: `${onePlayer ?? 'Your pick'} was voided${why}. Not burned.${slot ? ` ${slot} is open.` : ''}`,
         to: current ? '/lineup' : pastLineup,
       };
     }
     case 'SUBMISSION_REPOINTED':
       return {
-        tag: 'MOVED', tone: 'text-bulb', week,
+        tag: 'MOVED', tone: 'text-live', week,
         text: `${onePlayer ?? 'Your pick'} changed teams. ${slot ?? 'His slot'} now locks with ${str(p.newWindowLabel) ?? 'his new game'}.`,
         to: current ? '/' : pastLineup,
       };
     case 'SLOT_REOPENED':
       return {
-        tag: 'REOPENED', tone: 'text-bulb', week,
+        tag: 'REOPENED', tone: 'text-live', week,
         text: `${slot ?? 'A slot'}${onePlayer ? ` (${onePlayer})` : ''} reopened: the game was canceled. Not burned.`,
         to: current ? '/lineup' : pastLineup,
       };
     case 'LINEUP_RECEIPT':
       return {
-        tag: 'CONFIRMED', tone: 'text-line', week,
+        tag: 'CONFIRMED', tone: 'text-accent', week,
         text: week !== null ? `Week ${week} lineup confirmed.` : 'Lineup confirmed.',
         to: str(p.receiptId) ? `/receipts/${str(p.receiptId)}` : null,
       };

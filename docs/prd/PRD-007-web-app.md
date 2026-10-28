@@ -1,6 +1,6 @@
 # PRD-007 — Web App (Player Portal)
 **Burnout League · apps/web**
-*Status: v1.5 — **APPROVED 2026-10-27** (Nath), decisions Q1–Q7 in §14; mockups approved on the landing-page design system (§11); API additions (§8) built; web app patch (a) built; patch (b) part 1 (standings, burned roster, inbox) built 2026-10-28.*
+*Status: v1.6 — **APPROVED 2026-10-27** (Nath), decisions Q1–Q7 in §14; mockups approved on the landing-page design system (§11); API additions (§8) built; web app patch (a) built; patch (b) built 2026-10-28 in two parts (standings, burned roster, inbox; then account, feedback, light theme). Phase A screens complete.*
 *Author: Build thread · 2026-10-27*
 
 ---
@@ -174,6 +174,12 @@ In-app notices from the same events that queue emails, newest first, 30 at a tim
   - sessions: list with device and last seen, revoke one, sign out everywhere
 - **Receipts:** every confirmed lineup's receipt with its checksum, recomputable per PRD-006 §9.4.
 
+**As built (v1.6):** Account lists Profile (handle with an inline change, two changes a season per PRD-003; email), Security (Password, Authenticator app, Backup codes, Sessions, each its own screen), Lineups (Receipts), Appearance (Dark, Light, Match device), Rules and Sign out.
+- Password: current, new and repeat; other sessions are signed out and this one stays.
+- Replace authenticator and new backup codes ask for a fresh code first (step-up), in place, and ask again if the server says it's stale. New codes are shown once with download, copy and an "I've saved these" tick.
+- Sessions: device named from the browser (e.g. "Chrome on Android"), last active and signed-in times ET, "This device", sign out any other device, and sign out everywhere.
+- Receipts: newest first, week, confirmation time and the start of the checksum, each opening its receipt.
+
 ### 6.8 Help
 
 The rules page explains the burn, lock at scheduled kickoff, empty slots, Out/IR, team changes mid-week, cancellations and postponements, free play, and the Week 3 cutoff. It's linked from every screen that mentions a rule.
@@ -271,6 +277,8 @@ The spec is kept, with these changes to fit what's built:
 
 The floating button sits on every signed-in screen and sends the current route in `X-Current-Screen`. The 2,000-character limit and the spec's acceptance criteria otherwise stand.
 
+**As built (v1.6):** a round button bottom right that measures and sits just above whatever bar is pinned to the bottom (the tabs, the lineup footer, a gate footer); screens have extra bottom padding so their last rows scroll clear of it. It opens a bottom sheet on phones and a side drawer from 768px: one text box with a counter, SEND FEEDBACK, a short "Sent" confirmation that closes itself, and on failure "Couldn't send" with the reason and the text kept. It shows on sign-up steps after sign-in (so a stuck tester can say so) and never on signed-out screens.
+
 ---
 
 ## 11. Visual design (decided 2026-10-27: match the landing page)
@@ -300,6 +308,13 @@ The app uses the **live landing page's design system** (burnoutfantasy.com), not
 **Shape:** square-ish (4 px radius), 1 px rules, no shadows or gradients.
 
 **Light theme:** the landing page defines one (`data-theme="light"`); the app adopts the same token overrides.
+
+**As built (v1.6):** dark stays the default, as on the landing page; Account → Appearance offers Dark, Light or Match device, remembered per browser (`bl:theme` in localStorage, not account data) and applied before first paint by `public/theme.js` (an external file, since the CSP allows no inline script).
+- From the landing page: newsprint `#F3F0E8`, paper `#FBFAF6`, type `#141414`, muted `#5E5A52`, rule `#BDB8AC`, frame `#141414`, pencil `#C8102E`, and the primary button in ink with lime text.
+- App additions, because the app uses colors as text where the landing page doesn't: lime and amber stay as fills, but as text they'd be unreadable on cream, so accent text is olive `#4F5E00` and live text dark amber `#8A5300`; steel is `#646A6E`; the header and bars are light (`#FBFAF6`); slate panels are `#E8EDF0` / `#B7C2CA`. Every text color is at least 4.5:1 on every light surface, and axe passes in both themes.
+- Turnstile follows the theme; the browser's theme color follows it too.
+
+**Favicon (2026-10-28):** the flame in lime with a red offset echo on graphite (`public/favicon.svg`, from the project library).
 
 **Voice:** dry, confident and short, as on the landing page: "Start him. Lose him." "Locked in." Never hype.
 
@@ -337,7 +352,7 @@ Mockups (approved): the "Burnout League — Web App Mockups" canvas.
 - [ ] No player images, team logos or real names appear anywhere (automated scan of rendered routes).
 - [x] The inbox shows lock, burn, void and re-point notices with read state.
 - [x] Sign-up isn't complete without a confirmed authenticator. Until then, **the API refuses every route except the setup steps** (server-enforced and tested against every route). *(API side done; the app's backup-code acknowledgment is part of the web build.)*
-- [ ] Replacing the authenticator, regenerating backup codes, session revoke and sign-out-everywhere all work. No auth data is in `localStorage`.
+- [x] Replacing the authenticator, regenerating backup codes, session revoke and sign-out-everywhere all work. No auth data is in `localStorage`.
 - [ ] axe reports no serious or critical issues on any route.
 - [ ] Staging deploys on push. A production deploy during the blackout window is held by the gate.
 
@@ -362,7 +377,7 @@ Mockups (approved): the "Burnout League — Web App Mockups" canvas.
 1. ~~Approve this PRD (with Q1–Q7).~~ Done 2026-10-27.
 2. ~~Mockups of the three key screens, for sign-off.~~ Done 2026-10-27.
 3. ~~API additions (§8), shipped as their own patch with tests.~~ Built 2026-10-27.
-4. Web app Phase A, as two patches: (a) accounts, This Week, lineup and gates, with a short rules page and a basic account page; built 2026-10-27. (b) in two parts: **part 1**, standings with the reveal, the burned roster and the inbox, built 2026-10-28; **part 2**, the full account (security, sessions, receipts), the feedback button and the light theme.
+4. Web app Phase A, as two patches: (a) accounts, This Week, lineup and gates, with a short rules page and a basic account page; built 2026-10-27. (b) in two parts: **part 1**, standings with the reveal, the burned roster and the inbox, built 2026-10-28; **part 2**, the full account (security, sessions, receipts), the feedback button and the light theme, built 2026-10-28.
 5. Cloudflare setup: the deploy workflow, `wrangler.jsonc` and headers ship in patch (a); the runbook is `docs/deploy/CLOUDFLARE-APP.md` (API token and two GitHub secrets). Turnstile widgets created 2026-10-27.
 6. Testers invited once SendGrid domain authentication is done (verification emails must arrive).
 
@@ -374,6 +389,7 @@ Depends on: PRD-001, PRD-003, PRD-004 (Phase B), PRD-006, `SPEC-feedback-system.
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.6 | 2026-10-28 | Patch (b) part 2 built: §6.7 account as built (handle change, password, replace authenticator and new backup codes behind step-up, sessions with revoke and sign out everywhere, receipts, appearance); §10 feedback button as built; §11 light theme as built (dark default, landing tokens plus text-safe accents) and the new favicon. Acceptance: account security checked off. |
 | 1.5 | 2026-10-28 | Patch (b) part 1 built: §6.2.1 navigation (BOARD and BURNED tabs, inbox bell, Rules under Account); §6.4 burned roster grouped by week; §6.5 reveal week picker, burned state and live polling; §6.6 inbox names players, links each notice, NEW tag. §8.3: notices return player names; the inbox cursor includes the id. Acceptance: field board, reveal and inbox checked off. |
 | 1.4 | 2026-10-27 | §6.3: every open slot must be filled to submit (as the API already required), stale draft picks are flagged. §4, §12, §15: as built in web app patch (a). |
 | 1.3 | 2026-10-27 | §7: Gate 2 (CONTINUE lime and untappable until all three are ticked, then red with white text) and Gate 3 (red center fills 0→100% with the ring) as approved in the mockups. §8, §10: as built (response shapes, Turnstile fails closed, 30-second field cache with ETag, feedback limits and tagging). Corrected the PRD-006 decision reference to D3. Added to the repo. |

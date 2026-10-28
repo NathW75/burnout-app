@@ -23,7 +23,7 @@ export function OfficialClock({ compact = false }: { compact?: boolean }) {
   const text = clockET(now);
   return (
     <span role="timer" aria-live="off" className="flex items-center gap-2 font-mono text-[12px] text-muted" aria-label={`Official time ${text}`}>
-      {!compact && <span className="size-[7px] rounded-full bg-line" aria-hidden="true" />}
+      {!compact && <span className="size-[7px] rounded-full bg-accent" aria-hidden="true" />}
       <span className="tnum text-type" aria-hidden="true">{compact ? text.replace(/:\d\d (AM|PM)/, ' $1') : text}</span>
     </span>
   );
@@ -32,7 +32,7 @@ export function OfficialClock({ compact = false }: { compact?: boolean }) {
 export function Wordmark() {
   return (
     <span className="flex items-center gap-2 font-mono text-[13px] font-medium tracking-[1px] text-type">
-      <FlameIcon width={16} height={16} className="text-line" />
+      <FlameIcon width={16} height={16} className="text-accent" />
       BURNOUT<span className="max-[379px]:hidden"> LEAGUE</span>
     </span>
   );
@@ -46,7 +46,7 @@ export function InboxBell() {
     <NavLink
       to="/inbox"
       aria-label={n ? `Inbox, ${n} unread` : 'Inbox'}
-      className={({ isActive }) => `relative -mr-2 flex size-11 items-center justify-center no-underline ${isActive ? 'text-line' : 'text-type hover:text-line'}`}
+      className={({ isActive }) => `relative -mr-2 flex size-11 items-center justify-center no-underline ${isActive ? 'text-accent' : 'text-type hover:text-accent'}`}
     >
       <BellIcon />
       {n > 0 && (
@@ -61,7 +61,7 @@ export function InboxBell() {
 /** Top bar for the main tabs. */
 export function AppHeader() {
   return (
-    <header className="sticky top-0 z-10 flex items-center justify-between gap-2 border-b border-line bg-graphite py-[6px] pr-4 pl-4">
+    <header className="sticky top-0 z-10 flex items-center justify-between gap-2 border-b border-accent bg-chrome py-[6px] pr-4 pl-4">
       <Link to="/" className="no-underline" aria-label="Burnout League, This Week">
         <Wordmark />
       </Link>
@@ -76,7 +76,7 @@ export function AppHeader() {
 /** Top bar for a sub-screen: back, title, compact clock. */
 export function SubHeader({ title, back, backLabel }: { title: string; back: string; backLabel: string }) {
   return (
-    <header className="sticky top-0 z-10 flex items-center justify-between border-b border-line bg-graphite px-4 py-[10px]">
+    <header className="sticky top-0 z-10 flex items-center justify-between border-b border-accent bg-chrome px-4 py-[10px]">
       <Link to={back} aria-label={backLabel} className="-ml-3 flex size-11 items-center justify-center text-type">
         <BackIcon />
       </Link>
@@ -96,14 +96,14 @@ const tabs = [
 
 export function BottomNav() {
   return (
-    <nav aria-label="Main" className="sticky bottom-0 z-10 mt-auto grid grid-cols-5 border-t border-rule bg-graphite pb-[env(safe-area-inset-bottom)]">
+    <nav data-bottom-bar aria-label="Main" className="sticky bottom-0 z-10 mt-auto grid grid-cols-5 border-t border-rule bg-chrome pb-[env(safe-area-inset-bottom)]">
       {tabs.map(({ to, label, icon: Icon, end }) => (
         <NavLink
           key={to}
           to={to}
           end={end}
           className={({ isActive }) =>
-            `flex min-h-11 flex-col items-center gap-[3px] pt-[10px] pb-[14px] font-mono text-[11px] no-underline ${isActive ? 'text-line' : 'text-muted hover:text-type'}`
+            `flex min-h-11 flex-col items-center gap-[3px] pt-[10px] pb-[14px] font-mono text-[11px] no-underline ${isActive ? 'text-accent' : 'text-muted hover:text-type'}`
           }
         >
           <Icon />
@@ -123,7 +123,7 @@ export function TabPage({ children }: { children: ReactNode }) {
   return (
     <Page>
       <AppHeader />
-      <main className="flex flex-1 flex-col pb-6">{children}</main>
+      <main className="flex flex-1 flex-col pb-24">{children}</main>
       <BottomNav />
     </Page>
   );
@@ -133,7 +133,7 @@ export function SectionTitle({ children, aside }: { children: ReactNode; aside?:
   return (
     <div className="flex items-baseline justify-between gap-3">
       <h2 className="m-0 font-mono text-[15px] font-medium tracking-[1px]">
-        <span className="text-line">///</span> {children}
+        <span className="text-accent">///</span> {children}
       </h2>
       {aside}
     </div>

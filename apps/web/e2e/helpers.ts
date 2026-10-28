@@ -11,14 +11,14 @@ export interface Account {
 }
 
 let n = 0;
-let lastStep = 0;
+const lastStep = new Map<string, number>();
 
-/** A fresh TOTP code. Codes can't be replayed, so wait for a new 30-second step when needed. */
+/** A fresh TOTP code. A factor's codes can't be replayed, so wait for a new 30-second step when needed. */
 export async function freshCode(secret: string): Promise<string> {
   for (;;) {
     const step = Math.floor(Date.now() / 30_000);
-    if (step !== lastStep) {
-      lastStep = step;
+    if (step !== lastStep.get(secret)) {
+      lastStep.set(secret, step);
       return totp(secret, new Date());
     }
     await new Promise((r) => setTimeout(r, 500));
@@ -50,6 +50,8 @@ export async function signUp(page: Page): Promise<Account> {
   await page.getByRole('button', { name: 'CONTINUE' }).click();
 
   await expect(page).toHaveURL(/\/setup-2fa/);
+  // The setup screen loads on demand: wait for it, or the password lands in the outgoing sign-in form.
+  await expect(page.getByRole('heading', { name: 'Set up your authenticator' })).toBeVisible();
   await page.getByLabel('Password').fill(PASSWORD);
   await page.getByRole('button', { name: 'CONTINUE' }).click();
   const key = page.locator('code');

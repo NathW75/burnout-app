@@ -3,8 +3,8 @@
  * browser against the real API.
  */
 import AxeBuilder from '@axe-core/playwright';
-import { expect, test, type Page } from '@playwright/test';
-import { API, fillLineup, freshCode, FULL_LINEUP, hold, mailLink, PASSWORD, pick, signUp } from './helpers';
+import { expect, test, type Locator, type Page } from '@playwright/test';
+import { API, fillLineup, freshCode, FULL_LINEUP, hold, mailLink, PASSWORD, pick, signUp, type Account } from './helpers';
 
 test.describe.configure({ mode: 'serial' });
 
@@ -124,7 +124,7 @@ test('sign up → verify → authenticator → a lineup through all three gates 
   // This Week now shows the lineup, and a reload keeps the session (cookie, nothing in localStorage).
   await page.goto('/');
   await expect(page.getByText('9 / 9 SET')).toBeVisible();
-  const stored = await page.evaluate(() => Object.keys(localStorage).filter((k) => !k.startsWith('bl:draft:')));
+  const stored = await page.evaluate(() => Object.keys(localStorage).filter((k) => !k.startsWith('bl:draft:') && k !== 'bl:theme'));
   expect(stored).toEqual([]);
 });
 
@@ -203,6 +203,146 @@ test('after a lock and a burn: burned roster, inbox with read state, standings, 
   const w7 = page.getByRole('list', { name: 'rival_e2e, Week 7' });
   await expect(w7.getByText('Ray Dent')).toHaveClass(/line-through/);
   await expect(w7.getByText('RB1 · BURNED')).toBeVisible();
+});
+
+/** Signs in through the UI in a fresh page (another "device"). */
+async function signIn(page: Page, acc: Account, secret = acc.secret, password = PASSWORD) {
+  await page.goto('/login');
+  await page.getByLabel('Email').fill(acc.email);
+  await page.getByLabel('Password').fill(password);
+  await page.getByRole('button', { name: 'CONTINUE' }).click();
+  await expect(page).toHaveURL(/\/login\/code/);
+  await page.getByLabel('Code').fill(await freshCode(secret));
+  await page.getByRole('button', { name: 'SIGN IN' }).click();
+  await expect(page.getByRole('heading', { name: 'Week 8' })).toBeVisible();
+}
+
+/** Waits for the screen to settle on either the step-up prompt or `next`, and answers the prompt if asked. */
+async function stepUpIfAsked(page: Page, secret: string, next: Locator) {
+  const prompt = page.getByText('CONFIRM IT’S YOU');
+  await expect(prompt.or(next).first()).toBeVisible();
+  if (await prompt.isVisible()) {
+    await page.getByLabel('Code').fill(await freshCode(secret));
+    await page.getByRole('button', { name: 'CONFIRM' }).click();
+    await expect(prompt).toHaveCount(0);
+  }
+}
+
+test('account: sessions on two devices, revoke one; change password; new backup codes after a step-up', async ({ page, browser }) => {
+  test.setTimeout(150_000);
+  const acc = await signUp(page);
+  // A second device signs in.
+  const other = await browser.newContext({ baseURL: 'http://localhost:4173' });
+  const phone = await other.newPage();
+  await signIn(phone, acc);
+
+  await page.goto('/account');
+  await noSeriousA11yIssues(page, 'account');
+  await page.getByRole('list', { name: 'Security' }).getByRole('link', { name: /^Sessions/ }).click();
+  const devices = page.getByRole('list', { name: 'Signed-in devices' });
+  await expect(devices.getByRole('listitem')).toHaveCount(2);
+  await expect(devices.getByText('THIS DEVICE')).toHaveCount(1);
+  await noSeriousA11yIssues(page, 'sessions');
+  await devices.getByRole('button', { name: /^Sign out / }).click();
+  await expect(devices.getByRole('listitem')).toHaveCount(1);
+  // The revoked device is signed out on its next request.
+  await phone.goto('/lineup');
+  await expect(phone).toHaveURL(/\/login/);
+  await other.close();
+
+  // Password: this device stays signed in.
+  await page.goto('/account/password');
+  await page.getByLabel('Current password').fill(PASSWORD);
+  await page.getByLabel('NEW PASSWORD', { exact: true }).fill('an even better passphrase');
+  await page.getByLabel('New password again').fill('an even better passphrase');
+  await page.getByRole('button', { name: 'CHANGE PASSWORD' }).click();
+  await expect(page.getByText('Password changed. Your other devices are signed out.')).toBeVisible();
+  await page.goto('/');
+  await expect(page.getByRole('heading', { name: 'Week 8' })).toBeVisible();
+
+  // Backup codes need a fresh code first; the new ones are shown once.
+  await page.goto('/account/backup-codes');
+  await stepUpIfAsked(page, acc.secret, page.getByRole('button', { name: 'GET NEW BACKUP CODES' }));
+  await page.getByRole('button', { name: 'GET NEW BACKUP CODES' }).click();
+  await expect(page.getByRole('list', { name: 'Backup codes' }).getByRole('listitem')).toHaveCount(10);
+  await noSeriousA11yIssues(page, 'backup codes');
+  await page.getByLabel('I’ve saved these codes.').check();
+  await page.getByRole('button', { name: 'DONE' }).click();
+  await expect(page.getByText('New backup codes saved. The old ones no longer work.')).toBeVisible();
+});
+
+test('account: replace the authenticator; the old one stops working and the new one signs in', async ({ page, context }) => {
+  test.setTimeout(150_000);
+  const acc = await signUp(page);
+  await page.goto('/account/authenticator');
+  await stepUpIfAsked(page, acc.secret, page.getByLabel('Password'));
+  await page.getByLabel('Password').fill(PASSWORD);
+  await page.getByRole('button', { name: 'CONTINUE' }).click();
+  const key = (await page.locator('code').first().innerText()).replace(/\s+/g, '');
+  expect(key).toMatch(/^[A-Z2-7]{16,}$/);
+  await noPlayerImages(page);
+  await page.getByLabel('6-digit code from the new app').fill(await freshCode(key));
+  await page.getByRole('button', { name: 'CONFIRM' }).click();
+  await expect(page.getByRole('heading', { name: 'Save your new backup codes' })).toBeVisible();
+  await page.getByLabel('I’ve saved these codes.').check();
+  await page.getByRole('button', { name: 'DONE' }).click();
+  await expect(page.getByText(/Your new authenticator is set up/)).toBeVisible();
+
+  // Sign out; the old authenticator's code is refused, the new one works.
+  await page.goto('/account');
+  await page.getByRole('button', { name: 'SIGN OUT', exact: true }).click();
+  await context.clearCookies();
+  await page.goto('/login');
+  await page.getByLabel('Email').fill(acc.email);
+  await page.getByLabel('Password').fill(PASSWORD);
+  await page.getByRole('button', { name: 'CONTINUE' }).click();
+  await page.getByLabel('Code').fill(await freshCode(acc.secret));
+  await page.getByRole('button', { name: 'SIGN IN' }).click();
+  await expect(page.getByRole('alert')).toBeVisible();
+  await page.getByLabel('Code').fill(await freshCode(key));
+  await page.getByRole('button', { name: 'SIGN IN' }).click();
+  await expect(page.getByRole('heading', { name: 'Week 8' })).toBeVisible();
+});
+
+test('feedback from any signed-in screen; the light theme sticks across reloads and passes axe', async ({ page }) => {
+  await signUp(page);
+  // Feedback: floats above the bottom nav, sends, confirms.
+  await page.goto('/burned');
+  const fab = page.getByRole('button', { name: 'Send feedback' });
+  const nav = page.getByRole('navigation', { name: 'Main' });
+  const [fb, nb] = [await fab.boundingBox(), await nav.boundingBox()];
+  expect(fb!.y + fb!.height).toBeLessThanOrEqual(nb!.y);
+  const sent = page.waitForRequest((r) => r.url().endsWith('/v1/feedback') && r.method() === 'POST');
+  await fab.click();
+  const dialog = page.getByRole('dialog', { name: '/// FEEDBACK' });
+  await expect(dialog).toBeVisible();
+  await noSeriousA11yIssues(page, 'feedback');
+  await dialog.getByRole('textbox').fill('The burned roster reads well.');
+  await dialog.getByRole('button', { name: 'SEND FEEDBACK' }).click();
+  const req = await sent;
+  expect(req.headers()['x-current-screen']).toBe('burned_roster');
+  expect(req.postDataJSON()).toEqual({ body: 'The burned roster reads well.' });
+  await expect(dialog.getByText('Sent. Thanks, we read every one.')).toBeVisible();
+  await expect(dialog).toHaveCount(0, { timeout: 4000 });
+  // Not on signed-out screens.
+  await page.goto('/help');
+  await expect(fab).toBeVisible();
+
+  // Light theme.
+  await page.goto('/account');
+  await page.getByText('LIGHT', { exact: true }).click();
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+  await page.reload();
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+  await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(243, 240, 232)');
+  await noSeriousA11yIssues(page, 'account (light)');
+  await page.goto('/');
+  await noSeriousA11yIssues(page, 'this week (light)');
+  await page.goto('/lineup');
+  await noSeriousA11yIssues(page, 'lineup (light)');
+  await page.goto('/account');
+  await page.getByText('DARK', { exact: true }).click();
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
 });
 
 test('a window that locks during Gate 2 is rejected at Gate 3 and the user is sent back with the reason (runs last)', async ({ page }) => {

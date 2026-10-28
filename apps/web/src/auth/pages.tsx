@@ -138,7 +138,7 @@ export function SignOutLink() {
     },
   });
   return (
-    <button type="button" onClick={() => out.mutate()} className="self-start border-0 bg-transparent p-0 text-[14px] text-line underline">
+    <button type="button" onClick={() => out.mutate()} className="self-start border-0 bg-transparent p-0 text-[14px] text-accent underline">
       Sign out
     </button>
   );

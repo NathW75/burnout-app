@@ -4,6 +4,7 @@
  * the API, which has no secret there either, skips the check.
  */
 import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
+import { currentTheme } from '../lib/theme';
 
 export const TURNSTILE_SITE_KEY = (import.meta.env.VITE_TURNSTILE_SITE_KEY as string | undefined) ?? '';
 
@@ -71,7 +72,7 @@ export const Turnstile = forwardRef<TurnstileHandle, Props>(function Turnstile({
         if (cancelled || !el.current) return;
         widget.current = t.render(el.current, {
           sitekey: TURNSTILE_SITE_KEY,
-          theme: 'dark',
+          theme: currentTheme(),
           action: 'signup',
           callback: (token: string) => cb.current.onToken(token),
           'expired-callback': () => cb.current.onToken(null),

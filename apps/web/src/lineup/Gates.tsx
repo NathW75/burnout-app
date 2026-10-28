@@ -46,7 +46,7 @@ function GateFrame({ step, back, backLabel, children, footer }: { step: 1 | 2 | 
 
   return (
     <Page>
-      <header className="sticky top-0 z-10 flex flex-col gap-3 border-b border-line bg-graphite px-4 pt-[10px] pb-4">
+      <header className="sticky top-0 z-10 flex flex-col gap-3 border-b border-accent bg-chrome px-4 pt-[10px] pb-4">
         <div className="flex items-center justify-between">
           {done ? <span /> : <Link to={back} className="flex min-h-11 items-center font-mono text-[12px] no-underline">← {backLabel}</Link>}
           {!done && ctx.review && (
@@ -58,14 +58,14 @@ function GateFrame({ step, back, backLabel, children, footer }: { step: 1 | 2 | 
         <ol aria-label="Confirmation steps" className="m-0 grid list-none grid-cols-3 gap-[6px] p-0">
           {STEPS.map((s, i) => (
             <li key={s} aria-current={i + 1 === step ? 'step' : undefined} className="flex flex-col gap-[6px]">
-              <span className={`h-[3px] ${i + 1 <= step ? 'bg-line' : 'bg-rule'}`} />
-              <span className={`font-mono text-[11px] ${i + 1 === step ? 'text-line' : 'text-muted'}`}>{s}</span>
+              <span className={`h-[3px] ${i + 1 <= step ? 'bg-accent' : 'bg-rule'}`} />
+              <span className={`font-mono text-[11px] ${i + 1 === step ? 'text-accent' : 'text-muted'}`}>{s}</span>
             </li>
           ))}
         </ol>
       </header>
-      <main className="flex flex-1 flex-col">{children}</main>
-      {footer && <div className="sticky bottom-0 mt-auto flex flex-col gap-2 border-t border-rule bg-graphite px-4 pt-[14px] pb-[max(18px,env(safe-area-inset-bottom))]">{footer}</div>}
+      <main className="flex flex-1 flex-col pb-20">{children}</main>
+      {footer && <div data-bottom-bar className="sticky bottom-0 mt-auto flex flex-col gap-2 border-t border-rule bg-chrome px-4 pt-[14px] pb-[max(18px,env(safe-area-inset-bottom))]">{footer}</div>}
     </Page>
   );
 }
@@ -135,7 +135,7 @@ export function Gate1Page() {
               <li key={slot} className={`${base} bg-paper`}>
                 <span className="w-[42px] flex-none font-mono text-[13px] font-medium text-muted">{SLOT_LABEL[slot]}</span>
                 <div className="flex min-w-0 flex-1 flex-col gap-[2px]">
-                  <span className="text-[15px] font-semibold text-muted">Empty {isNew && <span className="font-mono text-[11px] font-medium text-line">· CHANGED</span>}</span>
+                  <span className="text-[15px] font-semibold text-muted">Empty {isNew && <span className="font-mono text-[11px] font-medium text-accent">· CHANGED</span>}</span>
                   <span className="text-[12px] text-muted">Scores 0, burns nothing</span>
                 </div>
               </li>
@@ -143,16 +143,16 @@ export function Gate1Page() {
           }
           return (
             <li key={slot} className={`${base} ${isNew ? 'bg-line/8' : 'bg-paper'}`}>
-              <span className={`w-[42px] flex-none font-mono text-[13px] font-medium ${isNew ? 'text-line' : r.locked ? 'text-bulb' : 'text-muted'}`}>{SLOT_LABEL[slot]}</span>
+              <span className={`w-[42px] flex-none font-mono text-[13px] font-medium ${isNew ? 'text-accent' : r.locked ? 'text-live' : 'text-muted'}`}>{SLOT_LABEL[slot]}</span>
               <div className="flex min-w-0 flex-1 flex-col gap-[2px]">
                 <span className="text-[15px] font-semibold">
                   {shortName(r.name)}
                   {r.position === 'FB' && <span className="ml-1 text-[12px] font-medium text-muted">FB</span>}
-                  {isNew && <span className="ml-1 font-mono text-[11px] font-medium text-line">· NEW</span>}
+                  {isNew && <span className="ml-1 font-mono text-[11px] font-medium text-accent">· NEW</span>}
                 </span>
                 <span className="text-[12px] text-muted">{r.locked ? 'Locked · game live · can’t change' : matchup(r.team, r.scheduledEt, windows) ?? r.team}</span>
               </div>
-              <span className={`flex-none font-mono text-[12px] ${r.locked ? 'text-bulb' : isNext ? 'text-bulb' : 'text-muted'}`}>{r.locked ? 'LIVE' : time}</span>
+              <span className={`flex-none font-mono text-[12px] ${r.locked ? 'text-live' : isNext ? 'text-live' : 'text-muted'}`}>{r.locked ? 'LIVE' : time}</span>
             </li>
           );
         })}
@@ -163,7 +163,7 @@ export function Gate1Page() {
           <>
             {' '}
             {lockingNext === 1 ? 'One player locks' : `${lockingNext} players lock`} in{' '}
-            <b className="tnum font-mono font-medium text-bulb">{countdown(nextT! - now, next.scheduledEt)}</b>.
+            <b className="tnum font-mono font-medium text-live">{countdown(nextT! - now, next.scheduledEt)}</b>.
           </>
         )}
       </p>
@@ -232,8 +232,8 @@ export function Gate2Page() {
       <fieldset className="m-0 mx-4 mt-[18px] flex flex-col gap-2 border-0 p-0">
         <legend className="sr-only">Acknowledgments</legend>
         {ACKS.map((a) => (
-          <label key={a.key} className={`flex cursor-pointer items-start gap-[14px] rounded-sm border bg-paper p-[14px] ${ticks[a.key] ? 'border-line' : 'border-rule'}`}>
-            <input type="checkbox" checked={ticks[a.key]} onChange={(e) => setTicks({ ...ticks, [a.key]: e.target.checked })} className="m-0 size-6 flex-none accent-line" />
+          <label key={a.key} className={`flex cursor-pointer items-start gap-[14px] rounded-sm border bg-paper p-[14px] ${ticks[a.key] ? 'border-accent' : 'border-rule'}`}>
+            <input type="checkbox" checked={ticks[a.key]} onChange={(e) => setTicks({ ...ticks, [a.key]: e.target.checked })} className="m-0 size-6 flex-none accent-accent" />
             <span className="flex flex-col gap-1">
               <span className="font-mono text-[13px] font-medium">{a.title}</span>
               <span className="text-[14px] leading-[1.5] text-muted">{a.text}</span>

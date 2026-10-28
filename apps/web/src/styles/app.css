@@ -20,6 +20,10 @@
   --color-ink: #141414;
   --color-slate: #1b232a;
   --color-slate-edge: #2c3a45;
+  /* App additions for theming: accents used as text or strokes, and the chrome behind the header and bars. */
+  --color-accent: #e6ff3d;
+  --color-live: #ffb81c;
+  --color-chrome: #0d0e0f;
 
   --font-mono: "DM Mono", ui-monospace, monospace;
   --font-sans: "IBM Plex Sans", system-ui, sans-serif;
@@ -27,10 +31,48 @@
   --radius-sm: 4px;
 }
 
+/*
+ * Light theme (PRD-007 §11): the landing page's :root[data-theme="light"]
+ * overrides (newsprint, paper, type, muted, rule, frame, pencil, primary
+ * button), plus what the app needs that the landing page doesn't:
+ * - lime and amber stay as fills, but as text they'd be unreadable on cream,
+ *   so accent text is a dark olive and live text a dark amber (both >= 4.5:1);
+ * - the header and bars are light (the landing page's header isn't graphite);
+ * - steel is darkened to keep greyed-out text at 4.5:1; slate panels are a
+ *   light cool gray.
+ */
+:root {
+  --btn-bg: var(--color-line);
+  --btn-fg: var(--color-ink);
+  --hold-hot-fg: #141414;
+}
+:root[data-theme="light"] {
+  color-scheme: light;
+  --color-newsprint: #f3f0e8;
+  --color-paper: #fbfaf6;
+  --color-type: #141414;
+  --color-muted: #5e5a52;
+  --color-rule: #bdb8ac;
+  --color-frame: #141414;
+  --color-pencil: #c8102e;
+  --color-steel: #646a6e;
+  --color-slate: #e8edf0;
+  --color-slate-edge: #b7c2ca;
+  --color-accent: #4f5e00;
+  --color-live: #8a5300;
+  --color-chrome: #fbfaf6;
+  --btn-bg: #141414;
+  --btn-fg: #e6ff3d;
+  --hold-hot-fg: #ffffff;
+}
+
 @layer base {
   html {
-    background: var(--color-graphite);
+    background: var(--color-chrome);
     color-scheme: dark;
+  }
+  html[data-theme="light"] {
+    color-scheme: light;
   }
   body {
     margin: 0;
@@ -40,7 +82,7 @@
     -webkit-font-smoothing: antialiased;
   }
   a {
-    color: var(--color-line);
+    color: var(--color-accent);
     text-underline-offset: 3px;
   }
   /* Links inside text are underlined, not just colored (WCAG 1.4.1). Buttons and nav set their own. */
@@ -51,7 +93,7 @@
     color: var(--color-type);
   }
   :focus-visible {
-    outline: 2px solid var(--color-line);
+    outline: 2px solid var(--color-accent);
     outline-offset: 2px;
   }
   button:disabled {
@@ -70,7 +112,7 @@
   letter-spacing: 1px;
 }
 
-/* Primary action: lime with ink text. */
+/* Primary action: lime with ink text (light theme: ink with lime text, as on the landing page). */
 @utility btn-primary {
   display: flex;
   align-items: center;
@@ -79,8 +121,8 @@
   padding: 0 18px;
   border: 0;
   border-radius: 4px;
-  background: var(--color-line);
-  color: var(--color-ink);
+  background: var(--btn-bg);
+  color: var(--btn-fg);
   font-family: var(--font-mono);
   font-size: 15px;
   font-weight: 500;

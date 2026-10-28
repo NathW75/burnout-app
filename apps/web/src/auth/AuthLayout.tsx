@@ -5,12 +5,12 @@ import { Page, Wordmark } from '../components/layout';
 export function AuthLayout({ title, intro, children, steps }: { title: string; intro?: ReactNode; children: ReactNode; steps?: ReactNode }) {
   return (
     <Page>
-      <header className="flex items-center justify-between border-b border-line bg-graphite px-4 py-[14px]">
+      <header className="flex items-center justify-between border-b border-accent bg-chrome px-4 py-[14px]">
         <Link to="/" className="no-underline" aria-label="Burnout League home">
           <Wordmark />
         </Link>
       </header>
-      <main className="flex flex-1 flex-col gap-5 px-4 pt-6 pb-10">
+      <main className="flex flex-1 flex-col gap-5 px-4 pt-6 pb-24">
         {steps}
         <div className="flex flex-col gap-2">
           <h1 className="m-0 font-mono text-[30px] leading-[1.1] font-medium tracking-[-0.5px]">{title}</h1>
@@ -31,8 +31,8 @@ export function SignupSteps({ current }: { current: 1 | 2 | 3 | 4 }) {
         const n = i + 1;
         return (
           <li key={s} aria-current={n === current ? 'step' : undefined} className="flex flex-col gap-[6px]">
-            <span className={`h-[3px] ${n <= current ? 'bg-line' : 'bg-rule'}`} />
-            <span className={`font-mono text-[10px] ${n === current ? 'text-line' : 'text-muted'}`}>
+            <span className={`h-[3px] ${n <= current ? 'bg-accent' : 'bg-rule'}`} />
+            <span className={`font-mono text-[10px] ${n === current ? 'text-accent' : 'text-muted'}`}>
               {String(n).padStart(2, '0')} {s}
               {n < current && <span className="sr-only"> (done)</span>}
             </span>

@@ -93,15 +93,15 @@ export function HoldButton({ label, onComplete, busy = false, now = () => perfor
       onContextMenu={(e) => e.preventDefault()}
       onClick={(e) => e.preventDefault()}
       className="relative size-[200px] cursor-pointer touch-none rounded-full border-0 bg-paper p-0 select-none"
-      style={{ color: hot ? '#141414' : '#EDEFEA', WebkitTouchCallout: 'none' }}
+      style={{ color: hot ? 'var(--hold-hot-fg)' : 'var(--color-type)', WebkitTouchCallout: 'none' }}
     >
       <span aria-hidden="true" data-testid="hold-fill" className="absolute inset-[19px] rounded-full bg-pencil" style={{ opacity: progress }} />
       <svg aria-hidden="true" width="200" height="200" viewBox="0 0 160 160" className="absolute inset-0 -rotate-90">
-        <circle cx="80" cy="80" r="70" fill="none" stroke="#33383C" strokeWidth="10" />
-        <circle data-testid="hold-ring" cx="80" cy="80" r="70" fill="none" stroke="#E6FF3D" strokeWidth="10" strokeDasharray={CIRCUMFERENCE} strokeDashoffset={CIRCUMFERENCE * (1 - progress)} />
+        <circle cx="80" cy="80" r="70" fill="none" stroke="var(--color-rule)" strokeWidth="10" />
+        <circle data-testid="hold-ring" cx="80" cy="80" r="70" fill="none" stroke="var(--color-accent)" strokeWidth="10" strokeDasharray={CIRCUMFERENCE} strokeDashoffset={CIRCUMFERENCE * (1 - progress)} />
       </svg>
       <span className="relative flex flex-col items-center gap-[6px]">
-        <FlameIcon width={30} height={30} stroke={hot ? '#141414' : '#E6FF3D'} />
+        <FlameIcon width={30} height={30} stroke={hot ? 'var(--hold-hot-fg)' : 'var(--color-accent)'} />
         <span className="font-mono text-[14px] font-medium tracking-[1px]">{text}</span>
       </span>
     </button>
