@@ -312,6 +312,7 @@ The app uses the **live landing page's design system** (burnoutfantasy.com), not
 **As built (v1.6):** dark stays the default, as on the landing page; Account → Appearance offers Dark, Light or Match device, remembered per browser (`bl:theme` in localStorage, not account data) and applied before first paint by `public/theme.js` (an external file, since the CSP allows no inline script).
 - Built on chalk `#EDEFEA` (the dark theme's type color) with cool neutrals rather than the landing page's warm cream (Nath, 2026-10-28): page `#EDEFEA`, cards and the header and bars `#F7F8F5`, rule `#BFC5C7`, muted `#52585B`, slate panels `#DEE5E9` / `#B3BFC6`.
 - Kept from the landing page: type `#141414`, frame `#141414`, pencil `#C8102E`, and the primary button in ink with lime text.
+- Brand marks (the header flame and the `///` section markers) are lime in dark and the darker red `#C8102E` in light (Nath, 2026-10-28).
 - App additions, because the app uses colors as text where the landing page doesn't: lime and amber stay as fills, but as text they'd be unreadable on a light page, so accent text is olive `#4F5E00` and live text dark amber `#8A5300`; steel is `#5F6569`. Every text color is at least 4.5:1 on every light surface, and axe passes in both themes.
 - Turnstile follows the theme; the browser's theme color follows it too.
 

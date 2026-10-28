@@ -106,7 +106,7 @@ export function BuilderPage() {
         </ol>
 
         <section className="mt-1 flex flex-col gap-2 rounded-sm border border-rule px-[14px] py-3">
-          <h2 className="m-0 font-mono text-[12px] font-medium tracking-[1px] text-muted"><span className="text-accent">///</span> HOW SLOTS WORK</h2>
+          <h2 className="m-0 font-mono text-[12px] font-medium tracking-[1px] text-muted"><span className="text-mark">///</span> HOW SLOTS WORK</h2>
           <p className="m-0 text-[13px] leading-[1.5]">
             Start him, lose him. A player in your lineup when his window locks is <b>burned</b> once his game goes Final. An empty slot scores 0 and burns nothing. <Link to="/help">The rules</Link>
           </p>

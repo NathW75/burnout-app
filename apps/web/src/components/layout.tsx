@@ -32,7 +32,7 @@ export function OfficialClock({ compact = false }: { compact?: boolean }) {
 export function Wordmark() {
   return (
     <span className="flex items-center gap-2 font-mono text-[13px] font-medium tracking-[1px] text-type">
-      <FlameIcon width={16} height={16} className="text-accent" />
+      <FlameIcon width={16} height={16} className="text-mark" />
       BURNOUT<span className="max-[379px]:hidden"> LEAGUE</span>
     </span>
   );
@@ -133,7 +133,7 @@ export function SectionTitle({ children, aside }: { children: ReactNode; aside?:
   return (
     <div className="flex items-baseline justify-between gap-3">
       <h2 className="m-0 font-mono text-[15px] font-medium tracking-[1px]">
-        <span className="text-accent">///</span> {children}
+        <span className="text-mark">///</span> {children}
       </h2>
       {aside}
     </div>

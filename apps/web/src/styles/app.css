@@ -24,6 +24,8 @@
   --color-accent: #e6ff3d;
   --color-live: #ffb81c;
   --color-chrome: #0d0e0f;
+  /* Brand marks: the header flame and the /// section markers. Lime in dark, the darker red in light. */
+  --color-mark: #e6ff3d;
 
   --font-mono: "DM Mono", ui-monospace, monospace;
   --font-sans: "IBM Plex Sans", system-ui, sans-serif;
@@ -60,6 +62,7 @@
   --color-accent: #4f5e00;
   --color-live: #8a5300;
   --color-chrome: #f7f8f5;
+  --color-mark: #c8102e;
   --btn-bg: #141414;
   --btn-fg: #e6ff3d;
   --hold-hot-fg: #ffffff;
