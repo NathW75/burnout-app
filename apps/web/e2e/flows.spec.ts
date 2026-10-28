@@ -208,7 +208,7 @@ test('after a lock and a burn: burned roster, inbox with read state, standings, 
   await noSeriousA11yIssues(page, 'reveal');
   // Notifications settings, and the email's unsubscribe link.
   await page.goto('/account/notifications');
-  await expect(page.getByRole('switch', { name: /Locks and burns/ })).toBeChecked();
+  await expect(page.getByRole('list', { name: 'Email notices' }).getByRole('switch', { name: /Locks and burns/ })).toBeChecked();
   await noSeriousA11yIssues(page, 'notifications');
   const unsub = /Unsubscribe from optional emails: (\S+)/.exec(mail.notices[0].text)![1];
   await page.goto(unsub.replace('http://localhost:4173', ''));

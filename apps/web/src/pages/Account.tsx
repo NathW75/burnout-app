@@ -123,12 +123,12 @@ function HandleRow({ handle }: { handle: string | null }) {
   const valid = /^[A-Za-z0-9_]{3,20}$/.test(value.trim());
   if (!editing) {
     return (
-      <div className="flex items-end justify-between gap-3">
-        <div className="flex flex-col gap-[2px]">
-          <dt className="font-mono text-[11px] text-muted">HANDLE (PUBLIC)</dt>
-          <dd className="m-0 text-[15px] font-semibold">{handle ?? '—'}</dd>
-        </div>
-        <button type="button" className="btn-outline px-3" onClick={() => (setValue(handle ?? ''), save.reset(), setEditing(true))}>CHANGE</button>
+      <div className="flex flex-col gap-[2px]">
+        <dt className="font-mono text-[11px] text-muted">HANDLE (PUBLIC)</dt>
+        <dd className="m-0 flex items-end justify-between gap-3">
+          <span className="text-[15px] font-semibold">{handle ?? '—'}</span>
+          <button type="button" className="btn-outline px-3" onClick={() => (setValue(handle ?? ''), save.reset(), setEditing(true))}>CHANGE</button>
+        </dd>
       </div>
     );
   }
