@@ -32,14 +32,13 @@
 }
 
 /*
- * Light theme (PRD-007 §11): the landing page's :root[data-theme="light"]
- * overrides (newsprint, paper, type, muted, rule, frame, pencil, primary
- * button), plus what the app needs that the landing page doesn't:
- * - lime and amber stay as fills, but as text they'd be unreadable on cream,
- *   so accent text is a dark olive and live text a dark amber (both >= 4.5:1);
- * - the header and bars are light (the landing page's header isn't graphite);
- * - steel is darkened to keep greyed-out text at 4.5:1; slate panels are a
- *   light cool gray.
+ * Light theme (PRD-007 §11): built on chalk #EDEFEA, the dark theme's own
+ * type color, with cool neutrals, so light reads as the same brand turned
+ * over rather than the landing page's warm cream (Nath, 2026-10-28). Kept
+ * from the landing page: type, frame and pencil, and the primary button in
+ * ink with lime text. App additions where the app uses color as text: lime
+ * and amber stay as fills, but accent text is olive and live text dark
+ * amber; steel is darkened. Every text color is >= 4.5:1 on every surface.
  */
 :root {
   --btn-bg: var(--color-line);
@@ -48,19 +47,19 @@
 }
 :root[data-theme="light"] {
   color-scheme: light;
-  --color-newsprint: #f3f0e8;
-  --color-paper: #fbfaf6;
+  --color-newsprint: #edefea;
+  --color-paper: #f7f8f5;
   --color-type: #141414;
-  --color-muted: #5e5a52;
-  --color-rule: #bdb8ac;
+  --color-muted: #52585b;
+  --color-rule: #bfc5c7;
   --color-frame: #141414;
   --color-pencil: #c8102e;
-  --color-steel: #646a6e;
-  --color-slate: #e8edf0;
-  --color-slate-edge: #b7c2ca;
+  --color-steel: #5f6569;
+  --color-slate: #dee5e9;
+  --color-slate-edge: #b3bfc6;
   --color-accent: #4f5e00;
   --color-live: #8a5300;
-  --color-chrome: #fbfaf6;
+  --color-chrome: #f7f8f5;
   --btn-bg: #141414;
   --btn-fg: #e6ff3d;
   --hold-hot-fg: #ffffff;

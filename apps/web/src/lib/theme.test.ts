@@ -16,7 +16,7 @@ describe('theme (PRD-007 §11)', () => {
     document.head.appendChild(meta);
     saveThemePref('light');
     expect(document.documentElement.getAttribute('data-theme')).toBe('light');
-    expect(meta.getAttribute('content')).toBe('#FBFAF6');
+    expect(meta.getAttribute('content')).toBe('#F7F8F5');
     expect(localStorage.getItem('bl:theme')).toBe('light');
     expect(readThemePref()).toBe('light');
     saveThemePref('dark');

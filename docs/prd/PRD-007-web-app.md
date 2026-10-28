@@ -310,8 +310,9 @@ The app uses the **live landing page's design system** (burnoutfantasy.com), not
 **Light theme:** the landing page defines one (`data-theme="light"`); the app adopts the same token overrides.
 
 **As built (v1.6):** dark stays the default, as on the landing page; Account → Appearance offers Dark, Light or Match device, remembered per browser (`bl:theme` in localStorage, not account data) and applied before first paint by `public/theme.js` (an external file, since the CSP allows no inline script).
-- From the landing page: newsprint `#F3F0E8`, paper `#FBFAF6`, type `#141414`, muted `#5E5A52`, rule `#BDB8AC`, frame `#141414`, pencil `#C8102E`, and the primary button in ink with lime text.
-- App additions, because the app uses colors as text where the landing page doesn't: lime and amber stay as fills, but as text they'd be unreadable on cream, so accent text is olive `#4F5E00` and live text dark amber `#8A5300`; steel is `#646A6E`; the header and bars are light (`#FBFAF6`); slate panels are `#E8EDF0` / `#B7C2CA`. Every text color is at least 4.5:1 on every light surface, and axe passes in both themes.
+- Built on chalk `#EDEFEA` (the dark theme's type color) with cool neutrals rather than the landing page's warm cream (Nath, 2026-10-28): page `#EDEFEA`, cards and the header and bars `#F7F8F5`, rule `#BFC5C7`, muted `#52585B`, slate panels `#DEE5E9` / `#B3BFC6`.
+- Kept from the landing page: type `#141414`, frame `#141414`, pencil `#C8102E`, and the primary button in ink with lime text.
+- App additions, because the app uses colors as text where the landing page doesn't: lime and amber stay as fills, but as text they'd be unreadable on a light page, so accent text is olive `#4F5E00` and live text dark amber `#8A5300`; steel is `#5F6569`. Every text color is at least 4.5:1 on every light surface, and axe passes in both themes.
 - Turnstile follows the theme; the browser's theme color follows it too.
 
 **Favicon (2026-10-28):** the flame in lime with a red offset echo on graphite (`public/favicon.svg`, from the project library).
@@ -389,7 +390,7 @@ Depends on: PRD-001, PRD-003, PRD-004 (Phase B), PRD-006, `SPEC-feedback-system.
 
 | Version | Date | Changes |
 |---------|------|---------|
-| 1.6 | 2026-10-28 | Patch (b) part 2 built: §6.7 account as built (handle change, password, replace authenticator and new backup codes behind step-up, sessions with revoke and sign out everywhere, receipts, appearance); §10 feedback button as built; §11 light theme as built (dark default, landing tokens plus text-safe accents) and the new favicon. Acceptance: account security checked off. |
+| 1.6 | 2026-10-28 | Patch (b) part 2 built: §6.7 account as built (handle change, password, replace authenticator and new backup codes behind step-up, sessions with revoke and sign out everywhere, receipts, appearance); §10 feedback button as built; §11 light theme as built (dark default; chalk-based cool neutrals instead of the landing page's cream; text-safe accents) and the new favicon. Acceptance: account security checked off. |
 | 1.5 | 2026-10-28 | Patch (b) part 1 built: §6.2.1 navigation (BOARD and BURNED tabs, inbox bell, Rules under Account); §6.4 burned roster grouped by week; §6.5 reveal week picker, burned state and live polling; §6.6 inbox names players, links each notice, NEW tag. §8.3: notices return player names; the inbox cursor includes the id. Acceptance: field board, reveal and inbox checked off. |
 | 1.4 | 2026-10-27 | §6.3: every open slot must be filled to submit (as the API already required), stale draft picks are flagged. §4, §12, §15: as built in web app patch (a). |
 | 1.3 | 2026-10-27 | §7: Gate 2 (CONTINUE lime and untappable until all three are ticked, then red with white text) and Gate 3 (red center fills 0→100% with the ring) as approved in the mockups. §8, §10: as built (response shapes, Turnstile fails closed, 30-second field cache with ETag, feedback limits and tagging). Corrected the PRD-006 decision reference to D3. Added to the repo. |

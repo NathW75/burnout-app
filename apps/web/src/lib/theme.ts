@@ -7,7 +7,7 @@ import { useEffect, useState } from 'react';
 
 export type ThemePref = 'dark' | 'light' | 'system';
 const KEY = 'bl:theme';
-const CHROME = { dark: '#0D0E0F', light: '#FBFAF6' } as const;
+const CHROME = { dark: '#0D0E0F', light: '#F7F8F5' } as const;
 
 export function readThemePref(): ThemePref {
   try {

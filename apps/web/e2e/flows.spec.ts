@@ -334,7 +334,7 @@ test('feedback from any signed-in screen; the light theme sticks across reloads 
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
   await page.reload();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
-  await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(243, 240, 232)');
+  await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(237, 239, 234)');
   await noSeriousA11yIssues(page, 'account (light)');
   await page.goto('/');
   await noSeriousA11yIssues(page, 'this week (light)');
