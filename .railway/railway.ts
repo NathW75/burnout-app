@@ -78,6 +78,9 @@ export default defineRailway((ctx, project) => {
       TURNSTILE_SECRET_KEY: secret('TURNSTILE_SECRET_KEY'), // PRD-007 §8.4: sign-up bot check
       // Invite-only sign-up (PRD-006 §6.10): on for staging testers; production decided before launch.
       SIGNUP_INVITE_ONLY: production ? 'off' : 'on',
+      // Web push (PRD-008 §9): the API hands browsers the public key to subscribe with.
+      NOTIFY_PUSH: production ? 'off' : 'on',
+      VAPID_PUBLIC_KEY: secret('VAPID_PUBLIC_KEY'),
     },
   });
 
@@ -100,6 +103,11 @@ export default defineRailway((ctx, project) => {
       NOTIFY_FROM: 'Burnout League <alerts@burnoutfantasy.com>',
       NOTIFY_GROUP_SECONDS: '120', // grouping window (PRD-008 §12.1): widen here if a busy Sunday sends too many
       API_PUBLIC_URL: apiOrigin,
+      // Web push (PRD-008 §9): on in staging; the key pair is a shared variable per environment.
+      NOTIFY_PUSH: production ? 'off' : 'on',
+      VAPID_PUBLIC_KEY: secret('VAPID_PUBLIC_KEY'),
+      VAPID_PRIVATE_KEY: secret('VAPID_PRIVATE_KEY'),
+      VAPID_SUBJECT: 'mailto:alerts@burnoutfantasy.com',
     },
   });
 

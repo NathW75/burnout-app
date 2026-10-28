@@ -72,6 +72,9 @@ export class Client {
   put(url: string, body: object = {}) {
     return this.prep(this.agent.put(url)).send(body);
   }
+  delete(url: string, body: object = {}) {
+    return this.prep(this.agent.delete(url)).send(body);
+  }
   del(url: string) {
     return this.prep(this.agent.delete(url));
   }

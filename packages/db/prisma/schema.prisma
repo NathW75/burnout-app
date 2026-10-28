@@ -55,6 +55,7 @@ model User {
   notificationPrefs   NotificationPreference[]
   invitesCreated      InviteCode[] @relation("InviteCreator")
   inviteUsed          InviteCode?  @relation("InviteUser")
+  pushSubscriptions   PushSubscription[]
 
   @@map("users")
 }
@@ -249,6 +250,12 @@ model NotificationQueue {
   dispatchNextAt    DateTime? @map("dispatch_next_at") @db.Timestamptz
   dispatchResult    String?   @map("dispatch_result") @db.VarChar(60)   // sent | skipped:<reason> | failed:<status>
   dispatchRef       String?   @map("dispatch_ref") @db.VarChar(120)
+  // PRD-008 Phase 2: push delivery, tracked apart from email
+  pushDispatchedAt  DateTime? @map("push_dispatched_at") @db.Timestamptz
+  pushClaimedAt     DateTime? @map("push_claimed_at") @db.Timestamptz
+  pushAttempts      Int       @default(0) @map("push_attempts") @db.SmallInt
+  pushNextAt        DateTime? @map("push_next_at") @db.Timestamptz
+  pushResult        String?   @map("push_result") @db.VarChar(60)
 
   @@index([dispatchedAt, createdAt], name: "idx_notification_queue_pending")
   @@index([userId, createdAt(sort: Desc)], name: "idx_notification_queue_user_created")
@@ -272,6 +279,23 @@ model InviteCode {
   user    User? @relation("InviteUser", fields: [usedBy], references: [id], onDelete: SetNull)
 
   @@map("invite_codes")
+}
+
+/// PRD-008 §9: one row per browser/device that allowed push.
+model PushSubscription {
+  id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  endpoint  String    @unique
+  p256dh    String    @db.VarChar(200)
+  auth      String    @db.VarChar(100)
+  userAgent String?   @map("user_agent") @db.VarChar(300)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  lastOkAt  DateTime? @map("last_ok_at") @db.Timestamptz
+  revokedAt DateTime? @map("revoked_at") @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("push_subscriptions")
 }
 
 /// PRD-008 §6: per-user notification choices. No row = the default.

@@ -13,6 +13,7 @@ import { listIdentities, setIdentity } from '../players/identity';
 import { getPool } from '../players/pool';
 import * as views from '../season/views';
 import * as invites from '../auth/invites';
+import * as devices from '../notify/devices';
 import * as notifyPrefs from '../notify/preferences';
 import { notifyStats } from '../notify/dispatcher';
 import { verifyUnsubscribeToken } from '../notify/unsubscribe';
@@ -194,11 +195,33 @@ export function buildRouter(ctx: ApiContext): Router {
   }));
 
   r.put('/me/notification-preferences', ah(async (req, res) => {
-    const b = body(z.object({
-      emailNotifications: z.enum(['on', 'off']).optional(),
-      email: z.object({ locks_burns: z.boolean(), lineup_changes: z.boolean(), receipts: z.boolean() }).partial().strict().optional(),
-    }).strict(), req);
+    const groups = z.object({ locks_burns: z.boolean(), lineup_changes: z.boolean(), receipts: z.boolean() }).partial().strict().optional();
+    const b = body(z.object({ emailNotifications: z.enum(['on', 'off']).optional(), email: groups, push: groups }).strict(), req);
     res.json(await notifyPrefs.setPreferences(ctx, session(req).userId, b));
+  }));
+
+  // ── web push (PRD-008 §9) ────────────────────────────────────────────────
+  // Public: whether push is on here, and the key browsers subscribe with.
+  r.get('/push/config', (_req, res) => {
+    res.set('Cache-Control', 'no-store').json({ enabled: !!ctx.config.vapidPublicKey, publicKey: ctx.config.vapidPublicKey });
+  });
+
+  const pushKey = z.string().regex(/^[A-Za-z0-9_-]+=*$/);
+  r.post('/me/push-subscriptions', ah(async (req, res) => {
+    const s = session(req);
+    if (!ctx.config.vapidPublicKey) throw new HttpError(409, 'PUSH_OFF', 'Push notifications are off here');
+    const b = body(z.object({
+      endpoint: z.string().url().max(1000),
+      keys: z.object({ p256dh: pushKey.min(80).max(200), auth: pushKey.min(16).max(100) }).strict(),
+    }).strict(), req);
+    await devices.saveSubscription(ctx, s.userId, b, req.get('user-agent'));
+    res.status(201).json({ subscribed: true, devices: await devices.countDevices(ctx, s.userId) });
+  }));
+
+  r.delete('/me/push-subscriptions', ah(async (req, res) => {
+    const s = session(req);
+    const b = body(z.object({ endpoint: z.string().url().max(1000) }).strict(), req);
+    res.json({ removed: await devices.removeSubscription(ctx, s.userId, b.endpoint), devices: await devices.countDevices(ctx, s.userId) });
   }));
 
   /**

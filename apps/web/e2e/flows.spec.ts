@@ -365,6 +365,36 @@ test('feedback from any signed-in screen; the light theme sticks across reloads 
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
 });
 
+test('push (PRD-008 §9): the service worker registers, the manifest loads, and the push section passes axe in both themes', async ({ page }) => {
+  await signUp(page);
+  await page.goto('/account/notifications');
+  await expect(page.getByRole('heading', { name: 'Email and push' })).toBeVisible();
+  // Headless Chromium blocks notifications by default: the page says how to allow them, with no button.
+  await expect(page.getByText(/Notifications are blocked for this site/)).toBeVisible();
+  await expect(page.getByRole('button', { name: 'TURN ON FOR THIS DEVICE' })).toHaveCount(0);
+  // Headless Chromium can't be granted notifications; report "not asked yet" to check the ready state.
+  await page.addInitScript(() => Object.defineProperty(Notification, 'permission', { get: () => 'default' }));
+  await page.reload();
+  await expect(page.getByRole('button', { name: 'TURN ON FOR THIS DEVICE' })).toBeVisible();
+  await expect(page.getByRole('list', { name: 'Push notices' }).getByRole('switch')).toHaveCount(3);
+  const sw = await page.evaluate(async () => {
+    const reg = await navigator.serviceWorker.ready;
+    return reg.active?.scriptURL ?? null;
+  });
+  expect(sw).toMatch(/\/sw\.js$/);
+  const manifest = await page.evaluate(async () => (await fetch('/manifest.webmanifest')).json());
+  expect(manifest).toMatchObject({ name: 'Burnout League', display: 'standalone', start_url: '/' });
+  for (const icon of ['/icon-192.png', '/icon-512.png', '/apple-touch-icon.png', '/badge-96.png']) {
+    expect((await page.request.get(icon)).headers()['content-type']).toBe('image/png');
+  }
+  await noSeriousA11yIssues(page, 'notifications (dark)');
+  await page.evaluate(() => localStorage.setItem('bl:theme', 'light'));
+  await page.reload();
+  await expect(page.getByRole('list', { name: 'Push notices' })).toBeVisible();
+  await noSeriousA11yIssues(page, 'notifications (light)');
+  await page.evaluate(() => localStorage.removeItem('bl:theme'));
+});
+
 test('a window that locks during Gate 2 is rejected at Gate 3 and the user is sent back with the reason (runs last)', async ({ page }) => {
   await signUp(page);
   await fillLineup(page);

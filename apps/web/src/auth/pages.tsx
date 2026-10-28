@@ -8,6 +8,7 @@ import type { LoginResponse } from '../api/types';
 import { ErrorNote, Notice, useScreen } from '../components/layout';
 import { Turnstile, TURNSTILE_SITE_KEY, type TurnstileHandle } from '../components/Turnstile';
 import { errorText } from '../lib/errors';
+import { forgetPushOnSignOut } from '../lib/push';
 import { AuthLayout, SignupSteps, SubmitButton, TextField } from './AuthLayout';
 import { safeNext } from './guards';
 
@@ -149,7 +150,10 @@ export function SignOutLink() {
   const qc = useQueryClient();
   const navigate = useNavigate();
   const out = useMutation({
-    mutationFn: () => api('/auth/logout', { method: 'POST' }),
+    mutationFn: async () => {
+      await forgetPushOnSignOut();
+      return api('/auth/logout', { method: 'POST' });
+    },
     onSettled: () => {
       qc.clear();
       navigate('/login', { replace: true });

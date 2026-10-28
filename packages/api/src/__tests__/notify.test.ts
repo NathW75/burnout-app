@@ -131,7 +131,7 @@ describeDbRedis('PRD-008 email notifications (Postgres + Redis)', () => {
   it('preferences: defaults on; turning a group off skips it; "nothing optional" skips all but required mail; the API validates', async () => {
     const amy = await account(w);
     const get = await amy.client.get('/v1/me/notification-preferences');
-    expect(get.body).toEqual({ emailNotifications: 'on', email: { locks_burns: true, lineup_changes: true, receipts: true } });
+    expect(get.body).toEqual({ emailNotifications: 'on', email: { locks_burns: true, lineup_changes: true, receipts: true }, push: { locks_burns: true, lineup_changes: true, receipts: true } });
     const put = await amy.client.put('/v1/me/notification-preferences', { email: { locks_burns: false } });
     expect(put.body.email).toEqual({ locks_burns: false, lineup_changes: true, receipts: true });
 

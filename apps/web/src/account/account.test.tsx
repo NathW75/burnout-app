@@ -193,7 +193,7 @@ describe('feedback (§10)', () => {
 });
 
 describe('email notices (PRD-008 §6)', () => {
-  const prefs = (over: object = {}) => ({ emailNotifications: 'on', email: { locks_burns: true, lineup_changes: true, receipts: true }, ...over });
+  const prefs = (over: object = {}) => ({ emailNotifications: 'on', email: { locks_burns: true, lineup_changes: true, receipts: true }, push: { locks_burns: true, lineup_changes: true, receipts: true }, ...over });
 
   it('shows the three groups; a switch saves just that group; "nothing optional" turns the rest off', async () => {
     let state = prefs();
@@ -229,5 +229,124 @@ describe('email notices (PRD-008 §6)', () => {
     await user.click(screen.getByRole('button', { name: 'UNSUBSCRIBE' }));
     expect(await screen.findByRole('heading', { name: 'You’re unsubscribed' })).toBeInTheDocument();
     expect(calls[0]).toMatchObject({ method: 'POST', path: '/notifications/unsubscribe' });
+  });
+});
+
+describe('push on this device (PRD-008 §9)', () => {
+  const KEY = 'BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjBJuBkr3qBUYIHBQFLXYp5Nksh8U';
+  const ENDPOINT = 'https://fcm.googleapis.com/fcm/send/dev1';
+  const state = () => ({ emailNotifications: 'on', email: { locks_burns: true, lineup_changes: true, receipts: true }, push: { locks_burns: true, lineup_changes: true, receipts: true } });
+  const defined: Array<[object, string]> = [];
+  const define = (o: object, k: string, value: unknown) => {
+    Object.defineProperty(o, k, { value, configurable: true, writable: true });
+    defined.push([o, k]);
+  };
+  afterEach(() => {
+    for (const [o, k] of defined.splice(0)) delete (o as Record<string, unknown>)[k];
+  });
+
+  /** A browser with push: a service worker registration, a push manager and the permission prompt. */
+  function browser({ permission = 'default', answer = 'granted' }: { permission?: NotificationPermission; answer?: NotificationPermission } = {}) {
+    let sub: { endpoint: string; options: { applicationServerKey: ArrayBuffer }; toJSON: () => object; unsubscribe: () => Promise<boolean> } | null = null;
+    const pushManager = {
+      getSubscription: vi.fn(async () => sub),
+      subscribe: vi.fn(async (o: { applicationServerKey: Uint8Array }) => {
+        sub = {
+          endpoint: ENDPOINT,
+          options: { applicationServerKey: o.applicationServerKey.buffer as ArrayBuffer },
+          toJSON: () => ({ endpoint: ENDPOINT, expirationTime: null, keys: { p256dh: 'P256', auth: 'AUTH' } }),
+          unsubscribe: vi.fn(async () => { sub = null; return true; }),
+        };
+        return sub;
+      }),
+    };
+    const reg = { pushManager };
+    define(navigator, 'serviceWorker', { getRegistration: async () => reg, register: async () => reg, ready: Promise.resolve(reg) });
+    vi.stubGlobal('PushManager', function PushManager() {});
+    const N = { permission, requestPermission: vi.fn(async () => { N.permission = answer; return answer; }) };
+    vi.stubGlobal('Notification', N);
+    return { pushManager, N };
+  }
+  const api = (over: Record<string, Reply> = {}) => {
+    let st = state();
+    return mockApi({
+      'GET /me/notification-preferences': () => ({ body: st }),
+      'PUT /me/notification-preferences': (init) => {
+        const b = JSON.parse(String(init!.body));
+        st = { ...st, push: { ...st.push, ...(b.push ?? {}) } };
+        return { body: st };
+      },
+      'GET /push/config': { body: { enabled: true, publicKey: KEY } },
+      'POST /me/push-subscriptions': { status: 201, body: { subscribed: true, devices: 1 } },
+      'DELETE /me/push-subscriptions': { body: { removed: true, devices: 0 } },
+      ...over,
+    });
+  };
+
+  it('hidden where push is off', async () => {
+    browser();
+    api({ 'GET /push/config': { body: { enabled: false, publicKey: null } } });
+    renderAt('/account/notifications', <NotificationsPage />);
+    await screen.findByRole('list', { name: 'Email notices' });
+    await new Promise((r) => setTimeout(r, 20));
+    expect(screen.queryByRole('list', { name: 'Push notices' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /THIS DEVICE/ })).not.toBeInTheDocument();
+  });
+
+  it('asks permission only on the tap, saves the subscription, and turns off again', async () => {
+    const { pushManager, N } = browser();
+    const calls = api();
+    renderAt('/account/notifications', <NotificationsPage />);
+    const user = userEvent.setup();
+    const on = await screen.findByRole('button', { name: 'TURN ON FOR THIS DEVICE' });
+    expect(N.requestPermission).not.toHaveBeenCalled();
+    await user.click(on);
+    await screen.findByRole('button', { name: 'TURN OFF ON THIS DEVICE' });
+    expect(N.requestPermission).toHaveBeenCalledTimes(1);
+    expect(pushManager.subscribe).toHaveBeenCalledWith(expect.objectContaining({ userVisibleOnly: true }));
+    expect(calls.find((c) => c.method === 'POST')).toMatchObject({ path: '/me/push-subscriptions', body: { endpoint: ENDPOINT, keys: { p256dh: 'P256', auth: 'AUTH' } } });
+    expect(screen.getByText('Push is on for this device.')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'TURN OFF ON THIS DEVICE' }));
+    await screen.findByRole('button', { name: 'TURN ON FOR THIS DEVICE' });
+    expect(calls.find((c) => c.method === 'DELETE')).toMatchObject({ path: '/me/push-subscriptions', body: { endpoint: ENDPOINT } });
+  });
+
+  it('push switches save under push, apart from email', async () => {
+    browser();
+    const calls = api();
+    renderAt('/account/notifications', <NotificationsPage />);
+    const user = userEvent.setup();
+    const list = await screen.findByRole('list', { name: 'Push notices' });
+    await user.click(within(list).getByRole('switch', { name: /Lineup receipts/ }));
+    await waitFor(() => expect(within(list).getByRole('switch', { name: /Lineup receipts/ })).not.toBeChecked());
+    expect(calls.find((c) => c.method === 'PUT')?.body).toEqual({ push: { receipts: false } });
+    expect(within(screen.getByRole('list', { name: 'Email notices' })).getByRole('switch', { name: /Lineup receipts/ })).toBeChecked();
+  });
+
+  it('saying no explains how to try again; a blocked site says where to allow it', async () => {
+    browser({ answer: 'default' });
+    api();
+    renderAt('/account/notifications', <NotificationsPage />);
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole('button', { name: 'TURN ON FOR THIS DEVICE' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('You didn’t allow notifications.');
+  });
+
+  it('blocked: no button, just how to allow it', async () => {
+    browser({ permission: 'denied' });
+    api();
+    renderAt('/account/notifications', <NotificationsPage />);
+    expect(await screen.findByText(/Notifications are blocked for this site/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /THIS DEVICE/ })).not.toBeInTheDocument();
+  });
+
+  it('iPhone in Safari: explains Add to Home Screen instead of a button', async () => {
+    define(navigator, 'userAgent', 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Version/18.0 Mobile/15E148 Safari/604.1');
+    api();
+    renderAt('/account/notifications', <NotificationsPage />);
+    expect(await screen.findByText(/push works from the Home Screen app/)).toBeInTheDocument();
+    expect(screen.getByText('Add to Home Screen')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /THIS DEVICE/ })).not.toBeInTheDocument();
   });
 });

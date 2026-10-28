@@ -1,6 +1,6 @@
 # PRD-008 — Notification Delivery (email, then push)
 **Burnout League · packages/api (worker) + apps/web**
-*Status: v1.2 — **APPROVED 2026-10-28** (Nath), Q1–Q5 as recommended · Phase 1 (email) built 2026-10-28*
+*Status: v1.3 — **APPROVED 2026-10-28** (Nath), Q1–Q5 as recommended · Phase 1 (email) built and live 2026-10-28 · Phase 2 (push) built 2026-10-28, ships after the Week 8 games*
 *Author: Build thread*
 
 ---
@@ -80,13 +80,17 @@ New columns on `notification_queue`: `dispatch_claimed_at`, `dispatch_attempts`,
 - Each run logs one JSON line: claimed, sent, skipped by reason, failed.
 - `GET /v1/admin/notifications/stats` (admin + step-up): last 24 hours by kind and result, oldest pending age. An oldest-pending age over 10 minutes is logged as an error, so a stalled sender is visible in Railway's logs.
 
-## 9. Phase 2 — web push (outline, its own approval)
+## 9. Phase 2 — web push (as built)
 
-- VAPID key pair in Railway env (`VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`); the public key also goes in the web build as a non-secret.
-- `push_subscriptions (id, user_id, endpoint, p256dh, auth, user_agent, created_at, last_ok_at, revoked_at)`; `POST/DELETE /v1/me/push-subscriptions`.
-- `apps/web`: `sw.js` (shows the notification, opens the linked screen on tap), `manifest.webmanifest`, the CSP gains `worker-src 'self'`; Account → Notifications gets an "Allow on this device" button (the browser's permission prompt only on that tap, never on page load).
-- The dispatcher fans out to push with the same grouping and preferences; a `410 Gone` from the push service revokes that subscription.
-- iPhone: works only from the home-screen app; the app shows a one-time "Add to Home Screen for alerts" hint on iOS Safari.
+**Decided 2026-10-28 (Nath):** push gets everything email gets, with the same three groups and defaults; built now, shipped after the Week 8 games.
+
+- **Keys.** One VAPID key pair per environment, in Railway shared variables only (`VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`; `VAPID_SUBJECT` = `mailto:alerts@burnoutfantasy.com`). Push runs only when `NOTIFY_PUSH=on` and both keys are set (staging on, production off). The web build carries no key: the app asks `GET /v1/push/config` (public: `{ enabled, publicKey }`).
+- **Devices.** `push_subscriptions (id, user_id, endpoint UNIQUE, p256dh, auth, user_agent, created_at, last_ok_at, revoked_at)`. `POST /v1/me/push-subscriptions { endpoint, keys: { p256dh, auth } }` saves this browser (a browser that changes accounts moves to the new one; turning it back on revives it); `DELETE` with `{ endpoint }` turns it off (owner only). Endpoints must be https on a known push service (Google FCM, Mozilla, Apple, Windows), with no port or credentials; the sender re-checks before every post, so the server never posts to an arbitrary URL.
+- **Sending.** A second worker job `push` on the same 30-second loop, after email. Same claim, grouping, too-late, retry and stall rules as email (§7), tracked in its own columns (`push_dispatched_at`, `push_claimed_at`, `push_attempts`, `push_next_at`, `push_result`), so email and push never wait on each other. One message per batch to every device: title = the top notice's subject (+N more), body = its first lines, a link to the same screen as the email, a tag unique to the batch (a later push never hides an earlier one). TTL 6 hours, high urgency. A 404/410 from the push service removes that device; if any device took it, it's sent; if every device is gone, `skipped:no_device`; anything else retries. No device at all: `skipped:no_device`, never retried (a device added later gets only new notices).
+- **Preferences.** `{ push: { locks_burns, lineup_changes, receipts } }` beside `email` in `GET/PUT /v1/me/notification-preferences`; they apply to every device. "Email me nothing optional" and the email unsubscribe link don't turn push off.
+- **Signing out.** Signing out on a device turns push off for it first (never blocking the sign-out). Signing out everywhere, a password reset or a suspension turns it off on every device.
+- **App.** `sw.js` shows the notification and, on tap, focuses the app and opens the linked screen (only ever a path on the app's own origin); it caches nothing. `manifest.webmanifest`, icons rendered from the favicon (192, 512, Apple 180, a one-colour Android badge). CSP gains `worker-src 'self'` and `manifest-src 'self'`; `/sw.js` is served `no-cache`. Account → Notifications gets a PUSH section, hidden where push is off: "Turn on for this device" (the permission prompt only on that tap), "Turn off on this device", the three push switches, and plain notes for blocked notifications, browsers without push, and iPhone/iPad in Safari ("Share → Add to Home Screen", iOS 16.4+).
+- **Stats.** The admin stats add push results by kind and the count of active devices.
 
 ## 10. Testing
 
@@ -104,6 +108,8 @@ New columns on `notification_queue`: `dispatch_claimed_at`, `dispatch_attempts`,
 - [ ] Turning a group off stops those emails; one-click unsubscribe stops all optional email; required transactional mail still arrives.
 - [ ] Two worker replicas never send the same notice twice; a SendGrid outage retries and then gives up visibly.
 - [ ] Emails contain no tracking, no other manager's picks, no sign-in links, no player images.
+- [ ] Push: with `NOTIFY_PUSH=on`, a device that turned push on gets each notice its push switches allow, as one notification per batch, within the same times as email; tapping it opens the linked screen.
+- [ ] Push: a device the push service reports gone is removed; signing out on a device, or everywhere, stops its push.
 
 ## 12. Open questions
 
@@ -128,7 +134,7 @@ Q1–Q5 approved as recommended. Nath's notes, **not for Phase 1**:
 1. Approve this PRD (Q1–Q5).
 2. Phase 1 patch: migration, dispatcher, templates, preferences API, unsubscribe, Account → Notifications, tests. Target: ready Thursday morning.
 3. Railway: `NOTIFY_EMAIL=on` and `NOTIFY_FROM` in staging; SendGrid domain authentication (user).
-4. Phase 2 (push) as its own patch after the Week 8 games.
+4. Phase 2 (push) as its own patch after the Week 8 games (built 2026-10-28; Railway: VAPID pair in shared variables, `NOTIFY_PUSH=on` in staging).
 
 Depends on: PRD-001 (lock/burn notices), PRD-006 (worker, auth, CSRF), PRD-007 (inbox links, Account), SendGrid domain authentication.
 
@@ -138,6 +144,7 @@ Depends on: PRD-001 (lock/burn notices), PRD-006 (worker, auth, CSRF), PRD-007 (
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.3 | 2026-10-28 | Phase 2 built (§9 rewritten as built): push gets what email gets; device subscriptions with a push-service allowlist; `push` worker job with its own delivery columns; push switches; sign-out stops push; service worker, manifest, icons, CSP; Account → Notifications PUSH section with iPhone Home Screen guidance. Railway: `NOTIFY_PUSH`, `VAPID_*`. |
 | 1.2 | 2026-10-28 | Phase 1 built: dispatcher (`notify` job, 30 s), templates, preferences by group, one-click unsubscribe and confirm page, Account → Notifications, admin stats, Railway settings (`NOTIFY_EMAIL`, `NOTIFY_FROM`, `NOTIFY_GROUP_SECONDS`, `API_PUBLIC_URL`). |
 | 1.1 | 2026-10-28 | Approved with Q1–Q5 as recommended. §12.1: notes for later (user time zones, grouping window as a setting, finer opt-outs). |
 | 1.0 | 2026-10-28 | First draft. |

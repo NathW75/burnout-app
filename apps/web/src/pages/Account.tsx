@@ -10,6 +10,7 @@ import { qk, useMe } from '../api/hooks';
 import { SubmitButton, TextField } from '../auth/AuthLayout';
 import { ErrorNote, SectionTitle, TabPage, useScreen } from '../components/layout';
 import { errorText } from '../lib/errors';
+import { forgetPushOnSignOut } from '../lib/push';
 import { useThemePref, type ThemePref } from '../lib/theme';
 
 export function AccountPage() {
@@ -21,7 +22,7 @@ export function AccountPage() {
     qc.clear();
     navigate('/login', { replace: true });
   };
-  const out = useMutation({ mutationFn: () => api('/auth/logout', { method: 'POST' }), onSettled: done });
+  const out = useMutation({ mutationFn: async () => { await forgetPushOnSignOut(); return api('/auth/logout', { method: 'POST' }); }, onSettled: done });
   return (
     <TabPage>
       <section className="flex flex-col gap-2 px-4 pt-[22px]">

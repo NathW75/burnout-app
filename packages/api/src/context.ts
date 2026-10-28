@@ -42,6 +42,8 @@ export interface ApiConfig {
   turnstileSecret: string | null;
   /** Sign-up needs a single-use invite code (PRD-006 §6.10). SIGNUP_INVITE_ONLY=on. */
   signupInviteOnly: boolean;
+  /** Web push public key (PRD-008 §9); null = push is off (NOTIFY_PUSH isn't on). */
+  vapidPublicKey: string | null;
 }
 
 export const DEFAULT_API_CONFIG: ApiConfig = {
@@ -66,6 +68,7 @@ export const DEFAULT_API_CONFIG: ApiConfig = {
   currentSeason: '2026-2027-regular',
   turnstileSecret: null,
   signupInviteOnly: false,
+  vapidPublicKey: null,
 };
 
 export type Log = (level: 'info' | 'warn' | 'error', message: string, meta?: object) => void;

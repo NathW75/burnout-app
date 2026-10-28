@@ -49,6 +49,8 @@ in the repo, in chat or in project docs.
 | `SENDGRID_API_KEY` | both | SendGrid key. Unset means emails aren't sent; a warning is logged. |
 | `TURNSTILE_SECRET_KEY` | api | Cloudflare Turnstile **secret key** for the sign-up widget (Cloudflare → Turnstile → the `burnoutfantasy.com` widget). Unset means sign-up has no bot check; a warning is logged. |
 | `ANTHROPIC_API_KEY` | worker | Optional. Tags feedback (PRD-007 §10). Empty means feedback is stored untagged. |
+| `VAPID_PUBLIC_KEY` | both | Web push key pair, public half (PRD-008 §9). Not secret, but kept beside its private half so the pair can't drift. |
+| `VAPID_PRIVATE_KEY` | worker | Web push key pair, private half. Unset (or the public half unset) means push is off; a warning is logged. |
 
 Generate a random value in cmd (once per variable, per environment):
 
@@ -75,6 +77,22 @@ change to them, run `railway config plan` and `railway config apply`. They use
 the existing `SENDGRID_API_KEY`. In SendGrid, authenticate the
 `burnoutfantasy.com` domain (Settings → Sender Authentication) or notices land
 in spam.
+
+**Push notifications (PRD-008 §9).** The worker also sends each notice as a
+web push to every device that turned push on, when `NOTIFY_PUSH=on` (staging:
+on; production: off) and the VAPID key pair is set. Make one pair per
+environment on your own machine:
+
+```
+npx web-push generate-vapid-keys
+```
+
+Put the two values in that environment's Shared Variables as
+`VAPID_PUBLIC_KEY` and `VAPID_PRIVATE_KEY`, then run `railway config plan` and
+`railway config apply`. Never paste the private key anywhere else. Changing the
+pair later signs every device out of push; people turn it back on in Account →
+Notifications. Phones: Android Chrome works from the browser; iPhone and iPad
+need the app added to the Home Screen first (iOS 16.4 or later).
 
 `DATABASE_URL` and `REDIS_URL` are references to the Postgres and Redis
 services, and the rest (`CURRENT_SEASON`, `APP_BASE_URL`, `CORS_ORIGINS`,

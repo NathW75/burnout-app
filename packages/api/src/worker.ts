@@ -5,6 +5,7 @@ import { createContext } from './app';
 import { anthropicClassifier } from './feedback/service';
 import { createJobs, dueJobs, msfFetcher } from './jobs';
 import { DEFAULT_NOTIFY_CONFIG, type NotifyConfig } from './notify/dispatcher';
+import { webPushSender, type PushSender } from './notify/push';
 import { createRuntime, jsonLog, requireEnv } from './runtime';
 
 async function main() {
@@ -27,10 +28,17 @@ async function main() {
           apiBaseUrl: process.env.API_PUBLIC_URL ?? DEFAULT_NOTIFY_CONFIG.apiBaseUrl,
         }
       : undefined;
+  // Web push (PRD-008 §9): needs NOTIFY_PUSH=on and the VAPID keys.
+  const vapid = { publicKey: process.env.VAPID_PUBLIC_KEY ?? '', privateKey: process.env.VAPID_PRIVATE_KEY ?? '', subject: process.env.VAPID_SUBJECT || 'mailto:alerts@burnoutfantasy.com' };
+  const pushOn = process.env.NOTIFY_PUSH === 'on' && !!vapid.publicKey && !!vapid.privateKey;
+  if (process.env.NOTIFY_PUSH === 'on' && !pushOn) jsonLog('warn', 'NOTIFY_PUSH is on but VAPID_PUBLIC_KEY or VAPID_PRIVATE_KEY is missing: push is off');
+  const push: { config: NotifyConfig; sender: PushSender } | undefined = pushOn
+    ? { config: { ...DEFAULT_NOTIFY_CONFIG, groupSeconds: Number(process.env.NOTIFY_GROUP_SECONDS ?? DEFAULT_NOTIFY_CONFIG.groupSeconds) }, sender: webPushSender(vapid) }
+    : undefined;
   if (!notify) jsonLog('warn', 'NOTIFY_EMAIL is not on: notices stay in the in-app inbox only');
   if (notify && !process.env.SENDGRID_API_KEY) jsonLog('warn', 'NOTIFY_EMAIL is on but SENDGRID_API_KEY is not set: notice emails are only recorded in memory');
   const jobs = createJobs({
-    db: rt.db, redis: rt.redis, payments: rt.payments, season, now: () => new Date(), log: jsonLog, apiContext, classifier, notify,
+    db: rt.db, redis: rt.redis, payments: rt.payments, season, now: () => new Date(), log: jsonLog, apiContext, classifier, notify, push,
     msf: msfFetcher(process.env.MSF_BASE_URL ?? 'https://api.mysportsfeeds.com/v2.1/pull/nfl', requireEnv('MSF_API_KEY')),
   });
 
@@ -65,15 +73,18 @@ async function main() {
       void jobs.run('feedback').finally(() => { tagging = false; });
     }, 15_000);
   }
-  if (notify) {
+  if (notify || push) {
     let sending = false;
     setInterval(() => {
       if (sending) return;
       sending = true;
-      void jobs.run('notify').finally(() => { sending = false; });
+      void (async () => {
+        if (notify) await jobs.run('notify');
+        if (push) await jobs.run('push'); // each channel tracks its own delivery
+      })().finally(() => { sending = false; });
     }, 30_000);
   }
-  jsonLog('info', 'worker started', { season, firstTickInMs: startIn, feedbackTagging: !!classifier, notifyEmail: !!notify, notifyGroupSeconds: notify?.groupSeconds ?? null });
+  jsonLog('info', 'worker started', { season, firstTickInMs: startIn, feedbackTagging: !!classifier, notifyEmail: !!notify, notifyPush: !!push, notifyGroupSeconds: notify?.groupSeconds ?? null });
 }
 
 main().catch((err) => {

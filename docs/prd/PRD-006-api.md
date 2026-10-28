@@ -1,6 +1,6 @@
 # PRD-006 — API, Accounts and Lineup Submission
 **Burnout League · packages/api**
-Version 1.11 · 2026-10-28
+Version 1.12 · 2026-10-28
 Status: APPROVED 2026-10-27 — scope and auth decisions locked by Nath (§3); rules calls Q1, Q2, Q4 resolved in v1.1
 
 ---
@@ -401,8 +401,11 @@ The user can recompute it from their email.
 | `GET /v1/me/burns?season=` | Every burned player: week, slot, name, position, team, points, window, burned time |
 | `GET /v1/me/notifications?before&limit` | Inbox, newest first, with `unread`, `players` (`{ [playerId]: { name, position, team } }` for players the notices name) and `nextBefore` (an opaque time-and-id cursor; a bare timestamp is also accepted) |
 | `POST /v1/me/notifications/read` | `{ ids }` or `{ all: true }`; my items only. Read state (`read_at`) is separate from delivery (`dispatched_at`) |
-| `GET /v1/me/notification-preferences` | PRD-008 §6: `{ emailNotifications, email: { locks_burns, lineup_changes, receipts } }` (emailNotifications is on or off); no stored choice = the default (on) |
-| `PUT /v1/me/notification-preferences` | Any of `emailNotifications` and `email.{group}`; groups are stored per kind |
+| `GET /v1/me/notification-preferences` | PRD-008 §6, §9: `{ emailNotifications, email: { locks_burns, lineup_changes, receipts }, push: { …same groups } }` (emailNotifications is on or off and doesn't affect push); no stored choice = the default (on) |
+| `PUT /v1/me/notification-preferences` | Any of `emailNotifications`, `email.{group}` and `push.{group}`; groups are stored per kind and channel |
+| `GET /v1/push/config` | Public. PRD-008 §9: `{ enabled, publicKey }`; enabled only when `NOTIFY_PUSH=on` and the VAPID key is set |
+| `POST /v1/me/push-subscriptions` | `{ endpoint, keys: { p256dh, auth } }` → 201 `{ subscribed, devices }`. Endpoint must be https on a known push service (400 `PUSH_ENDPOINT_NOT_ALLOWED`); 409 `PUSH_OFF` when push is off. Upsert by endpoint: a browser that changes accounts moves |
+| `DELETE /v1/me/push-subscriptions` | `{ endpoint }` → `{ removed, devices }`; only the owner's device. Signing out everywhere (logout-all, password reset, suspension) also turns off every device |
 | `POST /v1/notifications/unsubscribe?token=` | Public, no session (RFC 8058 one-click; mail providers post a form body). The signed token's only power is turning optional email off. 400 `TOKEN_INVALID` for a bad token; 30/min per IP |
 | `GET /v1/admin/notifications/stats` | Admin + step-up: last 24 hours by kind and result, oldest pending notice |
 | `GET /v1/auth/signup-config` | Public: `{ inviteOnly }` (§6.10) |
@@ -640,6 +643,7 @@ Every critical rule also gets a mutation check, as with PRD-001 to PRD-004.
 |---------|------|---------|
 | 1.7 | 2026-10-28 | §7.5: one person, one player. Duplicate MSF IDs for the same person become aliases of one kept ID; aliases can't be picked (DB-enforced); burns and stats follow the person; admin review and override. Roster sync also runs at worker startup. |
 | 1.8 | 2026-10-28 | §11: scoring works newest week first, retries a refused MSF read once, and skips only the week whose feed stays refused. |
+| 1.12 | 2026-10-28 | PRD-008 Phase 2: push config, device subscriptions, push preference groups; signing out everywhere revokes push devices; the `push` worker job; `push_subscriptions` and `notification_queue` push columns. |
 | 1.11 | 2026-10-28 | §6.10: invite-only sign-up (per-person single-use codes, optional email lock, expiry and revoke), `invite_codes`, `SIGNUP_INVITE_ONLY`. |
 | 1.10 | 2026-10-28 | PRD-008 Phase 1: notification preferences, one-click unsubscribe, admin stats; the `notify` worker job; `notification_queue` dispatch columns, `notification_preferences`, `users.email_notifications`. |
 | 1.9 | 2026-10-28 | §10.2.1: notices return the named players' names; the inbox cursor includes the id so notices sharing a timestamp never drop at a page edge; reveal `LOCKED` slots say whether the player has burned. |

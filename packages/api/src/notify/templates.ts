@@ -228,3 +228,32 @@ ${s.link ? `<div style="margin-top:14px;"><a href="${esc(url(s.link.path))}" sty
 
   return { subject, text, html };
 }
+
+export interface PushMessage {
+  title: string;
+  body: string;
+  /** Path in the app to open on tap. */
+  url: string;
+  /** Collapses a newer message over an older one for the same kind of news. */
+  tag: string;
+}
+
+/** One short notification for one user's batch (PRD-008 §9). null when none of the notices can be shown. */
+export function renderPush(notices: QueuedNotice[], lookup: Lookup, appBaseUrl: string): PushMessage | null {
+  const sections = notices
+    .map((n, i) => ({ s: section(n, lookup), i, kind: n.kind, id: n.id }))
+    .filter((x): x is { s: Section; i: number; kind: string; id: string } => x.s !== null)
+    .sort((a, b) => a.s.priority - b.s.priority || a.i - b.i);
+  if (!sections.length) return null;
+  const top = sections[0];
+  const extra = sections.length - 1;
+  const body = top.s.lines.slice(0, 3).join(' ').replace(/\s+/g, ' ').trim();
+  const clip = (t: string, n: number) => (t.length > n ? `${t.slice(0, n - 1)}…` : t);
+  return {
+    title: clip(`${top.s.subject}${extra ? ` (+${extra} more)` : ''}`, 80),
+    body: clip(body, 180),
+    url: `${appBaseUrl.replace(/\/$/, '')}${top.s.link?.path ?? '/inbox'}`,
+    // One tag per batch: a later push never silently replaces an earlier one (two voids are two actions).
+    tag: `bl-${top.kind.toLowerCase()}-${top.id.slice(0, 8)}`,
+  };
+}

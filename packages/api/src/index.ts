@@ -26,6 +26,7 @@ async function main() {
       currentSeason: process.env.CURRENT_SEASON ?? '2026-2027-regular',
       turnstileSecret: process.env.TURNSTILE_SECRET_KEY || null,
       signupInviteOnly: process.env.SIGNUP_INVITE_ONLY === 'on',
+      vapidPublicKey: process.env.NOTIFY_PUSH === 'on' ? process.env.VAPID_PUBLIC_KEY || null : null,
     },
   });
   const port = Number(process.env.PORT ?? 3000);

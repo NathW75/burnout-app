@@ -10,5 +10,8 @@ describe('security headers (PRD-007 §9)', () => {
     expect(h).toContain('Strict-Transport-Security: max-age=31536000');
     expect(h).toContain('Referrer-Policy: strict-origin-when-cross-origin');
     expect(h).not.toMatch(/script-src[^;]*unsafe/);
+    expect(h).toContain("worker-src 'self';");
+    expect(h).toContain("manifest-src 'self';");
+    expect(h).toMatch(/\/sw\.js\n  Cache-Control: no-cache/); // a new service worker is picked up at once
   });
 });

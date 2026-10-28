@@ -11,7 +11,8 @@ import { createScoringStore, parseGamelogs, parseGames, type GameStatus } from '
 import type { Redis } from 'ioredis';
 import type { ApiContext, Log } from './context';
 import { classifyPending, type FeedbackClassifier } from './feedback/service';
-import { checkStalled, runNotify, type NotifyConfig } from './notify/dispatcher';
+import { checkStalled, runNotify, runPush, type NotifyConfig } from './notify/dispatcher';
+import type { PushSender } from './notify/push';
 import { aliasMap, normalizeStatLines, resolveIdentities } from './players/identity';
 import { parsePlayers } from './players/msf-players';
 import { reresolveSubmissions, syncInjuries, syncPlayers } from './players/roster';
@@ -59,6 +60,8 @@ export interface JobsDeps {
   msfRetryDelayMs?: number;
   /** Email delivery (PRD-008). Absent = NOTIFY_EMAIL is off: notices stay in the inbox only. */
   notify?: NotifyConfig;
+  /** Web push (PRD-008 §9). Absent = NOTIFY_PUSH is off. */
+  push?: { config: NotifyConfig; sender: PushSender };
 }
 
 /** MSF answers worth one more try: throttling shows up as 403 or 429, and a 5xx is on their side. */
@@ -66,7 +69,7 @@ export function msfRetryable(err: unknown): boolean {
   return err instanceof MsfHttpError && (err.status === 403 || err.status === 429 || err.status >= 500);
 }
 
-export type JobName = 'locks' | 'payments' | 'scoring' | 'roster' | 'injuries' | 'schedule' | 'feedback' | 'notify';
+export type JobName = 'locks' | 'payments' | 'scoring' | 'roster' | 'injuries' | 'schedule' | 'feedback' | 'notify' | 'push';
 
 /** Regular-season weeks, for the week-by-week schedule fallback. */
 export const REGULAR_SEASON_WEEKS = 18;
@@ -239,6 +242,14 @@ export function createJobs(deps: JobsDeps) {
       return r;
     },
 
+    /** Web push, on the same 30-second loop as email when NOTIFY_PUSH=on (PRD-008 §9). */
+    async push() {
+      if (!deps.push) return { skipped: 'NOTIFY_PUSH_OFF' };
+      const r = await runPush(deps.apiContext, deps.push.config, deps.push.sender);
+      await checkStalled(deps.apiContext, deps.push.config, 'push');
+      return r;
+    },
+
     /** Runs on its own 15-second loop in the worker, so tags land within 30 seconds (feedback spec AC4). */
     async feedback() {
       if (!deps.classifier) return { skipped: 'NO_CLASSIFIER' };
@@ -258,7 +269,7 @@ export function createJobs(deps: JobsDeps) {
       // The 15-second feedback loop stays quiet when there was nothing to tag.
       const idle =
         (name === 'feedback' && result !== null && (result as { claimed?: number }).claimed === 0) ||
-        (name === 'notify' && result !== null && (result as { users?: number }).users === 0 && Object.keys((result as { skipped?: object }).skipped ?? {}).length === 0);
+        ((name === 'notify' || name === 'push') && result !== null && (result as { users?: number }).users === 0 && Object.keys((result as { skipped?: object }).skipped ?? {}).length === 0);
       if (!idle) log('info', `job ${name}`, { job: name, ms: Date.now() - started, result: result ?? 'skipped (held elsewhere)' });
       return result;
     } catch (err) {

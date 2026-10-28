@@ -13,6 +13,8 @@ export function securityHeaders(apiBase: string): string {
     "style-src-attr 'unsafe-inline'", // progress rings and countdown fills set inline style values
     "font-src https://fonts.gstatic.com",
     "img-src 'self' data:",
+    "worker-src 'self'", // sw.js: push notifications (PRD-008 §9)
+    "manifest-src 'self'",
     "object-src 'none'",
     "base-uri 'none'",
     "form-action 'self'",
@@ -29,6 +31,10 @@ export function securityHeaders(apiBase: string): string {
     '  Cache-Control: public, max-age=31536000, immutable',
     '/index.html',
     '  Cache-Control: no-cache',
+    '/sw.js',
+    '  Cache-Control: no-cache',
+    '/manifest.webmanifest',
+    '  Content-Type: application/manifest+json',
     '',
   ].join('\n');
 }

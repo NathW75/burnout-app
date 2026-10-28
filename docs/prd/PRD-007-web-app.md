@@ -1,6 +1,6 @@
 # PRD-007 — Web App (Player Portal)
 **Burnout League · apps/web**
-*Status: v1.6 — **APPROVED 2026-10-27** (Nath), decisions Q1–Q7 in §14; mockups approved on the landing-page design system (§11); API additions (§8) built; web app patch (a) built; patch (b) built 2026-10-28 in two parts (standings, burned roster, inbox; then account, feedback, light theme). Phase A screens complete.*
+*Status: v1.7 — **APPROVED 2026-10-27** (Nath), decisions Q1–Q7 in §14; mockups approved on the landing-page design system (§11); API additions (§8) built; web app patch (a) built; patch (b) built 2026-10-28 in two parts (standings, burned roster, inbox; then account, feedback, light theme). Phase A screens complete. Push notifications (PRD-008 §9) built 2026-10-28.*
 *Author: Build thread · 2026-10-27*
 
 ---
@@ -174,7 +174,7 @@ In-app notices from the same events that queue emails, newest first, 30 at a tim
   - sessions: list with device and last seen, revoke one, sign out everywhere
 - **Receipts:** every confirmed lineup's receipt with its checksum, recomputable per PRD-006 §9.4.
 
-**As built (v1.6):** Account lists Profile (handle with an inline change, two changes a season per PRD-003; email), Security (Password, Authenticator app, Backup codes, Sessions, each its own screen), Notifications (email notices, PRD-008 §6), Lineups (Receipts), Appearance (Dark, Light, Match device), Rules and Sign out. A public `/unsubscribe` page confirms the email's unsubscribe link.
+**As built (v1.6):** Account lists Profile (handle with an inline change, two changes a season per PRD-003; email), Security (Password, Authenticator app, Backup codes, Sessions, each its own screen), Notifications (email and push, PRD-008 §6 and §9: push on/off for this device, push switches, iPhone Home Screen guidance), Lineups (Receipts), Appearance (Dark, Light, Match device), Rules and Sign out. A public `/unsubscribe` page confirms the email's unsubscribe link. The app ships a web manifest, Home Screen icons and a notifications-only service worker (`sw.js`, no caching); signing out turns push off for that device first.
 - Password: current, new and repeat; other sessions are signed out and this one stays.
 - Replace authenticator and new backup codes ask for a fresh code first (step-up), in place, and ask again if the server says it's stale. New codes are shown once with download, copy and an "I've saved these" tick.
 - Sessions: device named from the browser (e.g. "Chrome on Android"), last active and signed-in times ET, "This device", sign out any other device, and sign out everywhere.
@@ -391,6 +391,7 @@ Depends on: PRD-001, PRD-003, PRD-004 (Phase B), PRD-006, `SPEC-feedback-system.
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.7 | 2026-10-28 | §6.7: Account → Notifications gains push (PRD-008 §9): this device on/off, push switches, iPhone Home Screen guidance. Web manifest, Home Screen icons, notifications-only service worker; CSP `worker-src`/`manifest-src`; sign-out turns push off for the device. |
 | 1.6 | 2026-10-28 | Patch (b) part 2 built: §6.7 account as built (handle change, password, replace authenticator and new backup codes behind step-up, sessions with revoke and sign out everywhere, receipts, appearance); §10 feedback button as built; §11 light theme as built (dark default; chalk-based cool neutrals instead of the landing page's cream; text-safe accents) and the new favicon. Acceptance: account security checked off. |
 | 1.5 | 2026-10-28 | Patch (b) part 1 built: §6.2.1 navigation (BOARD and BURNED tabs, inbox bell, Rules under Account); §6.4 burned roster grouped by week; §6.5 reveal week picker, burned state and live polling; §6.6 inbox names players, links each notice, NEW tag. §8.3: notices return player names; the inbox cursor includes the id. Acceptance: field board, reveal and inbox checked off. |
 | 1.4 | 2026-10-27 | §6.3: every open slot must be filled to submit (as the API already required), stale draft picks are flagged. §4, §12, §15: as built in web app patch (a). |
