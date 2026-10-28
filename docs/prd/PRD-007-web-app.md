@@ -1,6 +1,6 @@
 # PRD-007 — Web App (Player Portal)
 **Burnout League · apps/web**
-*Status: v1.9 — **APPROVED 2026-10-27** (Nath), decisions Q1–Q7 in §14; mockups approved on the landing-page design system (§11); API additions (§8) built; web app patch (a) built; patch (b) built 2026-10-28 in two parts (standings, burned roster, inbox; then account, feedback, light theme). Phase A screens complete. Push notifications (PRD-008 §9) built 2026-10-28.*
+*Status: v1.10 — **APPROVED 2026-10-27** (Nath), decisions Q1–Q7 in §14; mockups approved on the landing-page design system (§11); API additions (§8) built; web app patch (a) built; patch (b) built 2026-10-28 in two parts (standings, burned roster, inbox; then account, feedback, light theme). Phase A screens complete. Push notifications (PRD-008 §9) built 2026-10-28. Patch (c) (tester feedback: position filter, bottom nav on every screen, player stat columns) specced and built 2026-10-28.*
 *Author: Build thread · 2026-10-27*
 
 ---
@@ -31,7 +31,7 @@ The server is the authority for every rule. The web app never decides a lock, a 
 |------|----------|
 | Accounts | One sign-up process: account, verify email, **set up the authenticator (required)**, save backup codes, then in. Sign in (password + code), sign out, password reset. |
 | This Week | Official clock, the week's windows with lock countdowns, my nine slots and their states, my rank, what changed since last visit |
-| Lineup | Player pool with filters, slot editing, the three gates (§7), receipt with checksum |
+| Lineup | Player pool with filters, stat columns with group toggles and sort, slot editing, the three gates (§7), receipt with checksum |
 | Burned roster | Every player I've burned, by week, slot and points |
 | Standings | The season field leaderboard (§8.1) and the post-lock reveal of other managers' locked players |
 | Inbox | In-app notices: locks, burns, voided or re-pointed picks, reopened slots |
@@ -131,21 +131,133 @@ A user who stops partway resumes at the step they left on their next sign-in (th
 
 **Player picker:** opens for a slot and lists only eligible positions (FB counts at RB and FLEX).
 
-- **Filters:** position, team, game window, text search.
-- **Each card** (PRD-001 §10, Phase A fields): name, position, team, opponent with home/away, kickoff ET, injury status.
-  - Projected points and ownership arrive in Phase B; Phase A shows nothing rather than a placeholder number.
+#### 6.3.1 Position filter (patch c — tester feedback 2026-10-28)
+
+The filter bar is the **first thing visible** when the picker opens, before the player list. Testers reported that without prominent position filtering, finding players requires knowing names in advance and scrolling a long undifferentiated list.
+
+**Filter bar layout:**
+
+```
+[ ALL ] [ QB ] [ RB ] [ WR ] [ TE ] [ K ]
+```
+
+- Rendered as a **horizontally scrollable pill row** pinned below the picker header (not a dropdown, not hidden behind a "filter" button).
+- **ALL** is selected by default. Tapping a position pill filters the list immediately; no submit.
+- The slot's eligible positions determine which pills are shown: a FLEX slot shows QB hidden (not relevant), adds a FLEX pill. A QB slot shows only QB and ALL.
+- The active pill is lime (`--line`) background with `#141414` text. Inactive pills are `--paper` background, `--type` text, `--rule` border.
+- A search box sits **below** the pill row. Entering text searches by name within the current position filter (not instead of it). Clearing the search returns to the filtered list.
+- The filter selection persists within the picker session (not across opens). When the picker reopens for a different slot, it resets to ALL.
+
+**No API change needed for position filter:** the pool endpoint already returns position. Filtering is client-side.
+
+**As built (v1.10):**
+- Pills are ALL plus the slot's positions, with **FB folded into RB** (an FB is eligible wherever an RB is, and there are only a handful): RB slots show [ALL] [RB]; FLEX shows [ALL] [RB] [WR] [TE]. There is no separate FLEX pill, because on a FLEX slot it would show exactly the ALL list.
+- The pills sit in the sticky picker header, so they stay on screen while the list scrolls. The search label follows the filter ("SEARCH WRS"); search also matches team.
+- The open-window chips (ALL OPEN, then each kickoff) stay, as one sideways-scrolling row under the search.
+- Changing the pill resets the sort to the default.
+
+#### 6.3.2 Player stat columns (patch c — tester feedback 2026-10-28)
+
+Managers need to evaluate players without memorizing names or scrolling blind. The picker provides **sortable stat columns** drawn from the MSF API's season and game stats.
+
+**Stat categories are universal.** Every player has the same three stat groups available — rushing, receiving, passing — because any position can contribute in any category (trick plays, Wildcat, QB scrambles, gadget plays). Columns are never hidden because a position "doesn't rush" or "doesn't throw."
+
+**Stat groups (always the same three, regardless of position):**
+
+| Group | Key stats |
+|-------|-----------|
+| **Rush** | Att (rush attempts), Yds (rush yards), Y/C (yards per carry), TDs (rush TDs) |
+| **Rec** | Tgt (targets), Rec (receptions), Yds (rec yards), Y/R (yards per reception), TDs (rec TDs) |
+| **Pass** | Att (pass attempts), Cmp (completions), Yds (pass yards), Y/A (yards per attempt), TDs (pass TDs), Int (interceptions) |
+
+**Default column visibility by position** (which groups are on by default when the picker opens for that slot):
+
+| Slot / Position | Default ON | Default OFF |
+|-----------------|-----------|-------------|
+| QB | Pass, Rush | Rec |
+| RB, FB | Rush, Rec | Pass |
+| WR, TE | Rec, Rush | Pass |
+| K | *(kicker stats — see below)* | — |
+| FLEX | Rec, Rush | Pass |
+
+The user can toggle any group on or off while the picker is open. State persists within the picker session and resets on close (same as position filter).
+
+**Kicker stats:** K slots show `FGM/FGA` (field goals made / attempted), `FG%`, `XPM/XPA` (extra points made / attempted), and `Pts` (fantasy points). These replace the three-group layout for K; there is no toggle for kicker stats.
+
+**Stat period toggle:** a two-option toggle above the stat columns lets the user switch between:
+- **Season avg** (season totals divided by games played — the default)
+- **Last 3 avg** (rolling 3-game average, showing recent form)
+
+Both modes use the same column set. The toggle label shows the active mode and updates the displayed numbers immediately (client-side; data for both modes is fetched on picker open and cached for the session).
+
+**Sorting:** tapping any stat column header sorts the current position-filtered list by that column, descending on first tap, ascending on second tap, back to default (fantasy points scored this season, descending) on third tap. A small sort indicator (▼ / ▲) shows on the active sort column. Sorting applies within the current position filter; changing the filter resets the sort to default.
+
+**Column layout:** on a 360px screen, the player name column is fixed-left (sticky) and the stat columns scroll horizontally to the right. At ≥ 640px, all visible columns fit without horizontal scroll. The stat group header row labels the group (RUSH · REC · PASS); individual column labels are abbreviations.
+
+**Visual treatment:**
+- Column headers: `DM Mono`, uppercase, `--muted` text, 11px.
+- Stat values: `DM Mono`, `--type`, 12px, right-aligned, tabular numerals.
+- The sorted column header and its values get a subtle lime (`--line` at 10% opacity) column tint.
+- Zero values render as `—` (em dash), not `0`.
+- A value not available from the MSF API renders as `—`.
+
+**API changes for stats (§8.7):** the player pool response gains a `stats` field per player. See §8.7.
+
+**No projections in Phase A:** the stat columns show historical stats only (season averages and last-3 averages). Projected points are Phase B.
+
+**As built (v1.10):**
+- A **PTS column** (fantasy points per game, current scoring rules) leads the non-kicker table, since the default order is fantasy points; then the groups that are on, always in RUSH, REC, PASS order.
+- The table is a real table: a group header row, sortable column headers (`aria-sort`, named "YDS: Rush yards, sort" so the spoken name matches the label), a caption that says the period and sort, and a sideways-scrolling region with the name column pinned.
+- Pickable players come first, then greyed ones, each part in the chosen order; players with no value for a sorted column go last whichever way. Players with no stats yet read "—" everywhere and sort after those with stats.
+- One decimal for averages, whole numbers stay whole; kicking pairs read "1.7/2".
+
+#### 6.3.3 Remaining picker behavior
+
+- **Each card** (Phase A): name (large, `DM Mono`), position badge, team, opponent with home/away, kickoff ET, injury status. Stat columns from §6.3.2.
+  - Projected points and ownership arrive in Phase B.
 - **Greyed and unselectable, with the reason:**
   - Out or IR: "not selectable, not burned"
   - on bye: "BYE WEEK"
   - game already locked
-  - already burned (hidden by default, with a toggle to show)
+  - already burned (hidden by default, with a toggle to show; also greyed with red "BURNED" tag and strikethrough)
+- **"Show burned" toggle** reveals burned players at the bottom, muted, for reference — they are ineligible and cannot be tapped.
+
+**As built (v1.10):** rows are compact so a phone shows about six players: the **whole name cell is the select button** (name, a lime "+", and position · team · opponent, with a lime left edge), about 52px tall. The kickoff time is in the window chips and read out to screen readers rather than printed on each row. Greyed rows show the reason tag (OUT, BYE WEEK, LOCKED, BURNED, or the slot the player already fills) and can't be tapped.
 
 **Draft:** changes are a local draft until confirmed, saved per week in browser storage as a convenience only. The draft is cleared or reconciled on refetch: any slot the server now reports as locked or voided wins over the draft.
 
 **Submit:** "Review lineup" starts the three gates (§7). Only open slots can change; the API keeps locked slots fixed. **Every slot that hasn't locked needs a player to submit** (PRD-006 §9, `SLOT_EMPTY`): the button stays off and names the slots to fill. An empty slot happens only when a confirmed pick is voided later, and it then scores 0 and burns nothing. A draft pick whose window has since locked, or who is now listed Out, is flagged and must be replaced before review.
 
-### 6.2.1 Navigation (as built, v1.5)
+### 6.2.1 Navigation (patch c — persistent bottom nav, tester feedback 2026-10-28)
 
+**The bottom tab bar is present on every authenticated screen without exception.** Testers reported that the nav bar disappeared on certain screens, requiring use of the browser back button to move around.
+
+**Screens where the nav was previously absent and must now persist:**
+
+| Screen | Fix |
+|--------|-----|
+| Gate 1 (Review) | Tabs visible below the gate content. Gate scrolls within its own area; tabs don't scroll away. |
+| Gate 2 (Acknowledge) | Same. |
+| Gate 3 (Confirm) | Same. |
+| Help / Rules | Tabs persist. |
+| Inbox detail (individual notice) | Tabs persist. |
+| Receipt detail | Tabs persist. |
+| Account sub-screens (Security, Sessions, Receipts, Appearance, Notifications) | Tabs persist. Back-chevron in the sub-header returns to the Account root; the ACCOUNT tab stays highlighted. |
+| Sign-up steps (after sign-in, pre-enrollment-complete) | The partial nav (Account + Sign Out only, no WEEK/LINEUP/BOARD/BURNED because those routes are locked by `MFA_ENROLLMENT_REQUIRED`) remains present. |
+
+**Implementation note:** the tab bar component is rendered in the root authenticated layout shell, not mounted per-route. Any screen that was mounting its own full-page layout (bypassing the shell) should be refactored to use the shell with a `<Outlet>` pattern. The gate screens in particular should render as a modal-style overlay or a full-height `<Outlet>` within the shell, keeping the tab bar in the DOM.
+
+**Gate screens exception:** the Gate 3 hold button must not be obscured by the tab bar on small screens. The gate content area must have enough bottom padding (`pb-safe` + tab bar height + 16px) that the hold button is fully above the tab bar. Existing gate bottom-padding logic (§10, which already accounts for the feedback button) should extend to also account for the tab height.
+
+**Tab highlights:** the LINEUP tab stays highlighted while any gate screen is active (the user is in a lineup flow). The tab bar otherwise highlights the tab matching the current top-level route.
+
+**As built (v1.10):**
+- The signed-in route group is wrapped in an app shell; every page inside it ends with the tabs, so a new screen gets them without doing anything. Covered: This Week, the builder, the picker, all three gates, standings and the reveal, burned, inbox, help, receipts, every Account sub-screen, and the admin screens.
+- The builder's and the gates' pinned footers sit directly on top of the tabs (they're offset by the tabs' measured height), so the REVIEW / CONTINUE buttons and the Gate 3 hold button are always above the tabs; the feedback button clears whichever bar is highest. Checked at 360×740.
+- LINEUP stays lit through the picker and the gates; ACCOUNT stays lit on Help, Receipts and the admin screens, which are reached from Account.
+- **Sign-up steps:** these screens never had tabs; they keep their "Sign out" link and no tabs, since every tab's route is locked until the authenticator is set up.
+
+**Previously documented (v1.5):**
 - **Bottom tabs:** WEEK, LINEUP, BOARD (standings), BURNED, ACCOUNT.
 - **Header:** wordmark, official clock, and an inbox bell with the unread count as text (`Inbox, 3 unread` for screen readers). Below 380px the wordmark shortens to BURNOUT so all three fit at 360px.
 - **Rules** moved from a tab to Account, and stay linked from every screen that states a rule (This Week's locks, the builder, the gates, the burned roster, the reveal).
@@ -250,6 +362,61 @@ PRD-006 required a second factor only before the first money action. From this c
 
 ---
 
+### 8.7 Player stats for the picker (patch c)
+
+`GET /v1/seasons/:season/weeks/:week/players?season=<year>` — the existing player pool endpoint — gains a `stats` field per player. *(As built, the route is `/v1/seasons/:season/weeks/:week/pool`; see below.)*
+
+**Response shape addition:**
+
+```jsonc
+{
+  "players": [
+    {
+      "id": "...",
+      "name": "...",
+      "position": "RB",
+      "team": "PHI",
+      // ... existing fields ...
+      "stats": {
+        "season": {
+          "gamesPlayed": 8,
+          "rush": { "att": 112, "yds": 487, "ypc": 4.3, "tds": 4 },
+          "rec":  { "tgt": 38,  "rec": 29,  "yds": 221, "ypr": 7.6, "tds": 1 },
+          "pass": { "att": 0,   "cmp": 0,   "yds": 0,   "ypa": null, "tds": 0, "int": 0 },
+          "k":    null
+        },
+        "last3": {
+          "gamesPlayed": 3,
+          "rush": { "att": 44,  "yds": 186, "ypc": 4.2, "tds": 2 },
+          "rec":  { "tgt": 14,  "rec": 11,  "yds": 83,  "ypr": 7.5, "tds": 0 },
+          "pass": { "att": 0,   "cmp": 0,   "yds": 0,   "ypa": null, "tds": 0, "int": 0 },
+          "k":    null
+        }
+      }
+    }
+  ]
+}
+```
+
+For kickers, `rush`, `rec` and `pass` are `null` and `k` is `{ fgm, fga, fgPct, xpm, xpa, pts }`.
+
+For non-kickers, `k` is `null`.
+
+Per-game averages (season totals ÷ `gamesPlayed`) are computed server-side and included in the `season` block. The `last3` block is the straight average of the last three games the player appeared in (not the last three calendar weeks). If a player has fewer than three games in the season, `last3` uses all available games and sets `gamesPlayed` to that count.
+
+**Null handling:** any rate stat (`ypc`, `ypr`, `ypa`) where the denominator is zero is `null`, not `NaN`. The UI renders null rate stats as `—`.
+
+**Source:** MySportsFeeds v2.1 cumulative stats and game log endpoints. The API fetches both once per player pool hydration (on pool cache miss) and stores them in Redis alongside the pool, with the same 5-minute TTL. No new Postgres tables.
+
+**No API change for position filter:** position filtering remains client-side.
+
+**As built (v1.10):**
+- **Endpoint:** the existing pool route, `GET /v1/seasons/:season/weeks/:week/pool`; each player gains `stats: { season, last3 } | null` (`null` until the stats job has run, or for a player with no games logged).
+- **Source and storage, changed:** only the **worker** holds the MySportsFeeds key (a standing rule: the key lives in the worker's Railway variables only), so the API can't call MSF. A worker job, `stats`, runs at :05 and :35 and at worker start: it reads every started week's `player_gamelogs` feed, keeps each week's parsed lines in Redis (a frozen week is fetched once and kept 30 days; an open week is refetched each run), averages them per player and writes one blob, `stats:<season>`, that the pool reads (held in memory for 60 seconds per API process). Still no new Postgres tables. A refused feed keeps that week's last copy. If Redis has nothing, the pool still works and every stat reads "—".
+- **Per person:** another MSF ID for the same person counts as that person (PRD-006 §7.5).
+- **Points:** each block also carries `pts` (fantasy points per game under the current scoring rules, from the scoring engine's own parser and rules), and the season block carries `ptsTotal`, which the default sort uses.
+- **Rates** (Y/C, Y/R, Y/A, FG%) come from the period's totals, not an average of per-game rates; averages are rounded to one decimal.
+
 ## 9. Behavior details
 
 - **Freshness:**
@@ -341,6 +508,22 @@ Mockups (approved): the "Burnout League — Web App Mockups" canvas.
   - the leaderboard renders tied ranks per PRD-003
 - **Accessibility checks** (axe) on every route in CI.
 - **API additions (§8):** integration tests and mutation checks as for PRD-006 (`packages/api/src/__tests__/web-api.test.ts`, and the §8.6 block in `auth.test.ts`).
+- **Patch (c) additions:**
+  - Position filter pill row renders correct pills for each slot type (QB slot → QB + ALL only; FLEX slot → RB/WR/TE + ALL, as built).
+  - Active pill is lime; tapping a pill filters the list immediately (no submit).
+  - Text search filters within the current position filter, not across all positions.
+  - "Show burned" toggle reveals burned players muted at bottom, does not make them selectable.
+  - Bottom tab bar is present in the DOM on every authenticated route (enumerated): gate screens, help, inbox detail, receipt detail, account sub-screens.
+  - LINEUP tab is highlighted while any gate route is active.
+  - Gate 3 hold button is fully above the tab bar on a 360px viewport (no overlap).
+  - Stats: default column visibility matches the position default table (§6.3.2).
+  - Stats: toggling a stat group on/off shows/hides its columns immediately.
+  - Stats: sorting by a column header sorts descending → ascending → default; indicator shows correct state.
+  - Stats: switching Season avg ↔ Last 3 avg updates all displayed values; both datasets were fetched on picker open.
+  - Stats: zero values render as `—`; null rate stats render as `—`.
+  - Stats: kicker slot shows FG/XP/Pts columns, no rush/rec/pass toggle.
+  - Stats: stat columns are horizontally scrollable on 360px with name column sticky-left.
+- **Stats API (§8.7):** the pool response includes a `stats` block for every player with games; kicker `k` block is present for K-position players only; non-kicker `rush`/`rec`/`pass` blocks are present; null rate stats where denominator is zero. *(As built: the worker job's per-week cache, frozen weeks fetched once, a refused week keeping its last copy, and per-person folding of MSF IDs are tested too.)*
 
 ---
 
@@ -360,6 +543,14 @@ Mockups (approved): the "Burnout League — Web App Mockups" canvas.
 - [x] The inbox shows lock, burn, void and re-point notices with read state.
 - [x] Sign-up isn't complete without a confirmed authenticator. Until then, **the API refuses every route except the setup steps** (server-enforced and tested against every route). *(API side done; the app's backup-code acknowledgment is part of the web build.)*
 - [x] Replacing the authenticator, regenerating backup codes, session revoke and sign-out-everywhere all work. No auth data is in `localStorage`.
+- [x] The player picker opens with position filter pills visible before the player list. Tapping a pill filters immediately. Text search works within the active position filter.
+- [x] The bottom tab bar is present on every authenticated screen including gate screens, help, inbox detail, receipt detail, and all account sub-screens.
+- [x] The Gate 3 hold button is not obscured by the tab bar on a 360px screen.
+- [x] Stat columns are visible in the player picker. Default visible groups match the slot's position. A group toggle shows/hides its columns immediately.
+- [x] Sorting by a stat column header sorts the filtered list; a sort indicator is visible. A third tap returns to default (fantasy points, descending).
+- [x] Season avg / Last 3 avg toggle updates all stat values. Both datasets are present without a second network request.
+- [x] Kicker slots show FG/XP/Pts columns only (no rush/rec/pass toggles).
+- [x] All stat columns are reachable on a 360px screen (horizontal scroll with sticky name column).
 - [ ] axe reports no serious or critical issues on any route.
 - [ ] Staging deploys on push. A production deploy during the blackout window is held by the gate.
 
@@ -385,8 +576,9 @@ Mockups (approved): the "Burnout League — Web App Mockups" canvas.
 2. ~~Mockups of the three key screens, for sign-off.~~ Done 2026-10-27.
 3. ~~API additions (§8), shipped as their own patch with tests.~~ Built 2026-10-27.
 4. Web app Phase A, as two patches: (a) accounts, This Week, lineup and gates, with a short rules page and a basic account page; built 2026-10-27. (b) in two parts: **part 1**, standings with the reveal, the burned roster and the inbox, built 2026-10-28; **part 2**, the full account (security, sessions, receipts), the feedback button and the light theme, built 2026-10-28.
-5. Cloudflare setup: the deploy workflow, `wrangler.jsonc` and headers ship in patch (a); the runbook is `docs/deploy/CLOUDFLARE-APP.md` (API token and two GitHub secrets). Turnstile widgets created 2026-10-27.
-6. Testers invited once SendGrid domain authentication is done (verification emails must arrive).
+5. **Patch (c):** position filter UX (§6.3.1), persistent bottom nav (§6.2.1), and player stat columns with group toggles and sort (§6.3.2 + §8.7). Built 2026-10-28; §8.7's stats come from a worker job (the MSF key is worker-only).
+6. Cloudflare setup: the deploy workflow, `wrangler.jsonc` and headers ship in patch (a); the runbook is `docs/deploy/CLOUDFLARE-APP.md` (API token and two GitHub secrets). Turnstile widgets created 2026-10-27.
+7. Testers invited once SendGrid domain authentication is done (verification emails must arrive).
 
 Depends on: PRD-001, PRD-003, PRD-004 (Phase B), PRD-006, `SPEC-feedback-system.md`. PRD-011 Phase 1a hosts its consent page and token settings here (Phase B).
 
@@ -396,6 +588,7 @@ Depends on: PRD-001, PRD-003, PRD-004 (Phase B), PRD-006, `SPEC-feedback-system.
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.10 | 2026-10-28 | Patch (c), merged from the project copy's spec (written there as v1.8 and v1.9 by the spec thread, while the repo's v1.8 and v1.9 recorded the feedback screen and the AI connector) and built: §6.3.1 position pills, §6.3.2 stat columns, §6.3.3 picker behavior, §6.2.1 persistent bottom nav, §8.7 stats in the pool, §12 tests, §13 eight new acceptance criteria (checked). As built: FB folded into the RB pill and no FLEX pill; a PTS column; compact rows with the name cell as the select button; footers sit on the tabs; §8.7 stats from a worker job into Redis, because only the worker holds the MSF key; sign-up steps keep their Sign out link without tabs. |
 | 1.9 | 2026-10-28 | §6.7: Account gains CONNECTIONS → AI connector (PRD-011 §8): connector tokens, made after a fresh code and shown once; the notifications row reads "Email and push". |
 | 1.8 | 2026-10-28 | §10.1: the admin feedback screen (moved up from Phase B) and an email to admins for each new piece of feedback, for the Week 8 testers. |
 | 1.7 | 2026-10-28 | §6.7: Account → Notifications gains push (PRD-008 §9): this device on/off, push switches, iPhone Home Screen guidance. Web manifest, Home Screen icons, notifications-only service worker; CSP `worker-src`/`manifest-src`; sign-out turns push off for the device. |

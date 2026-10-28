@@ -15,6 +15,7 @@ import { checkStalled, runNotify, runPush, type NotifyConfig } from './notify/di
 import type { PushSender } from './notify/push';
 import { aliasMap, normalizeStatLines, resolveIdentities } from './players/identity';
 import { parsePlayers } from './players/msf-players';
+import { aggregate, clearStatsMemo, FROZEN_WEEK_TTL, OPEN_WEEK_TTL, parseGameLines, STATS_TTL, statsKey, weekLinesKey, type GameLine } from './players/stats';
 import { reresolveSubmissions, syncInjuries, syncPlayers } from './players/roster';
 import { importSchedule } from './schedule/import';
 import type { SqlDatabase } from './sql';
@@ -69,7 +70,7 @@ export function msfRetryable(err: unknown): boolean {
   return err instanceof MsfHttpError && (err.status === 403 || err.status === 429 || err.status >= 500);
 }
 
-export type JobName = 'locks' | 'payments' | 'scoring' | 'roster' | 'injuries' | 'schedule' | 'feedback' | 'notify' | 'push';
+export type JobName = 'locks' | 'payments' | 'scoring' | 'roster' | 'injuries' | 'schedule' | 'feedback' | 'notify' | 'push' | 'stats';
 
 /** Nothing tagged and nothing alerted: the 15-second loop stays quiet. */
 function feedbackIdle(result: object): boolean {
@@ -202,6 +203,56 @@ export function createJobs(deps: JobsDeps) {
       return { weeks: out, weeksFrozen: frozen.map((f) => f.week) };
     },
 
+    /**
+     * Picker stats (PRD-007 §8.7): every started week's game logs, cached per
+     * week (a frozen week is fetched once), averaged per player into one blob
+     * the API reads. Runs every 30 minutes and at worker start.
+     */
+    async stats() {
+      const redis = deps.apiContext.redis ?? deps.redis;
+      if (!redis) return { skipped: 'NO_REDIS' };
+      const ns = deps.apiContext.ns;
+      const weeks = (await db.query<{ week: number }>(
+        `SELECT DISTINCT week FROM nfl_games WHERE season = $1 AND scheduled_start <= $2 ORDER BY week`, [season, now()]
+      )).map((r) => r.week);
+      const frozen = new Set((await db.query<{ week: number }>(`SELECT week FROM week_freezes WHERE season = $1`, [season])).map((r) => r.week));
+      const lines: GameLine[] = [];
+      const fetched: number[] = [];
+      const cached: number[] = [];
+      const failed: number[] = [];
+      for (const week of weeks) {
+        const key = weekLinesKey(ns, season, week);
+        let have: GameLine[] | null = null;
+        try {
+          const raw = await redis.get(key);
+          have = raw ? (JSON.parse(raw) as GameLine[]) : null;
+        } catch {
+          have = null;
+        }
+        if (have && frozen.has(week)) {
+          lines.push(...have);
+          cached.push(week);
+          continue;
+        }
+        try {
+          const fresh = parseGameLines(await msfGet(`${season}/week/${week}/player_gamelogs.json`));
+          await redis.set(key, JSON.stringify(fresh), 'EX', frozen.has(week) ? FROZEN_WEEK_TTL : OPEN_WEEK_TTL);
+          lines.push(...fresh);
+          fetched.push(week);
+        } catch (err) {
+          if (!(err instanceof MsfHttpError)) throw err;
+          log('warn', 'stats: MSF game logs refused, using the last copy', { job: 'stats', week, status: err.status, hadCopy: !!have });
+          if (have) lines.push(...have);
+          failed.push(week);
+        }
+      }
+      const positions = new Map((await db.query<{ id: string; position: string }>(`SELECT msf_player_id AS id, position FROM nfl_players WHERE canonical_id IS NULL`)).map((r) => [r.id, r.position]));
+      const players = aggregate(lines, await aliasMap(db), positions);
+      await redis.set(statsKey(ns, season), JSON.stringify({ season, asOf: now().toISOString(), weeks, players }), 'EX', STATS_TTL);
+      clearStatsMemo();
+      return { weeks: weeks.length, fetched, cached, failed, players: Object.keys(players).length };
+    },
+
     async roster() {
       // `players` may not be in the subscription (403): fall back to seasonal player stats (same player objects).
       let raw: unknown;
@@ -304,6 +355,7 @@ export function dueJobs(at: Date, opts: { windowsActive: boolean }): JobName[] {
   if (opts.windowsActive ? et.minute % 15 === 0 : et.minute === 0) due.push('scoring');
   if ((et.hour === 3 && et.minute === 0) || (et.weekday === 'Tue' && et.hour === 23 && et.minute === 59)) due.push('roster');
   if (['Wed', 'Thu', 'Fri', 'Sat', 'Sun'].includes(et.weekday) && et.minute % 15 === 0) due.push('injuries'); // Tech Summary §5
+  if (et.minute === 5 || et.minute === 35) due.push('stats'); // picker stats (PRD-007 §8.7)
   if (et.minute === 30) due.push('schedule'); // hourly: flexes and same-week moves (§11.6); the worker also runs it at startup
   return due;
 }

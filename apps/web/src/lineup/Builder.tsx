@@ -6,7 +6,7 @@ import { api } from '../api/client';
 import { useBurns, usePool } from '../api/hooks';
 import type { LineupSlot, PlayerCard, ReviewResponse, SlotKey } from '../api/types';
 import { ClockIcon, CloseIcon } from '../components/icons';
-import { ErrorNote, Notice, Page, SubHeader, useScreen } from '../components/layout';
+import { ABOVE_NAV, ErrorNote, Notice, Page, SubHeader, useScreen } from '../components/layout';
 import { errorText, issuesOf } from '../lib/errors';
 import { countdown, dayTimeET, points, shortName } from '../lib/format';
 import { anyWindowOpen, SLOT_LABEL, SLOT_ORDER, slotState, VOID_TEXT } from '../lib/slots';
@@ -114,7 +114,7 @@ export function BuilderPage() {
       </main>
 
       {open && !freePlayOver && (
-        <div data-bottom-bar className="sticky bottom-0 flex items-center justify-between gap-3 border-t border-rule bg-chrome px-4 pt-[14px] pb-[max(18px,env(safe-area-inset-bottom))]">
+        <div data-bottom-bar className={`sticky ${ABOVE_NAV} z-10 flex items-center justify-between gap-3 border-t border-rule bg-chrome px-4 pt-[14px] pb-[18px]`}>
           <div className="flex flex-col gap-[2px]">
             <span className="text-[14px] font-semibold">{changes === 0 ? 'No changes' : `${changes} change${changes === 1 ? '' : 's'} not submitted`}</span>
             <span className="text-[12px] text-muted">

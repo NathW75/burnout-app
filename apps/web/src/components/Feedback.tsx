@@ -19,7 +19,9 @@ function useBottomBarHeight(): number {
   useLayoutEffect(() => {
     const measure = () => {
       const bars = [...document.querySelectorAll<HTMLElement>('[data-bottom-bar]')];
-      setH(bars.reduce((max, el) => Math.max(max, el.getBoundingClientRect().height), 0));
+      // Bars stack (a lineup or gate footer sits on the tabs): clear the topmost one.
+      const tops = bars.map((el) => el.getBoundingClientRect().top).filter((t) => t > 0 && t < window.innerHeight);
+      setH(tops.length ? Math.max(0, window.innerHeight - Math.min(...tops)) : bars.reduce((max, el) => Math.max(max, el.getBoundingClientRect().height), 0));
     };
     measure();
     const ro = typeof ResizeObserver === 'function' ? new ResizeObserver(measure) : null;

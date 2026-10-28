@@ -5,6 +5,7 @@
 import type { ApiContext } from '../context';
 import type { SqlRunner } from '../sql';
 import { INACTIVE_STATUSES, SELECTABLE_POSITIONS } from './msf-players';
+import { readStats, type PlayerStats } from './stats';
 
 export interface PlayerCard {
   playerId: string;
@@ -24,6 +25,8 @@ export interface PlayerCard {
   /** False → shown greyed out. Out/IR players are greyed but never burned. */
   selectable: boolean;
   unavailableReason: 'BURNED' | 'LOCKED' | 'INACTIVE' | 'BYE' | 'WINDOW_CLOSED' | null;
+  /** Season and last-3 per-game averages (PRD-007 §8.7); null when there are none yet. */
+  stats: PlayerStats | null;
 }
 
 /**
@@ -120,6 +123,7 @@ export async function getPool(ctx: ApiContext, userId: string, season: string, w
     [userId, season, week, [...SELECTABLE_POSITIONS]]
   );
   const own = await ownership(ctx, season, week);
+  const stats = await readStats(ctx.redis, ctx.ns, season);
   const reason = (r: (typeof rows)[number], windowOpen: boolean): PlayerCard['unavailableReason'] =>
     r.burned ? 'BURNED' : r.locked ? 'LOCKED' : INACTIVE_STATUSES.has(r.injury_status) ? 'INACTIVE' : r.opponent === null ? 'BYE' : !windowOpen ? 'WINDOW_CLOSED' : null;
   return rows.map((r) => {
@@ -142,6 +146,7 @@ export async function getPool(ctx: ApiContext, userId: string, season: string, w
     burnState: r.burned ? 'burned' : r.locked ? 'locked' : 'available',
     selectable: unavailableReason === null,
     unavailableReason,
+    stats: stats?.players[r.id] ?? null,
     };
   });
 }

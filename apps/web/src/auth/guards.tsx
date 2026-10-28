@@ -7,7 +7,7 @@
 import { Navigate, Outlet, useLocation } from 'react-router';
 import { useMe } from '../api/hooks';
 import type { Me } from '../api/types';
-import { ErrorNote, Loading, Page } from '../components/layout';
+import { AppShell, ErrorNote, Loading, Page } from '../components/layout';
 import { errorText } from '../lib/errors';
 import { FeedbackButton } from '../components/Feedback';
 
@@ -24,7 +24,7 @@ export function nextStep(me: Me | null | undefined): '/login' | '/verify-pending
   return null;
 }
 
-function Gate({ allow, feedback = false }: { allow: (me: Me | null, next: string) => string | null; feedback?: boolean }) {
+function Gate({ allow, feedback = false, shell = false }: { allow: (me: Me | null, next: string) => string | null; feedback?: boolean; shell?: boolean }) {
   const me = useMe();
   const loc = useLocation();
   const next = safeNext(new URLSearchParams(loc.search).get('next'));
@@ -41,17 +41,18 @@ function Gate({ allow, feedback = false }: { allow: (me: Me | null, next: string
     const back = to === '/login' ? `?next=${encodeURIComponent(loc.pathname + loc.search)}` : '';
     return <Navigate to={`${to}${back}`} replace />;
   }
-  return (
+  const page = (
     <>
       <Outlet />
       {feedback && me.data && <FeedbackButton />}
     </>
   );
+  return shell ? <AppShell>{page}</AppShell> : page;
 }
 
 /** Signed in, verified, with an authenticator: the whole app. */
 export function RequireAccount() {
-  return <Gate allow={(me) => nextStep(me)} feedback />;
+  return <Gate allow={(me) => nextStep(me)} feedback shell />;
 }
 
 /** Signed in (any sign-up step): verify-pending and setup. */

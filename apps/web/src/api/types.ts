@@ -68,6 +68,24 @@ export interface PlayerCard {
   burnState: 'available' | 'locked' | 'burned';
   selectable: boolean;
   unavailableReason: 'BURNED' | 'LOCKED' | 'INACTIVE' | 'BYE' | 'WINDOW_CLOSED' | null;
+  /** Per-game averages (PRD-007 §8.7); null until the stats job has run, or for a player with no games. */
+  stats?: PlayerStats | null;
+}
+
+/** One period of per-game averages. Rates are null when their denominator is 0. */
+export interface StatBlock {
+  gamesPlayed: number;
+  pts: number;
+  ptsTotal?: number;
+  rush: { att: number; yds: number; ypc: number | null; tds: number } | null;
+  rec: { tgt: number; rec: number; yds: number; ypr: number | null; tds: number } | null;
+  pass: { att: number; cmp: number; yds: number; ypa: number | null; tds: number; int: number } | null;
+  k: { fgm: number; fga: number; fgPct: number | null; xpm: number; xpa: number; pts: number } | null;
+}
+
+export interface PlayerStats {
+  season: StatBlock;
+  last3: StatBlock;
 }
 
 export interface Pool {

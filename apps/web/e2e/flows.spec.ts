@@ -9,7 +9,17 @@ import { API, fillLineup, freshCode, FULL_LINEUP, hold, mailLink, PASSWORD, pick
 test.describe.configure({ mode: 'serial' });
 
 async function noSeriousA11yIssues(page: Page, where: string) {
-  const r = await new AxeBuilder({ page: page as never }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa']).analyze();
+  // Audit the whole page at its full height. The header and tabs are pinned, so whatever happens to sit at a screen edge
+  // is partly under one of them at that scroll position; axe's target-size check would count that as a layout fault.
+  const size = page.viewportSize();
+  const full = await page.evaluate(() => document.documentElement.scrollHeight);
+  if (size && full > size.height) await page.setViewportSize({ width: size.width, height: full });
+  let r;
+  try {
+    r = await new AxeBuilder({ page: page as never }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa']).analyze();
+  } finally {
+    if (size && full > size.height) await page.setViewportSize(size);
+  }
   const bad = r.violations.filter((v) => v.impact === 'serious' || v.impact === 'critical');
   expect(bad.map((v) => `${where}: ${v.id} (${v.nodes.length})`)).toEqual([]);
 }
@@ -430,6 +440,96 @@ test('AI connector (PRD-011): make a token after a fresh code, use it on /mcp fr
   await expect(page.getByText('No tokens yet.')).toBeVisible();
   const after = await request.post(`${API}/mcp`, { headers, data: { jsonrpc: '2.0', id: 3, method: 'initialize', params: { protocolVersion: '2025-11-25', capabilities: {}, clientInfo: { name: 'e2e', version: '1' } } } });
   expect(after.status()).toBe(401);
+});
+
+test('patch c: the picker filters by position first, sorts by stat columns, scrolls sideways at 360px with the name pinned; axe passes', async ({ page }) => {
+  await page.setViewportSize({ width: 360, height: 740 });
+  await signUp(page);
+  await page.goto('/lineup');
+  await page.getByRole('link', { name: 'PICK FLEX', exact: true }).click();
+  const pills = page.getByRole('group', { name: 'Filter by position' });
+  await expect(pills).toBeVisible();
+  const table = page.getByRole('table', { name: 'Players for FLEX' });
+  await expect(table).toBeVisible();
+  // Pills above the list, and above the search box (measured from the top of the page).
+  await page.evaluate(() => window.scrollTo(0, 0));
+  expect((await pills.boundingBox())!.y).toBeLessThan((await page.getByLabel(/SEARCH/).boundingBox())!.y);
+  expect((await pills.boundingBox())!.y).toBeLessThan((await table.boundingBox())!.y);
+  await noSeriousA11yIssues(page, 'picker');
+
+  await pills.getByRole('button', { name: 'WR' }).click();
+  const rows = table.getByRole('rowheader');
+  const positions = await rows.locator('b').allTextContents();
+  expect(positions.length).toBeGreaterThan(0);
+  expect(new Set(positions)).toEqual(new Set(['WR']));
+  await page.getByLabel('SEARCH WRS').fill('Buff');
+  await expect(rows).toHaveCount(1);
+  await page.getByLabel('SEARCH WRS').fill('');
+
+  // Sort by targets: ▼ then ▲, values in order.
+  const tgt = table.getByRole('button', { name: /Targets, sort/ });
+  await tgt.click();
+  await expect(tgt).toContainText('▼');
+  const col = async () => {
+    const idx = await table.locator('thead tr').nth(1).locator('th').evaluateAll((ths) => ths.findIndex((t) => t.getAttribute('aria-sort') !== 'none'));
+    // Pickable rows only: greyed-out players always sit below them, whatever the sort.
+    return (await table.locator('tbody tr:not([aria-disabled])').evaluateAll((trs, i) => trs.map((tr) => tr.querySelectorAll('td')[i]?.textContent ?? ''), idx)).filter((t) => t !== '—').map(Number);
+  };
+  const down = await col();
+  expect(down).toEqual([...down].sort((a, b) => b - a));
+  await tgt.click();
+  const up = await col();
+  expect(up).toEqual([...up].sort((a, b) => a - b));
+  await page.getByRole('group', { name: 'Stat period' }).getByRole('button', { name: 'LAST 3 AVG' }).click();
+  await expect(page.getByRole('group', { name: 'Stat period' }).getByRole('button', { name: 'LAST 3 AVG' })).toHaveAttribute('aria-pressed', 'true');
+
+  // Sideways scroll: the stats move, the name column stays put.
+  const region = page.getByRole('region', { name: /scrolls sideways/ });
+  const name = rows.first();
+  const before = (await name.boundingBox())!.x;
+  await region.evaluate((el) => { el.scrollLeft = 400; });
+  expect(await region.evaluate((el) => el.scrollLeft)).toBeGreaterThan(0);
+  expect(Math.abs((await name.boundingBox())!.x - before)).toBeLessThan(1);
+  await page.screenshot({ path: 'test-results/picker-360.png', fullPage: false });
+
+  // Light theme too.
+  await page.evaluate(() => localStorage.setItem('bl:theme', 'light'));
+  await page.reload();
+  await expect(page.getByRole('table', { name: 'Players for FLEX' })).toBeVisible();
+  await noSeriousA11yIssues(page, 'picker (light)');
+  await page.screenshot({ path: 'test-results/picker-360-light.png', fullPage: false });
+  await page.evaluate(() => localStorage.removeItem('bl:theme'));
+});
+
+test('patch c: the tabs stay on every signed-in screen, LINEUP stays lit through the gates, and the Gate 3 button clears the tabs at 360px', async ({ page }) => {
+  test.setTimeout(90_000);
+  await page.setViewportSize({ width: 360, height: 740 });
+  await signUp(page);
+  const nav = page.getByRole('navigation', { name: 'Main' });
+  for (const path of ['/', '/lineup', '/lineup/pick/qb', '/board', '/burned', '/inbox', '/help', '/account', '/account/password', '/account/authenticator', '/account/backup-codes', '/account/sessions', '/account/receipts', '/account/notifications', '/account/connector']) {
+    await page.goto(path);
+    await expect(nav, path).toBeInViewport({ ratio: 1 }); // pinned, fully on screen
+  }
+  await page.goto('/help');
+  await expect(nav.getByRole('link', { name: 'ACCOUNT' })).toHaveClass(/text-accent/);
+
+  await fillLineup(page);
+  await page.getByRole('button', { name: 'REVIEW LINEUP' }).click();
+  await expect(page).toHaveURL(/\/lineup\/review$/);
+  await expect(nav).toBeVisible();
+  await expect(nav.getByRole('link', { name: 'LINEUP' })).toHaveAttribute('aria-current', 'page');
+  await page.getByRole('button', { name: /CONTINUE/ }).click();
+  await expect(page).toHaveURL(/\/lineup\/acknowledge$/);
+  await expect(nav).toBeVisible();
+  for (const box of await page.getByRole('checkbox').all()) await box.check();
+  await page.getByRole('button', { name: 'CONTINUE' }).click();
+  await expect(page).toHaveURL(/\/lineup\/confirm$/);
+  await expect(nav.getByRole('link', { name: 'LINEUP' })).toHaveAttribute('aria-current', 'page');
+  const holdBox = (await page.getByRole('button', { name: /Hold to lock in/ }).boundingBox())!;
+  const navBox = (await nav.boundingBox())!;
+  expect(holdBox.y + holdBox.height).toBeLessThanOrEqual(navBox.y); // fully above the tabs
+  await page.screenshot({ path: 'test-results/gate3-360.png' });
+  await noSeriousA11yIssues(page, 'gate 3 with tabs');
 });
 
 test('a window that locks during Gate 2 is rejected at Gate 3 and the user is sent back with the reason (runs last)', async ({ page }) => {

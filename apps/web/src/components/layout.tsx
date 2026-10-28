@@ -2,8 +2,8 @@
  * App chrome: the header with the official clock, the bottom nav, and the
  * small shared pieces every screen uses.
  */
-import { useEffect, type ReactNode } from 'react';
-import { Link, NavLink } from 'react-router';
+import { createContext, useContext, useEffect, useRef, type ReactNode } from 'react';
+import { Link, NavLink, useLocation } from 'react-router';
 import { setCurrentScreen } from '../api/client';
 import { useUnread } from '../api/hooks';
 import { clockET } from '../lib/format';
@@ -87,24 +87,50 @@ export function SubHeader({ title, back, backLabel }: { title: string; back: str
 }
 
 const tabs = [
-  { to: '/', label: 'WEEK', icon: HomeIcon, end: true },
-  { to: '/lineup', label: 'LINEUP', icon: LineupIcon, end: false },
-  { to: '/board', label: 'BOARD', icon: BoardIcon, end: false },
-  { to: '/burned', label: 'BURNED', icon: FlameIcon, end: false },
-  { to: '/account', label: 'ACCOUNT', icon: UserIcon, end: false },
+  { to: '/', label: 'WEEK', icon: HomeIcon, end: true, also: [] as string[] },
+  { to: '/lineup', label: 'LINEUP', icon: LineupIcon, end: false, also: [] }, // the gates live under /lineup, so LINEUP stays lit through them
+  { to: '/board', label: 'BOARD', icon: BoardIcon, end: false, also: [] },
+  { to: '/burned', label: 'BURNED', icon: FlameIcon, end: false, also: [] },
+  { to: '/account', label: 'ACCOUNT', icon: UserIcon, end: false, also: ['/help', '/admin', '/receipts'] }, // reached from Account
 ];
 
+/** Every signed-in screen sits inside the app shell, which keeps the bottom tabs on screen (PRD-007 §6.2.1, patch c). */
+const ShellContext = createContext(false);
+export function AppShell({ children }: { children: ReactNode }) {
+  return <ShellContext.Provider value={true}>{children}</ShellContext.Provider>;
+}
+export const useInShell = () => useContext(ShellContext);
+
+/** Bars pinned above the tabs (the lineup and gate footers) use this offset: the tabs' measured height. */
+export const ABOVE_NAV = 'bottom-[var(--bl-nav-h,0px)]';
+
 export function BottomNav() {
+  const { pathname } = useLocation();
+  const ref = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const root = document.documentElement;
+    const set = () => root.style.setProperty('--bl-nav-h', `${el.getBoundingClientRect().height}px`);
+    set();
+    const ro = typeof ResizeObserver === 'function' ? new ResizeObserver(set) : null;
+    ro?.observe(el);
+    return () => {
+      ro?.disconnect();
+      root.style.removeProperty('--bl-nav-h');
+    };
+  }, []);
   return (
-    <nav data-bottom-bar aria-label="Main" className="sticky bottom-0 z-10 mt-auto grid grid-cols-5 border-t border-rule bg-chrome pb-[env(safe-area-inset-bottom)]">
-      {tabs.map(({ to, label, icon: Icon, end }) => (
+    <nav ref={ref} data-bottom-bar aria-label="Main" className="sticky bottom-0 z-10 mt-auto grid grid-cols-5 border-t border-rule bg-chrome pb-[env(safe-area-inset-bottom)]">
+      {tabs.map(({ to, label, icon: Icon, end, also }) => (
         <NavLink
           key={to}
           to={to}
           end={end}
-          className={({ isActive }) =>
-            `flex min-h-11 flex-col items-center gap-[3px] pt-[10px] pb-[14px] font-mono text-[11px] no-underline ${isActive ? 'text-accent' : 'text-muted hover:text-type'}`
-          }
+          className={({ isActive }) => {
+            const on = isActive || also.some((p) => pathname === p || pathname.startsWith(`${p}/`));
+            return `flex min-h-11 flex-col items-center gap-[3px] pt-[10px] pb-[14px] font-mono text-[11px] no-underline ${on ? 'text-accent' : 'text-muted hover:text-type'}`;
+          }}
         >
           <Icon />
           {label}
@@ -114,9 +140,15 @@ export function BottomNav() {
   );
 }
 
-/** A full-height column, mobile-first; centered and capped on wide screens. */
+/** A full-height column, mobile-first; centered and capped on wide screens. Inside the app shell it ends with the tabs. */
 export function Page({ children, className = '' }: { children: ReactNode; className?: string }) {
-  return <div className={`mx-auto flex min-h-dvh w-full max-w-[560px] flex-col bg-newsprint ${className}`}>{children}</div>;
+  const shell = useInShell();
+  return (
+    <div className={`mx-auto flex min-h-dvh w-full max-w-[560px] flex-col bg-newsprint ${className}`}>
+      {children}
+      {shell && <BottomNav />}
+    </div>
+  );
 }
 
 export function TabPage({ children }: { children: ReactNode }) {
@@ -124,7 +156,6 @@ export function TabPage({ children }: { children: ReactNode }) {
     <Page>
       <AppHeader />
       <main className="flex flex-1 flex-col pb-24">{children}</main>
-      <BottomNav />
     </Page>
   );
 }

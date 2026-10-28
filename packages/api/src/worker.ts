@@ -46,6 +46,8 @@ async function main() {
   await jobs.run('schedule');
   // Then the rosters, so player identity (§7.5) is current after every deploy, not only at the nightly sync.
   await jobs.run('roster');
+  // Picker stats in the background: a fresh Redis has none until this finishes (PRD-007 §8.7).
+  void jobs.run('stats');
 
   let running = false;
   const tick = async () => {

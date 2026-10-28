@@ -16,6 +16,7 @@ import Redis from 'ioredis';
 import { Client, Pool } from 'pg';
 import { createPaymentsService, FakeProcessor } from '@burnout/payments';
 import { createApp } from '../../../packages/api/src/app';
+import { aggregate, statsKey, type GameLine } from '../../../packages/api/src/players/stats';
 import { createJobs, type MsfFetcher } from '../../../packages/api/src/jobs';
 import { DEFAULT_NOTIFY_CONFIG } from '../../../packages/api/src/notify/dispatcher';
 import { MemoryMailer } from '../../../packages/api/src/mailer';
@@ -103,6 +104,28 @@ async function seed(db: ReturnType<typeof pgDatabase>): Promise<void> {
   }
 }
 
+/** Picker stats (PRD-007 §8.7) as the worker would leave them: seven played weeks per player, deterministic. */
+async function seedStats(redis: Redis, namespace: string): Promise<void> {
+  const lines: GameLine[] = [];
+  PLAYERS.forEach(([id, , , pos], i) => {
+    for (let week = 1; week <= 7; week++) {
+      const f = ((i * 7 + week * 3) % 11) + 1; // 1..11, varies by player and week
+      const z = { att: 0, yds: 0, tds: 0 };
+      lines.push({
+        playerId: id, gameId: `s${week}-${id}`, week, start: new Date(Date.UTC(2026, 8, 10 + (week - 1) * 7, 17)).toISOString(),
+        rush: pos === 'RB' || pos === 'FB' ? { att: 8 + f, yds: 30 + f * 9, tds: f > 9 ? 1 : 0 } : pos === 'QB' ? { att: 3, yds: f * 2, tds: 0 } : z,
+        rec: pos === 'WR' || pos === 'TE' ? { tgt: 4 + f, rec: 2 + Math.floor(f / 2), yds: 20 + f * 8, tds: f > 9 ? 1 : 0 } : pos === 'RB' ? { tgt: f % 5, rec: f % 4, yds: f * 3, tds: 0 } : { tgt: 0, rec: 0, yds: 0, tds: 0 },
+        pass: pos === 'QB' ? { att: 25 + f, cmp: 15 + f, yds: 180 + f * 15, tds: f > 6 ? 2 : 1, int: f % 3 === 0 ? 1 : 0 } : { att: 0, cmp: 0, yds: 0, tds: 0, int: 0 },
+        k: pos === 'K' ? { fgm: f % 3, fga: (f % 3) + 1, xpm: 2, xpa: 2 } : { fgm: 0, fga: 0, xpm: 0, xpa: 0 },
+        ptsX100: (5 + f) * 100 + (pos === 'QB' ? 600 : 0),
+      });
+    }
+  });
+  const positions = new Map(PLAYERS.map(([id, , , pos]) => [id, pos]));
+  const players = aggregate(lines, new Map(), positions);
+  await redis.set(statsKey(namespace, SEASON), JSON.stringify({ season: SEASON, asOf: new Date().toISOString(), weeks: [1, 2, 3, 4, 5, 6, 7], players }));
+}
+
 async function main() {
   const adminUrl = process.env.E2E_DATABASE_URL;
   const redisUrl = process.env.E2E_REDIS_URL;
@@ -120,6 +143,8 @@ async function main() {
     log: (level, message, meta) => level !== 'info' && console.error(JSON.stringify({ level, message, ...meta })),
     config: { bcryptCost: 4, cookieSecure: false, corsOrigins: [WEB_ORIGIN], appBaseUrl: WEB_ORIGIN, currentSeason: SEASON, trustProxy: 0, edgeSecret: null, vapidPublicKey: 'BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjBJuBkr3qBUYIHBQFLXYp5Nksh8U' },
   });
+
+  await seedStats(redis, namespace);
 
   const app = express();
   // ── test-only helpers ──

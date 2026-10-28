@@ -15,7 +15,7 @@ import { api, isApiError, NetworkError } from '../api/client';
 import { qk, useBurns } from '../api/hooks';
 import type { ConfirmResponse, DescribedSlot, SlotKey } from '../api/types';
 import { HoldButton } from '../components/HoldButton';
-import { ErrorNote, Page, useScreen } from '../components/layout';
+import { ABOVE_NAV, ErrorNote, Page, useScreen } from '../components/layout';
 import { clearDraft } from '../lib/draft';
 import { errorText, issuesOf, issueText } from '../lib/errors';
 import { countdown, dayET, fullET, points, shortName, timeET } from '../lib/format';
@@ -65,7 +65,7 @@ function GateFrame({ step, back, backLabel, children, footer }: { step: 1 | 2 | 
         </ol>
       </header>
       <main className="flex flex-1 flex-col pb-20">{children}</main>
-      {footer && <div data-bottom-bar className="sticky bottom-0 mt-auto flex flex-col gap-2 border-t border-rule bg-chrome px-4 pt-[14px] pb-[max(18px,env(safe-area-inset-bottom))]">{footer}</div>}
+      {footer && <div data-bottom-bar className={`sticky ${ABOVE_NAV} z-10 flex flex-col gap-2 border-t border-rule bg-chrome px-4 pt-[14px] pb-[18px]`}>{footer}</div>}
     </Page>
   );
 }
