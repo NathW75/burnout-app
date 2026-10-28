@@ -54,6 +54,13 @@ export interface JobsDeps {
   apiContext: ApiContext;
   /** Tags feedback (PRD-007 §10). Absent when ANTHROPIC_API_KEY isn't set: feedback stays untagged. */
   classifier?: FeedbackClassifier;
+  /** Pause before the one retry of a refused MSF read (403/429/5xx). Default 2 s; tests pass 0. */
+  msfRetryDelayMs?: number;
+}
+
+/** MSF answers worth one more try: throttling shows up as 403 or 429, and a 5xx is on their side. */
+export function msfRetryable(err: unknown): boolean {
+  return err instanceof MsfHttpError && (err.status === 403 || err.status === 429 || err.status >= 500);
 }
 
 export type JobName = 'locks' | 'payments' | 'scoring' | 'roster' | 'injuries' | 'schedule' | 'feedback';
@@ -70,6 +77,18 @@ export function createJobs(deps: JobsDeps) {
   const scoring = createScoringStore(db, { afterFreeze: leaderboardHooks.afterFreeze });
   const leaderboard = createLeaderboardService({ db, redis: deps.redis, namespace: deps.namespace, log });
   const burnDeps = { ...burnStore, getServerTime: now, log };
+  const retryDelayMs = deps.msfRetryDelayMs ?? 2000;
+
+  /** One MSF read, retried once after a refusal that may be temporary. */
+  async function msfGet(path: string): Promise<unknown> {
+    try {
+      return await deps.msf.get(path);
+    } catch (err) {
+      if (!msfRetryable(err)) throw err;
+      if (retryDelayMs > 0) await new Promise((r) => setTimeout(r, retryDelayMs));
+      return deps.msf.get(path);
+    }
+  }
 
   async function rebuildBoards() {
     try {
@@ -133,10 +152,21 @@ export function createJobs(deps: JobsDeps) {
     },
 
     async scoring() {
-      const out: Array<{ week: number; burns: number; windowsFinal: number }> = [];
-      for (const week of await activeWeeks()) {
-        const games = parseGames(await deps.msf.get(`${season}/week/${week}/games.json`));
-        const parsed = parseGamelogs(await deps.msf.get(`${season}/week/${week}/player_gamelogs.json`));
+      const out: Array<{ week: number; burns: number; windowsFinal: number } | { week: number; failed: string }> = [];
+      // Newest week first, and one week's feed failing never holds up another week: a refused read
+      // of last week's feed (MSF answers 403 when it throttles) must not delay tonight's burns.
+      for (const week of [...(await activeWeeks())].reverse()) {
+        let games: ReturnType<typeof parseGames>;
+        let parsed: ReturnType<typeof parseGamelogs>;
+        try {
+          games = parseGames(await msfGet(`${season}/week/${week}/games.json`));
+          parsed = parseGamelogs(await msfGet(`${season}/week/${week}/player_gamelogs.json`));
+        } catch (err) {
+          if (!(err instanceof MsfHttpError)) throw err;
+          log('error', 'scoring: MSF feed refused, week skipped this run', { job: 'scoring', week, status: err.status, error: err.message });
+          out.push({ week, failed: `MSF HTTP ${err.status}` });
+          continue;
+        }
         // Stats posted under another MSF ID for the same person are scored under the kept ID (PRD-006 §7.5).
         const gamelogs = { ...parsed, lines: normalizeStatLines(parsed.lines, await aliasMap(db)) };
         await scoring.ingest({ season, games: games.games, gamelogs, serverNow: now() });

@@ -340,7 +340,7 @@ function Done() {
           <h1 className="m-0 font-mono text-[30px] leading-[1.1] font-medium">Locked in.</h1>
           <p className="m-0 text-[14px] leading-[1.5] text-muted">
             Your Week {ctx.week} lineup is confirmed.
-            {next && lockingNext > 0 && ` ${lockingNext === 1 ? 'One player locks' : `${lockingNext} players lock`} at ${timeET(next.scheduledEt)} ET.`}
+            {next && lockingNext > 0 && ` ${lockingNext === 1 ? 'One player locks' : `${lockingNext} players lock`} ${dayET(next.scheduledEt)} at ${timeET(next.scheduledEt)} ET.`}
           </p>
         </div>
         <dl className="m-0 grid grid-cols-2 gap-x-2 gap-y-3 rounded-sm border border-slate-edge bg-slate p-[14px]">

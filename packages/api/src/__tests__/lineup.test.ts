@@ -468,4 +468,63 @@ describeDbRedis('PRD-006 lineups, players, payments routes (HTTP, Postgres + Red
     const [{ n }] = await w.t.sql<{ n: number }>(`SELECT count(*)::int AS n FROM user_week_scores WHERE user_id = $1 AND week = 7`, [a.userId]);
     expect(n).toBe(1);
   });
+
+  it('§11: a refused feed for one week never holds up another week, and a refusal gets one retry', async () => {
+    const fx = (name: string) => JSON.parse(readFileSync(join(__dirname, '../../../scoring-engine/src/__tests__/fixtures', name), 'utf8'));
+    const games = fx('msf-2026-w7-games.json');
+    const gamelogs = fx('msf-2026-w7-gamelogs.sample.json');
+    const [{ id: w7 }] = await w.t.sql<{ id: string }>(
+      `INSERT INTO game_windows (week, season, label, scheduled_et, status, msf_game_ids) VALUES (7, $1, 'Sunday Late', '2026-10-25T20:05:00Z', 'locked', $2) RETURNING id::text AS id`,
+      [SEASON, ['163650']]
+    );
+    // A newer week whose feed MSF keeps refusing: it's tried first and must not block week 7.
+    await w.t.sql(
+      `INSERT INTO game_windows (week, season, label, scheduled_et, status, msf_game_ids) VALUES (8, $1, 'Thursday Night', '2026-10-30T00:15:00Z', 'locked', '{}')`,
+      [SEASON]
+    );
+    const a = await account(w);
+    const playerId = String(gamelogs.gamelogs[0].player.id);
+    await w.t.sql(`INSERT INTO pool_entries (user_id, player_id, season) VALUES ($1, $2, $3)`, [a.userId, playerId, SEASON]);
+    await w.t.sql(
+      `INSERT INTO season_submissions (user_id, week, season, slot_key, player_id, game_window_id, locked_at) VALUES ($1, 7, $2, 'te', $3, $4, '2026-10-23T00:15:30Z')`,
+      [a.userId, SEASON, playerId, w7]
+    );
+    const calls: string[] = [];
+    let w7Refusals = 1; // week 7's first read is refused once (throttling), then served
+    const msf: MsfFetcher = {
+      async get(path) {
+        calls.push(path);
+        if (path.includes('/week/8/')) throw new MsfHttpError(403, path);
+        if (path.includes('/week/7/games.json') && w7Refusals-- > 0) throw new MsfHttpError(403, path);
+        return path.endsWith('games.json') ? games : gamelogs;
+      },
+    };
+    const logged: Array<[string, string, Record<string, unknown> | undefined]> = [];
+    const log = (level: string, msg: string, extra?: Record<string, unknown>) => { logged.push([level, msg, extra]); };
+    const jobs = createJobs({ db: w.t.db, payments: w.payments, msf, season: SEASON, now: w.clock.get, log: log as never, apiContext: w.ctx, msfRetryDelayMs: 0 });
+    w.clock.set(new Date('2026-10-30T12:00:00Z'));
+
+    const out = (await jobs.run('scoring')) as { weeks: unknown[] };
+    expect(out.weeks).toEqual([{ week: 8, failed: 'MSF HTTP 403' }, { week: 7, burns: 1, windowsFinal: 1 }]);
+    expect(calls.filter((c) => c.includes('/week/8/games.json'))).toHaveLength(2); // one retry, then skipped
+    expect(calls.filter((c) => c.includes('/week/7/games.json'))).toHaveLength(2); // refused once, served on retry
+    expect(calls.some((c) => c.includes('/week/8/player_gamelogs'))).toBe(false);
+    expect(logged.some(([lvl, , x]) => lvl === 'error' && x?.week === 8 && x?.status === 403)).toBe(true);
+    const [{ n }] = await w.t.sql<{ n: number }>(`SELECT count(*)::int AS n FROM burn_records WHERE user_id = $1`, [a.userId]);
+    expect(n).toBe(1);
+  });
+
+  it('§11: a feed error MSF won\'t fix by retrying (404) is not retried and still skips only that week', async () => {
+    await w.t.sql(
+      `INSERT INTO game_windows (week, season, label, scheduled_et, status, msf_game_ids) VALUES (8, $1, 'Thursday Night', '2026-10-30T00:15:00Z', 'locked', '{}')`,
+      [SEASON]
+    );
+    const calls: string[] = [];
+    const msf: MsfFetcher = { async get(path) { calls.push(path); throw new MsfHttpError(404, path); } };
+    const jobs = createJobs({ db: w.t.db, payments: w.payments, msf, season: SEASON, now: w.clock.get, log: silent, apiContext: w.ctx, msfRetryDelayMs: 0 });
+    w.clock.set(new Date('2026-10-30T12:00:00Z'));
+    const out = (await jobs.run('scoring')) as { weeks: unknown[] };
+    expect(out.weeks).toEqual([{ week: 8, failed: 'MSF HTTP 404' }]);
+    expect(calls).toHaveLength(1);
+  });
 });

@@ -1,6 +1,6 @@
 # PRD-006 — API, Accounts and Lineup Submission
 **Burnout League · packages/api**
-Version 1.7 · 2026-10-28
+Version 1.8 · 2026-10-28
 Status: APPROVED 2026-10-27 — scope and auth decisions locked by Nath (§3); rules calls Q1, Q2, Q4 resolved in v1.1
 
 ---
@@ -471,6 +471,8 @@ Each job:
 - logs a JSON line;
 - survives the failure of any other job.
 
+**Scoring and refused feeds (v1.8).** The scoring cycle works through the active weeks newest first. Each MSF read that is refused with 403, 429 or 5xx is retried once after 2 seconds (MSF throttling shows up as 403). If a week's feed is still refused, that week is skipped for this run: an error line names the week and the HTTP status, the result lists it as `failed`, and the other weeks go on to ingest and burn. Staging on 2026-10-28 showed why this matters: an intermittent 403 on an old week's feed stopped every scoring run for about three hours.
+
 ### 11.6 Season schedule import
 
 The `schedule` job builds `game_windows` and `nfl_games` from the MySportsFeeds season schedule (`{season}/games.json`). If the subscription doesn't include it (`403`), the job uses the 18 weekly `games.json` feeds instead, skipping any week that returns `404`. An empty feed changes nothing.
@@ -617,6 +619,7 @@ Every critical rule also gets a mutation check, as with PRD-001 to PRD-004.
 | Version | Date | Changes |
 |---------|------|---------|
 | 1.7 | 2026-10-28 | §7.5: one person, one player. Duplicate MSF IDs for the same person become aliases of one kept ID; aliases can't be picked (DB-enforced); burns and stats follow the person; admin review and override. Roster sync also runs at worker startup. |
+| 1.8 | 2026-10-28 | §11: scoring works newest week first, retries a refused MSF read once, and skips only the week whose feed stays refused. |
 | 1.6 | 2026-10-27 | PRD-007 §8: D3 amended (a second factor for all use, §6.9; admin factor reset §6.7); Turnstile on sign-up; web app reads (§10.2.1); feedback and its worker tagging; `read_at`, `feedback`. |
 | 1.5 | 2026-10-27 | §11.6: season schedule import. One window per exact kickoff; frozen windows fixed (enforced by a trigger); picks re-resolved after changes; review list for decisions the import won't make; backfill through the normal jobs; pools close at the Week 3 lock at publish. |
 | 1.4 | 2026-10-27 | Free play is two weeks: the paid-entry cutoff moves from the Week 4 lock to the Week 3 lock (§9.0, Q4; PRD-003 §3, PRD-004 D7). |
