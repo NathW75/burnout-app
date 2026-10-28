@@ -23,7 +23,7 @@ const MESSAGES: Record<string, string> = {
   MFA_ENROLLMENT_REQUIRED: 'Set up your authenticator to continue.',
   STEP_UP_REQUIRED: 'Confirm with a code from your authenticator.',
   WEEK_CLOSED: 'Every game window this week has locked. The next week opens soon.',
-  PAID_ENTRY_REQUIRED: 'Free play has ended for this season. Enter a pool to keep playing.',
+  PAID_ENTRY_REQUIRED: 'Lineups are closed for the rest of this season.',
   SEASON_CLOSED: 'Lineups are only open for the current season.',
   CONFIRMATION_EXPIRED: 'Your review expired. Review your lineup again.',
   GATE_ORDER: 'This confirmation is out of date. Review your lineup again.',

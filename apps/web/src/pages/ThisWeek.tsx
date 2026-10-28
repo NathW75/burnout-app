@@ -40,7 +40,6 @@ export function ThisWeekPage() {
 
   const me = field.data?.me ?? null;
   const elig = lineup.data.eligibility;
-  const freePlay = !elig.prizeEligible;
   const freePlayOver = elig.freePlayThroughWeek !== null && week > elig.freePlayThroughWeek;
   const open = anyWindowOpen(windows.data, now);
   const filled = lineup.data.slots.filter((s) => s.playerId && !s.voidReason).length;
@@ -69,12 +68,11 @@ export function ThisWeekPage() {
           ) : (
             <span>Not on the board yet: confirm a lineup to join it.</span>
           )}
-          {freePlay && <span>Free play</span>}
         </div>
       </section>
 
       {freePlayOver && (
-        <div className="mx-4 mt-3"><ErrorNote>Free play ended after Week {elig.freePlayThroughWeek}. Enter a pool to keep playing this season.</ErrorNote></div>
+        <div className="mx-4 mt-3"><ErrorNote>Lineups are closed for the rest of this season.</ErrorNote></div>
       )}
 
       {unread.length > 0 && (

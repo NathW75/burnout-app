@@ -9,6 +9,7 @@ import { API, fillLineup, freshCode, FULL_LINEUP, hold, mailLink, PASSWORD, pick
 test.describe.configure({ mode: 'serial' });
 
 async function noSeriousA11yIssues(page: Page, where: string) {
+  await noMoneyWording(page, where);
   // Audit the whole page at its full height. The header and tabs are pinned, so whatever happens to sit at a screen edge
   // is partly under one of them at that scroll position; axe's target-size check would count that as a layout fault.
   const size = page.viewportSize();
@@ -29,6 +30,16 @@ async function noPlayerImages(page: Page) {
   const imgs = await page.locator('img').evaluateAll((els) => els.map((e) => (e as HTMLImageElement).alt));
   expect(imgs.filter((alt) => alt !== 'QR code for your authenticator app')).toEqual([]);
   expect(await page.locator('[style*="background-image"]').count()).toBe(0);
+}
+
+/**
+ * Staging and testing (Nath, 2026-10-28): no mention of prizes, money, tiers or anything financial on any screen.
+ * Checked on every screen the suite audits (with axe) and on every signed-in route in the tabs test.
+ */
+const MONEY_WORDS = /\b(prizes?|refunds?|refunded|payments?|paid|pay|payouts?|money|cash|winnings|wagers?|buy-?ins?|entry fees?|purses?|jackpot|tiers?)\b|\$\s?\d|free play/i;
+async function noMoneyWording(page: Page, where: string) {
+  const text = await page.locator('body').innerText();
+  expect(MONEY_WORDS.exec(text)?.[0] ?? null, `${where}: financial wording`).toBeNull();
 }
 
 test('the API refuses everything but sign-up steps until the authenticator is set up (server-enforced)', async ({ page }) => {
@@ -510,6 +521,8 @@ test('patch c: the tabs stay on every signed-in screen, LINEUP stays lit through
   for (const path of ['/', '/lineup', '/lineup/pick/qb', '/board', '/burned', '/inbox', '/help', '/account', '/account/password', '/account/authenticator', '/account/backup-codes', '/account/sessions', '/account/receipts', '/account/notifications', '/account/connector']) {
     await page.goto(path);
     await expect(nav, path).toBeInViewport({ ratio: 1 }); // pinned, fully on screen
+    await expect(page.locator('main')).not.toBeEmpty();
+    await noMoneyWording(page, path);
   }
   await page.goto('/help');
   await expect(nav.getByRole('link', { name: 'ACCOUNT' })).toHaveClass(/text-accent/);
@@ -526,6 +539,7 @@ test('patch c: the tabs stay on every signed-in screen, LINEUP stays lit through
   const acks = page.getByRole('checkbox');
   await expect(acks).toHaveCount(3);
   for (let i = 0; i < 3; i++) await acks.nth(i).check();
+  await noMoneyWording(page, 'gate 2');
   await page.getByRole('button', { name: 'CONTINUE' }).click();
   await expect(page).toHaveURL(/\/lineup\/confirm$/);
   await expect(nav.getByRole('link', { name: 'LINEUP' })).toHaveAttribute('aria-current', 'page');

@@ -75,7 +75,7 @@ export function NotificationsPage() {
           <label className="flex cursor-pointer items-start justify-between gap-4 rounded-sm border border-rule bg-paper px-[14px] py-3">
             <span className="flex flex-col gap-[2px]">
               <span className="text-[15px] font-semibold">Email me nothing optional</span>
-              <span id="all-off-note" className="text-[13px] leading-[1.45] text-muted">Stops every email above. Account and payment emails (sign-in links, receipts for money) still come.</span>
+              <span id="all-off-note" className="text-[13px] leading-[1.45] text-muted">Stops every email above. Account emails (sign-in links, security notices) still come.</span>
             </span>
             <input
               type="checkbox"
@@ -194,7 +194,7 @@ export function UnsubscribePage() {
   return (
     <AuthLayout
       title={done ? 'You’re unsubscribed' : 'Unsubscribe from emails?'}
-      intro={done ? 'We won’t send optional emails anymore. Account and payment emails still come. Everything stays in your inbox in the app.' : 'This stops lock, burn, lineup-change and receipt emails. Your inbox in the app keeps everything.'}
+      intro={done ? 'We won’t send optional emails anymore. Account emails still come. Everything stays in your inbox in the app.' : 'This stops lock, burn, lineup-change and receipt emails. Your inbox in the app keeps everything.'}
     >
       {done ? (
         <Notice>

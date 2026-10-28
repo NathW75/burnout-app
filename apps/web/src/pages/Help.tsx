@@ -43,9 +43,6 @@ export function HelpPage() {
       <Rule id="disruptions" title="CANCELED OR POSTPONED GAMES">
         <p>A canceled game’s picks are voided and nobody is burned. If a game is postponed after it locked, Burnout League follows the published disruption rules; you’ll get a notice about any slot that reopens.</p>
       </Rule>
-      <Rule id="free-play" title="FREE PLAY">
-        <p>Free play is for trying the game: Weeks 1 and 2, no prizes. Free play and late paid entry both close at the Week 3 lock. A late entrant’s prize standings count from the week they joined.</p>
-      </Rule>
       <Rule id="gates" title="CONFIRMING A LINEUP">
         <p>Every lineup goes through three steps: review it, tick the three acknowledgments, then press and hold to confirm. Our server timestamps each step, and you get a receipt.</p>
         <p id="terms">The acknowledgments summarize the Terms. The Terms are the final word.</p>

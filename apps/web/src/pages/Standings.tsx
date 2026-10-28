@@ -33,7 +33,7 @@ export function StandingsPage() {
       <section className="flex flex-col gap-[6px] px-4 pt-[22px] pb-2">
         <h1 className="m-0 font-mono text-[40px] leading-none font-medium tracking-[-1px]">Standings</h1>
         <p className="m-0 text-[13px] leading-[1.45] text-muted">
-          Season field · {b.fieldSize} {b.fieldSize === 1 ? 'manager' : 'managers'}. Free play: these aren’t prize standings.
+          Season field · {b.fieldSize} {b.fieldSize === 1 ? 'manager' : 'managers'}.
           {b.week > 0 && <> The WEEK column is Week {b.week}.</>}
         </p>
       </section>

@@ -157,7 +157,7 @@ export async function playEligibility(q: SqlRunner, userId: string, season: stri
 async function assertMayPlay(q: SqlRunner, userId: string, season: string, week: number): Promise<void> {
   const e = await playEligibility(q, userId, season);
   if (e.freePlayThroughWeek !== null && week > e.freePlayThroughWeek) {
-    throw new HttpError(403, 'PAID_ENTRY_REQUIRED', `Free play ended after Week ${e.freePlayThroughWeek}. Enter a pool to keep playing.`);
+    throw new HttpError(403, 'PAID_ENTRY_REQUIRED', 'Lineups are closed for the rest of this season.');
   }
 }
 

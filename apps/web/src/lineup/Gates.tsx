@@ -176,7 +176,7 @@ export function Gate1Page() {
 const ACKS = [
   { key: 'burnRules', title: '01 · THE BURN RULE', text: 'A player in my lineup when his window locks is burned once his game goes Final, win or lose.' },
   { key: 'permanent', title: '02 · IT’S PERMANENT', text: 'A burned player is gone from my pool for the rest of the season. No undo.' },
-  { key: 'noRefund', title: '03 · NO REFUNDS', text: 'A confirmed lineup can’t be reversed or refunded.' },
+  { key: 'noRefund', title: '03 · IT’S FINAL', text: 'Once I confirm, this lineup can’t be undone or reversed.' },
 ] as const;
 type AckKey = (typeof ACKS)[number]['key'];
 

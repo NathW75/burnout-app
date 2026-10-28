@@ -228,15 +228,15 @@ export async function getBurnHistory(ctx: ApiContext, userId: string, args: { we
 
 export async function getPoolStandings(ctx: ApiContext, userId: string, args: { pool_id?: string }) {
   const season = ctx.config.currentSeason;
-  const entered = await ctx.db.query<{ id: string; name: string; buy_in_cents: number }>(
-    `SELECT p.id::text AS id, p.name, p.buy_in_cents FROM contest_pools p
+  const entered = await ctx.db.query<{ id: string; name: string }>(
+    `SELECT p.id::text AS id, p.name FROM contest_pools p
       WHERE p.season = $1 AND p.status <> 'draft' AND ($3::uuid IS NULL OR p.id = $3::uuid)
         AND EXISTS (SELECT 1 FROM contest_entries ce WHERE ce.pool_id = p.id AND ce.user_id = $2::uuid
                       AND NOT EXISTS (SELECT 1 FROM contest_entry_voids v WHERE v.entry_id = ce.id))
       ORDER BY p.buy_in_cents, p.name`,
     [season, userId, args.pool_id ?? null]
   );
-  if (args.pool_id && !entered.length) throw new ToolError('You haven’t entered that pool, so its standings aren’t available to you.');
+  if (args.pool_id && !entered.length) throw new ToolError('You haven’t entered that contest, so its standings aren’t available to you.');
   const pools = [];
   for (const p of entered) {
     try {
@@ -249,7 +249,7 @@ export async function getPoolStandings(ctx: ApiContext, userId: string, args: { 
       const rows = board.rows.map(row);
       if (!rows.some((r) => r.is_me)) rows.push(row({ rank: me.rank, handle: me.handle, pointsX100: me.pointsX100, weekPointsX100: me.weekPointsX100, isMe: true, movement: me.movement }));
       pools.push({
-        pool_id: p.id, name: p.name, buy_in: p.buy_in_cents / 100, week: board.currentWeek, status: board.status,
+        pool_id: p.id, name: p.name, week: board.currentWeek, status: board.status,
         total_entrants: board.fieldSize, my_rank: me.rank, my_total_points: pts(me.pointsX100)!, rows,
       });
     } catch (err) {
@@ -260,7 +260,6 @@ export async function getPoolStandings(ctx: ApiContext, userId: string, args: { 
   const fb = await fieldBoard(ctx, userId, season, 0, 10);
   return {
     season,
-    free_play: entered.length === 0,
     pools,
     season_field: {
       week: fb.week,
@@ -294,7 +293,7 @@ export async function getFieldBurnRates(ctx: ApiContext, userId: string, args: F
           AND NOT EXISTS (SELECT 1 FROM contest_entry_voids v WHERE v.entry_id = ce.id)`,
       [args.pool_id, userId, season]
     );
-    if (!ok) throw new ToolError('You haven’t entered that pool, so its field isn’t available to you.');
+    if (!ok) throw new ToolError('You haven’t entered that contest, so its field isn’t available to you.');
   }
   const [{ latest }] = await ctx.db.query<{ latest: number | null }>(`SELECT max(week)::int AS latest FROM burn_records WHERE season = $1`, [season]);
   const throughWeek = args.week ?? latest ?? (await weekNow(ctx));

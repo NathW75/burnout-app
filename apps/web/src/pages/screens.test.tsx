@@ -62,7 +62,7 @@ describe('Standings (§6.5)', () => {
     expect(within(rows[2]).getByText('YOU')).toBeInTheDocument();
     expect(within(rows[0]).getByRole('link', { name: 'ace' })).toHaveAttribute('href', '/board/ace');
     expect(screen.getByLabelText('Rank 2 of 3')).toBeInTheDocument();
-    expect(screen.getByText(/these aren’t prize standings/)).toBeInTheDocument();
+    expect(screen.queryByText(/prize/i)).toBeNull(); // no money wording while testing (Nath, 2026-10-28)
   });
 
   it('pins my row under the page when I rank below it, and pages server-side', async () => {

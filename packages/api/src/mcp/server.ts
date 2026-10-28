@@ -65,13 +65,13 @@ const TOOLS = [
     name: 'get_pool_standings',
     title: 'Standings',
     description:
-      'Standings for every contest pool you have entered (the same board as the app: rank, handle, season and week points, rank change), plus the season field board everyone sees. Pools you have not entered are not readable.',
-    input: obj({ pool_id: { ...uuidSchema, description: 'Only this pool.' } }),
-    output: out({ season: { type: 'string' }, free_play: { type: 'boolean' }, pools: { type: 'array' }, season_field: { type: 'object' } }, ['season', 'free_play', 'pools', 'season_field']),
+      'Your standings: the season field board everyone sees (rank, handle, season and week points, rank change), plus any contest you have entered (the same boards as the app). Contests you have not entered are not readable.',
+    input: obj({ pool_id: { ...uuidSchema, description: 'Only this contest.' } }),
+    output: out({ season: { type: 'string' }, pools: { type: 'array' }, season_field: { type: 'object' } }, ['season', 'pools', 'season_field']),
     limit: TOOL_LIMITS.get_pool_standings,
     run: (ctx: ApiContext, userId: string, a: Record<string, unknown>) => getPoolStandings(ctx, userId, a),
     text: (r: Awaited<ReturnType<typeof getPoolStandings>>) =>
-      `${r.pools.length ? `${r.pools.length} pool(s).` : 'No paid pools entered (free play).'} Season field: ${r.season_field.my_rank !== null ? `you're #${r.season_field.my_rank} of ${r.season_field.field_size}` : `${r.season_field.field_size} managers`}.`,
+      `${r.pools.length ? `${r.pools.length} contest(s). ` : ''}Season field: ${r.season_field.my_rank !== null ? `you're #${r.season_field.my_rank} of ${r.season_field.field_size}` : `${r.season_field.field_size} managers`}.`,
   },
   {
     name: 'get_field_burn_rates',

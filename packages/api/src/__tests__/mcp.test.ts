@@ -137,6 +137,8 @@ describeDbRedis('PRD-011 AI connector, personal tokens (HTTP, Postgres + Redis)'
     const list = rpc(await modern(token, 'tools/list')).result!;
     expect(list).toMatchObject({ resultType: 'complete', cacheScope: 'private' });
     expect(list.tools.map((t: { name: string }) => t.name)).toEqual(TOOLS);
+    // No mention of prizes, money or free play anywhere an AI reads about the tools, while testing (Nath, 2026-10-28).
+    expect(JSON.stringify(list.tools)).not.toMatch(/\b(prizes?|refunds?|payments?|paid|payouts?|money|cash|winnings|buy[-_ ]?ins?|entry fees?|free[-_ ]play)\b|\$\s?\d/i);
     for (const t of list.tools) {
       expect(t.annotations).toMatchObject({ readOnlyHint: true, openWorldHint: false });
       expect(t.inputSchema.type).toBe('object');
@@ -324,7 +326,8 @@ describeDbRedis('PRD-011 AI connector, personal tokens (HTTP, Postgres + Redis)'
     await w.t.sql(`UPDATE users SET display_name = 'Amelia Secretname'`);
     const { token } = await makeToken(amy);
     const r = (await call(token, 'get_pool_standings')).structuredContent;
-    expect(r).toMatchObject({ free_play: true, pools: [] });
+    expect(r).toMatchObject({ pools: [] });
+    expect(r).not.toHaveProperty('free_play'); // no money or free-play wording while testing (Nath, 2026-10-28)
     expect(r.season_field.top.map((x: { handle: string }) => x.handle).sort()).toEqual(['amy', 'bob']);
     expect(r.season_field.top.find((x: { handle: string }) => x.handle === 'amy').is_me).toBe(true);
     const err = await call(token, 'get_pool_standings', { pool_id: '00000000-0000-4000-8000-000000000000' });

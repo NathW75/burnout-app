@@ -68,7 +68,7 @@ export function BuilderPage() {
       <SubHeader title={`WEEK ${week} LINEUP`} back="/" backLabel="Back to This Week" />
       <main className={`flex flex-1 flex-col gap-[14px] px-4 pt-[14px] ${open && !freePlayOver ? 'pb-28' : 'pb-24'}`}>
         <ErrorNote>{flash}</ErrorNote>
-        {freePlayOver && <ErrorNote>Free play ended after Week {elig.freePlayThroughWeek}. Enter a pool to keep playing this season.</ErrorNote>}
+        {freePlayOver && <ErrorNote>Lineups are closed for the rest of this season.</ErrorNote>}
         {!open && <Notice>Every window this week has locked. Your lineup is set; next week opens when its schedule is final.</Notice>}
         {next && (
           <div className="flex items-center gap-[10px] rounded-sm border border-slate-edge bg-slate px-3 py-[10px]">

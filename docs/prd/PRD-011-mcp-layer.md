@@ -1,6 +1,6 @@
 # PRD-011 — AI Connector / MCP Layer
 **Burnout League · Corewright Labs LLC**
-*Status: v1.3 — **Phase 1a APPROVED 2026-10-27** (Nath). Phase 1a part 1 (connector, four tools, personal tokens) built 2026-10-28; part 2 (OAuth for hosted AI apps) next. Phase 1b under discussion; not committed.*
+*Status: v1.4 — **Phase 1a APPROVED 2026-10-27** (Nath). Phase 1a part 1 (connector, four tools, personal tokens) built 2026-10-28; part 2 (OAuth for hosted AI apps) next. Phase 1b under discussion; not committed.*
 *Authors: Product (Overlord thread) v1.0 · Build thread revisions v1.1–v1.3 · 2026-10-27/28*
 *Repo: `NathW75/burnout-app` · `docs/prd/PRD-011-mcp-layer.md`*
 
@@ -175,10 +175,11 @@ Every burn the manager has recorded.
 The leaderboard of every contest pool the manager has entered, identical to the in-app view (PRD-003).
 
 - **Inputs:** `pool_id?`.
-- **Per pool:** `pool_id`, `name`, `buy_in`, `week`, `status`, `total_entrants`, and `rows` of [`rank`, `handle`, `total_points`, `week_points`, `is_me`, `rank_change`] (top 100, plus the manager's own row if lower).
+- **Per pool:** `pool_id`, `name`, `week`, `status`, `total_entrants`, and `rows` of [`rank`, `handle`, `total_points`, `week_points`, `is_me`, `rank_change`] (top 100, plus the manager's own row if lower).
   - Also `my_rank` and `my_total_points`.
   - Prize standings honor `scoring_from_week`.
-- **Access:** pools the manager has not entered are not readable (an error result). Free players get an empty list with `free_play: true`.
+- **Access:** pools the manager has not entered are not readable (an error result). A manager with none gets an empty list.
+- **No financial wording while in staging and testing (v1.4, Nath 2026-10-28; PRD-007 §5.8):** no `buy_in` or `free_play` fields, and the tool's description and text summary talk about the season board and "contests", never prizes, money or free play. A test checks every tool description.
 - **As built, also `season_field`:** the season field board every signed-in manager sees in the app (PRD-007 §6.5): `field_size`, `my_rank`, `my_total_points` and the top 10 by handle. Free-play testers have no pools, so this is their standings.
 - **Sources:** the leaderboard service (`contest_entries`, `user_week_scores`, `leaderboard_snapshots`), run on the handler's read-only connection. Same code path as the app.
 
@@ -327,6 +328,7 @@ Depends on: PRD-001 (burn state), PRD-003 (standings), PRD-006 (sessions, step-u
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.4 | 2026-10-28 | `get_pool_standings`: `buy_in` and `free_play` removed and the description reworded, so the connector says nothing financial while in staging and testing (PRD-007 §5.8). |
 | 1.3 | 2026-10-28 | Phase 1a part 1 built: `/mcp` on the official SDK v2 (2026-07-28 plus stateless 2025-11-25), Origin check, MCP-only bearer auth, READ ONLY handlers, rate limits; personal tokens (`mcp_credentials`, create with step-up, list, revoke, audit, revoked by password change / sign out everywhere / suspension); the four tools; Account → AI connector page. Protocol details verified against the 2026-07-28 spec. As-built notes: `state`/`limit` inputs and `season_points` in `get_my_pool`; `elite_remaining` ranked on this season's points until prior-season totals are imported; `season_field` in `get_pool_standings`; floor applies to the season and the week slice. OAuth (§5.1) moves to part 2 with the hosted-client requirements recorded. Added to the repo. |
 | 1.2 | 2026-10-27 | Nath's decisions: Phase 1a (four read tools) approved. Q4 yes (own pending picks; `my_lineup_this_week` added to `get_my_pool`), Q5 yes (step-up), Q6 yes (50-manager floor). Phase 1b under discussion, not committed (Q8). |
 | 1.1 | 2026-10-27 | Build-thread revision:<br>• **Protocol:** aligned to MCP 2026-07-28 (stateless Streamable HTTP, `server/discover`, required headers, `resultType`), with 2025-11-25 compatibility. Dropped the non-standard `/.well-known/mcp.json` and the custom `{tool, params}` body.<br>• **Auth:** resolved the OAuth vs. bearer contradiction with both (OAuth 2.1 + CIMD for hosted apps; personal tokens for developer clients). Token hashing changed from bcrypt to SHA-256 (bcrypt can't be looked up by hash).<br>• **Data:** mapped to the real tables (`season_submissions`, `contest_entries`, leaderboard service); added FB and the real slot names. "League" became contest pool / season field, since the burn pool is per user per season. The cross-league flag was replaced by a 50-manager anonymity floor per slice.<br>• **Scope:** split into 1a (four tools) and 1b (BVR and burn path, no stubs).<br>• **Safety:** added READ ONLY transactions, credential boundaries, attorney items, Q4–Q7 and sequencing. |
