@@ -2,7 +2,7 @@
  * App chrome: the header with the official clock, the bottom nav, and the
  * small shared pieces every screen uses.
  */
-import { createContext, useContext, useEffect, useRef, type ReactNode } from 'react';
+import { createContext, Suspense, useContext, useEffect, useRef, type ReactNode } from 'react';
 import { Link, NavLink, useLocation } from 'react-router';
 import { setCurrentScreen } from '../api/client';
 import { useUnread } from '../api/hooks';
@@ -97,7 +97,13 @@ const tabs = [
 /** Every signed-in screen sits inside the app shell, which keeps the bottom tabs on screen (PRD-007 §6.2.1, patch c). */
 const ShellContext = createContext(false);
 export function AppShell({ children }: { children: ReactNode }) {
-  return <ShellContext.Provider value={true}>{children}</ShellContext.Provider>;
+  // Screens load on demand. Their loading state renders inside the shell, so the tabs stay put while a screen's code arrives;
+  // without this boundary the app-wide one above the shell would replace everything, tabs included, with a bare spinner.
+  return (
+    <ShellContext.Provider value={true}>
+      <Suspense fallback={<Page><Loading /></Page>}>{children}</Suspense>
+    </ShellContext.Provider>
+  );
 }
 export const useInShell = () => useContext(ShellContext);
 

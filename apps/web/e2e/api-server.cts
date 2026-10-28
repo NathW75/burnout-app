@@ -141,7 +141,8 @@ async function main() {
     db, redis, namespace, payments, mailer,
     totpEncryptionKey: randomBytes(32).toString('base64'),
     log: (level, message, meta) => level !== 'info' && console.error(JSON.stringify({ level, message, ...meta })),
-    config: { bcryptCost: 4, cookieSecure: false, corsOrigins: [WEB_ORIGIN], appBaseUrl: WEB_ORIGIN, currentSeason: SEASON, trustProxy: 0, edgeSecret: null, vapidPublicKey: 'BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjBJuBkr3qBUYIHBQFLXYp5Nksh8U' },
+    // Every simulated user in the suite shares one IP (127.0.0.1), so the per-IP cap is raised here; production stays at 300 a minute.
+    config: { bcryptCost: 4, ipRateLimitPerMinute: 5_000, cookieSecure: false, corsOrigins: [WEB_ORIGIN], appBaseUrl: WEB_ORIGIN, currentSeason: SEASON, trustProxy: 0, edgeSecret: null, vapidPublicKey: 'BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjBJuBkr3qBUYIHBQFLXYp5Nksh8U' },
   });
 
   await seedStats(redis, namespace);

@@ -84,7 +84,7 @@ export function createApp(deps: CreateAppDeps): { app: Express; ctx: ApiContext 
   }));
 
   app.use(express.json({ limit: '100kb' }));
-  app.use(ipRateLimit(ctx, 'ip', 300, 60));
+  app.use(ipRateLimit(ctx, 'ip', ctx.config.ipRateLimitPerMinute, 60));
   // The AI connector (PRD-011) takes only its own bearer credentials: it sits before session auth and CSRF.
   app.use('/mcp', mcpRouter(ctx));
   app.use(authResolver(ctx));

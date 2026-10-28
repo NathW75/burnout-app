@@ -3,6 +3,8 @@
  * step-up, CSRF, admin, audit and secrets — over HTTP against real
  * Postgres + Redis.
  */
+import request from 'supertest';
+import { DEFAULT_API_CONFIG } from '../context';
 import { totp } from '../auth/totp';
 import { sha256Hex } from '../auth/crypto';
 import { describeDbRedis, SEASON } from '@burnout/test-support';
@@ -507,5 +509,21 @@ describeDbRedis('PRD-007 §8.6: a second factor for all use (HTTP, Postgres + Re
     const setup = await again.post('/v1/auth/mfa/totp/setup', { password: PASSWORD });
     expect((await again.post('/v1/auth/mfa/totp/confirm', { code: totp(setup.body.secret, w.clock.get()) })).status).toBe(200);
     expect((await again.get(`/v1/seasons/${SEASON}/weeks/8/lineup`)).status).toBe(200);
+  });
+});
+
+describeDbRedis('API-wide per-IP rate limit (PRD-006 §10)', () => {
+  it('defaults to 300 a minute; the cap applies to every route, and only the e2e harness raises it', async () => {
+    expect(DEFAULT_API_CONFIG.ipRateLimitPerMinute).toBe(300);
+    const w = await createWorld({ ipRateLimitPerMinute: 3 });
+    try {
+      const statuses: number[] = [];
+      for (let i = 0; i < 4; i++) statuses.push((await request(w.app).get('/v1/time').set('X-Forwarded-For', '203.0.113.9')).status);
+      expect(statuses).toEqual([200, 200, 200, 429]);
+      // Another client IP has its own count.
+      expect((await request(w.app).get('/v1/time').set('X-Forwarded-For', '203.0.113.10')).status).toBe(200);
+    } finally {
+      await w.close();
+    }
   });
 });
