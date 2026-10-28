@@ -24,6 +24,8 @@ async function main() {
 
   // The schedule first, so a fresh database has windows before the first lock check (§11.6).
   await jobs.run('schedule');
+  // Then the rosters, so player identity (§7.5) is current after every deploy, not only at the nightly sync.
+  await jobs.run('roster');
 
   let running = false;
   const tick = async () => {

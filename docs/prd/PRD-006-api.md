@@ -1,6 +1,6 @@
 # PRD-006 — API, Accounts and Lineup Submission
 **Burnout League · packages/api**
-Version 1.6 · 2026-10-27
+Version 1.7 · 2026-10-28
 Status: APPROVED 2026-10-27 — scope and auth decisions locked by Nath (§3); rules calls Q1, Q2, Q4 resolved in v1.1
 
 ---
@@ -174,6 +174,7 @@ It computes no points, ranks or prizes. Those come from PRD-002, PRD-003 and PRD
 | `SUBMISSION_VOIDED` |
 | `ADMIN_ACTION` |
 | `MFA_RESET` |
+| `PLAYER_MERGED` |
 
 Events with no known user are recorded under the system user (all-zero UUID).
 
@@ -230,6 +231,20 @@ Locked submissions are never touched. The same re-resolve also covers a game mov
 ### 7.4 MSF access
 
 Only the worker calls MSF, with `MSF_API_KEY` from env using Basic auth (`key:MYSPORTSFEEDS`). The key is never logged.
+
+### 7.5 One person, one player (decision 2026-10-28)
+
+MySportsFeeds sometimes lists the same person under two IDs (on 2026-10-28: Brandon Smith, WR PIT, as 30297 and 112299, same birth date and college, different jersey numbers). Treated as two players, he could be burned under one ID and played again under the other. After every roster sync, and at worker startup:
+
+- **Same person** = same name and same birth date. Also same name, team and position when a birth date is missing, as long as no two of them have different birth dates; these merges go on a review list. Different birth dates are never merged. Names compare without case, accents, punctuation or suffixes (Jr., Sr., II–V). The birth date is read from the feed for this check only and is **never stored**.
+- **One ID is kept** (`nfl_players.canonical_id IS NULL`): the one already kept, else the one on a team, else the one with game stats, else the oldest. The rest become aliases (`canonical_id` → the kept ID). A kept ID never changes automatically.
+- **Aliases never play:** they're left out of the player pool and of the lineup checks, and a database trigger refuses any `season_submissions` row (insert, or change of player) that names one. No chains: an alias points at a kept ID, and a kept ID with aliases can't become one.
+- **Burns follow the person** (PRD-001 §5.4): a burn under any of a person's IDs makes him burned for that manager.
+- **Open picks move:** an unlocked pick on a new alias moves to the kept ID. If the manager already has that person in another slot that week, the alias pick is voided (`PLAYER_MERGED`) and the manager is notified. Locked picks are never touched.
+- **Stats follow the person:** the scoring job scores stats posted under an alias under the kept ID; if both IDs have a line for the same game, the kept ID's own line wins.
+- **Admin:** `GET /v1/admin/players/identities` lists the merges and how many await review. `POST /v1/admin/players/:id/identity { canonicalId, reason }` merges a player into a kept ID by hand, or splits him out with `canonicalId: null`. Admin decisions (`identity_source = 'manual'`) are never changed by the sync. Every merge is audited (`PLAYER_MERGED`, or `ADMIN_ACTION` with the reason).
+
+On the 2026-10-27 feed this merges 24 pairs. Six involve a rostered player: Brandon Smith (PIT), plus a rostered record and a stale free-agent copy for Jackson Acker (SEA), Mark Gronowski (HOU), Jackson Meeks (DET), Ted Hurst (TB) and Trent Sherfield (BUF).
 
 ---
 
@@ -423,6 +438,8 @@ Setup: `docs/deploy/RAILWAY.md`.
 | `POST /v1/admin/users/:id/factors/reset` (§6.7) |
 | `GET /v1/admin/feedback?reviewed&category&severity&before&limit` |
 | `POST /v1/admin/feedback/:id/review { reviewed }` |
+| `GET /v1/admin/players/identities` (§7.5) |
+| `POST /v1/admin/players/:id/identity { canonicalId, reason }` (§7.5) |
 
 ### 10.6 Ops
 
@@ -504,6 +521,8 @@ The `schedule` job builds `game_windows` and `nfl_games` from the MySportsFeeds 
 | `notification_queue` (v1.6) | Adds `read_at` and an index on `(user_id, created_at DESC)` for the inbox |
 | `feedback` (v1.6) | New: user, screen, body (CHECK 1–2,000 chars), `tags` (JSONB, GIN index), `classified_at`, `classify_attempts`, review fields |
 | `season_submissions` (v1.6) | Index on `(season, user_id)` for the field board |
+| `nfl_players` (v1.7) | Adds `canonical_id`, `identity_source` (auto/manual), `identity_review`; no-chain trigger (§7.5) |
+| `season_submissions` (v1.7) | Trigger: a row can't name an alias; `void_reason` gains `PLAYER_MERGED` |
 
 ---
 
@@ -597,6 +616,7 @@ Every critical rule also gets a mutation check, as with PRD-001 to PRD-004.
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.7 | 2026-10-28 | §7.5: one person, one player. Duplicate MSF IDs for the same person become aliases of one kept ID; aliases can't be picked (DB-enforced); burns and stats follow the person; admin review and override. Roster sync also runs at worker startup. |
 | 1.6 | 2026-10-27 | PRD-007 §8: D3 amended (a second factor for all use, §6.9; admin factor reset §6.7); Turnstile on sign-up; web app reads (§10.2.1); feedback and its worker tagging; `read_at`, `feedback`. |
 | 1.5 | 2026-10-27 | §11.6: season schedule import. One window per exact kickoff; frozen windows fixed (enforced by a trigger); picks re-resolved after changes; review list for decisions the import won't make; backfill through the normal jobs; pools close at the Week 3 lock at publish. |
 | 1.4 | 2026-10-27 | Free play is two weeks: the paid-entry cutoff moves from the Week 4 lock to the Week 3 lock (§9.0, Q4; PRD-003 §3, PRD-004 D7). |

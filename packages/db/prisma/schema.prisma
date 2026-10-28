@@ -850,6 +850,13 @@ model NflPlayer {
   rosterStatus  String?  @map("roster_status") @db.VarChar(40)
   injuryStatus  String   @default("Active") @map("injury_status") @db.VarChar(15)
   updatedAt     DateTime @map("updated_at") @db.Timestamptz
+  // PRD-006 §7.5: another MSF ID for the same person points at the one we keep.
+  canonicalId    String?  @map("canonical_id") @db.VarChar(50)
+  identitySource String?  @map("identity_source") @db.VarChar(10) // auto | manual
+  identityReview Boolean  @default(false) @map("identity_review")
+
+  canonical NflPlayer?  @relation("PlayerIdentity", fields: [canonicalId], references: [msfPlayerId], onDelete: Restrict)
+  aliases   NflPlayer[] @relation("PlayerIdentity")
 
   @@index([position], name: "idx_nfl_players_position")
   @@index([team], name: "idx_nfl_players_team")

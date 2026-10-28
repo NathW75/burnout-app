@@ -26,12 +26,26 @@ export interface PlayerCard {
   unavailableReason: 'BURNED' | 'LOCKED' | 'INACTIVE' | 'BYE' | 'WINDOW_CLOSED' | null;
 }
 
-/** Players the user may still select this season: selectable positions, on a team, not burned by them. */
+/**
+ * Burned for this user (PRD-001 §5.4): the person counts, not the ID. True if
+ * the player, or any other MSF ID for the same person, was burned.
+ * $1 = user id, $2 = season; `p` is the nfl_players row in the outer query.
+ */
+export const BURNED_BY_PERSON_SQL = `
+  EXISTS (SELECT 1 FROM pool_entries pe JOIN nfl_players x ON x.msf_player_id = pe.player_id
+           WHERE pe.user_id = $1::uuid AND pe.season = $2 AND pe.burned
+             AND COALESCE(x.canonical_id, x.msf_player_id) = COALESCE(p.canonical_id, p.msf_player_id))`;
+
+/**
+ * Players the user may still select this season: selectable positions, on a
+ * team, one ID per person (aliases never), and not burned by them under any
+ * of that person's IDs (PRD-006 §7.5).
+ */
 export async function availablePlayerIds(q: SqlRunner, userId: string, season: string): Promise<Set<string>> {
   const rows = await q.query<{ id: string }>(
     `SELECT p.msf_player_id AS id FROM nfl_players p
-      WHERE p.position = ANY ($3::text[]) AND p.team IS NOT NULL
-        AND NOT EXISTS (SELECT 1 FROM pool_entries pe WHERE pe.user_id = $1::uuid AND pe.season = $2 AND pe.player_id = p.msf_player_id AND pe.burned)`,
+      WHERE p.position = ANY ($3::text[]) AND p.team IS NOT NULL AND p.canonical_id IS NULL
+        AND NOT ${BURNED_BY_PERSON_SQL}`,
     [userId, season, [...SELECTABLE_POSITIONS]]
   );
   return new Set(rows.map((r) => r.id));
@@ -88,9 +102,11 @@ export async function getPool(ctx: ApiContext, userId: string, season: string, w
   }>(
     `SELECT p.msf_player_id AS id, p.first_name || ' ' || p.last_name AS name, p.team, p.position, p.injury_status,
             g.opponent, g.home_away, g.scheduled_et, g.status,
-            EXISTS (SELECT 1 FROM pool_entries pe WHERE pe.user_id = $1::uuid AND pe.season = $2 AND pe.player_id = p.msf_player_id AND pe.burned) AS burned,
-            EXISTS (SELECT 1 FROM season_submissions s WHERE s.user_id = $1::uuid AND s.season = $2 AND s.week = $3
-                      AND s.player_id = p.msf_player_id AND s.locked_at IS NOT NULL AND s.void_reason IS NULL) AS locked
+            ${BURNED_BY_PERSON_SQL} AS burned,
+            EXISTS (SELECT 1 FROM season_submissions s JOIN nfl_players x ON x.msf_player_id = s.player_id
+                     WHERE s.user_id = $1::uuid AND s.season = $2 AND s.week = $3
+                       AND COALESCE(x.canonical_id, x.msf_player_id) = p.msf_player_id
+                       AND s.locked_at IS NOT NULL AND s.void_reason IS NULL) AS locked
        FROM nfl_players p
        LEFT JOIN LATERAL (
          SELECT CASE WHEN p.team = gm.home_team THEN gm.away_team ELSE gm.home_team END AS opponent,
@@ -99,7 +115,7 @@ export async function getPool(ctx: ApiContext, userId: string, season: string, w
            FROM nfl_games gm LEFT JOIN game_windows gw ON gw.id = gm.game_window_id
           WHERE gm.season = $2 AND gm.week = $3 AND p.team IN (gm.home_team, gm.away_team)
           ORDER BY gm.scheduled_start LIMIT 1) g ON true
-      WHERE p.position = ANY ($4::text[]) AND p.team IS NOT NULL
+      WHERE p.position = ANY ($4::text[]) AND p.team IS NOT NULL AND p.canonical_id IS NULL -- one card per person (§7.5)
       ORDER BY p.position, p.last_name, p.first_name, p.msf_player_id`,
     [userId, season, week, [...SELECTABLE_POSITIONS]]
   );

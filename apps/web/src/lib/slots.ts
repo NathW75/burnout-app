@@ -40,6 +40,7 @@ export const VOID_TEXT: Record<VoidReason, string> = {
   PLAYER_NO_GAME: 'No game this week. Not burned.',
   GAME_CANCELED: 'Game canceled. Not burned.',
   ADMIN_VOID: 'Voided by Burnout League. Not burned.',
+  PLAYER_MERGED: 'Same player as another of your picks this week. Not burned.',
 };
 
 /** How a slot shows (PRD-007 §6.3). */

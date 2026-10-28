@@ -2,8 +2,10 @@
  * MSF v2.1 `players` feed parser — PRD-006 §7.1
  *
  * NIL: only id, name, position, team, roster status and injury designation
- * are read. Everything else in the feed (officialImageSrc, social handles,
- * birth data, …) is dropped here and never reaches the database.
+ * are stored. The birth date is read too, but only to tell whether two MSF
+ * records are the same person (PRD-006 §7.5); it is never stored. Everything
+ * else in the feed (officialImageSrc, social handles, …) is dropped here and
+ * never reaches the database.
  *
  * Verified against real feeds (2026-10-27):
  *   players.json  → { lastUpdatedOn, players: [{ player: {…}, teamAsOfDate }], references }
@@ -34,6 +36,8 @@ export interface ParsedPlayer {
   team: string | null;
   rosterStatus: string | null;
   injuryStatus: InjuryStatus;
+  /** YYYY-MM-DD. In memory only, for duplicate detection (§7.5); never written to the database. */
+  birthDate?: string | null;
 }
 
 export class MsfPlayersFeedError extends Error {
@@ -82,6 +86,7 @@ export function parsePlayers(feed: unknown): { lastUpdatedOn: Date | null; playe
       team,
       rosterStatus,
       injuryStatus: injuryFrom(rosterStatus, prob),
+      birthDate: typeof p.birthDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(p.birthDate) ? p.birthDate : null,
     });
   });
   const updated = typeof feed.lastUpdatedOn === 'string' ? new Date(feed.lastUpdatedOn) : null;

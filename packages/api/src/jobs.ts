@@ -11,6 +11,7 @@ import { createScoringStore, parseGamelogs, parseGames, type GameStatus } from '
 import type { Redis } from 'ioredis';
 import type { ApiContext, Log } from './context';
 import { classifyPending, type FeedbackClassifier } from './feedback/service';
+import { aliasMap, normalizeStatLines, resolveIdentities } from './players/identity';
 import { parsePlayers } from './players/msf-players';
 import { reresolveSubmissions, syncInjuries, syncPlayers } from './players/roster';
 import { importSchedule } from './schedule/import';
@@ -135,7 +136,9 @@ export function createJobs(deps: JobsDeps) {
       const out: Array<{ week: number; burns: number; windowsFinal: number }> = [];
       for (const week of await activeWeeks()) {
         const games = parseGames(await deps.msf.get(`${season}/week/${week}/games.json`));
-        const gamelogs = parseGamelogs(await deps.msf.get(`${season}/week/${week}/player_gamelogs.json`));
+        const parsed = parseGamelogs(await deps.msf.get(`${season}/week/${week}/player_gamelogs.json`));
+        // Stats posted under another MSF ID for the same person are scored under the kept ID (PRD-006 §7.5).
+        const gamelogs = { ...parsed, lines: normalizeStatLines(parsed.lines, await aliasMap(db)) };
         await scoring.ingest({ season, games: games.games, gamelogs, serverNow: now() });
         // Burn every locked window whose games are all Final (PRD-001 §5).
         const windows = await db.query<{ id: string; finals: string[] }>(
@@ -170,10 +173,12 @@ export function createJobs(deps: JobsDeps) {
       }
       const feed = parsePlayers(raw);
       const sync = await syncPlayers(deps.apiContext, feed.players, { complete: source === 'players' });
+      // One person, one player: other MSF IDs for the same person become aliases (§7.5).
+      const identity = await resolveIdentities(deps.apiContext, feed.players);
       const week = await currentWeek();
       const reresolve = week ? await reresolveSubmissions(deps.apiContext, season, week) : null;
       // The stats fallback only lists players with stats, so it can't be treated as a complete roster.
-      return { source, ...sync, week, reresolve };
+      return { source, ...sync, identity, week, reresolve };
     },
 
     /** Injury reports (Tech Summary §5): light feed, every 15 minutes Wednesday–Sunday. */

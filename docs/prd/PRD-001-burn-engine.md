@@ -1,7 +1,7 @@
 # PRD-001 — Burn Engine
 **Burnout League · packages/burn-engine**
-Version 1.3 · 2026-10-27
-Status: APPROVED — implement against this spec (v1.3 changes: see change log at end)
+Version 1.4 · 2026-10-28
+Status: APPROVED — implement against this spec (v1.4 changes: see change log at end)
 
 ---
 
@@ -140,6 +140,12 @@ When MSF returns `final: true` for a game:
 ### 5.3 Burn record immutability
 
 `burn_records` is write-once. No application code path may update or delete a burn record. The only authorized exception is a sysadmin-initiated SLOT_REOPENED event (see §6).
+
+### 5.4 A burn belongs to the person, not the feed ID (decision 2026-10-28)
+
+The data feed sometimes lists one person under two player IDs (PRD-006 §7.5). A burn applies to the **person**: if a manager burned any of a person's IDs, that person is burned for that manager, and no other ID for him can be selected. One ID per person is kept; the others are aliases that never appear in the player pool, and the database refuses a season lineup row that names one. A lineup can therefore never hold the same person twice, and the same person can never be burned twice.
+
+Burn records already written under an alias stay as they are (write-once); availability reads them through the person.
 
 ---
 
@@ -400,6 +406,9 @@ An implementation is correct when all of the following are true:
 ---
 
 ## Change log
+
+**v1.4 — 2026-10-28**
+- §5.4: new — a burn belongs to the person; another feed ID for the same person can't be played (PRD-006 §7.5)
 
 **v1.3 — 2026-10-27**
 - §4.3: a window is one exact scheduled kickoff (4:05 and 4:25 are separate windows); windows come from the schedule import (PRD-006 §11.6) and are fixed once they leave `pending`

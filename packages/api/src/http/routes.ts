@@ -9,6 +9,7 @@ import type { ApiContext } from '../context';
 import { HttpError, notFound } from '../errors';
 import * as feedback from '../feedback/service';
 import * as lineups from '../lineups/service';
+import { listIdentities, setIdentity } from '../players/identity';
 import { getPool } from '../players/pool';
 import * as views from '../season/views';
 import { adminSession, ah, body, enrollmentGate, enrollmentSession, financialSession, ipRateLimit, pendingSession, session } from './middleware';
@@ -396,6 +397,19 @@ export function buildRouter(ctx: ApiContext): Router {
     await ctx.payments.recordIdentityVerification({ ...b, provider: 'manual' });
     ctx.log('info', 'manual identity verification recorded', { by: s.userId, userId: b.userId });
     res.status(201).json({ verified: true });
+  }));
+
+  // ── player identity (PRD-006 §7.5) ──────────────────────────────────────
+  r.get('/admin/players/identities', ah(async (req, res) => {
+    adminSession(ctx, req);
+    res.json(await listIdentities(ctx));
+  }));
+
+  r.post('/admin/players/:id/identity', ah(async (req, res) => {
+    const s = adminSession(ctx, req);
+    const playerId = z.string().min(1).max(50).parse(req.params.id);
+    const b = body(z.object({ canonicalId: z.string().min(1).max(50).nullable(), reason: z.string().min(3).max(500) }).strict(), req);
+    res.json(await setIdentity(ctx, s, playerId, b.canonicalId, b.reason));
   }));
 
   r.get('/admin/feedback', ah(async (req, res) => {

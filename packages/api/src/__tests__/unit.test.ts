@@ -89,7 +89,7 @@ describe('AC11: players parser keeps text only', () => {
     const { players, lastUpdatedOn } = parsePlayers(feed);
     expect(lastUpdatedOn?.toISOString()).toBe('2026-10-28T08:00:00.000Z');
     expect(players.map((p) => p.msfPlayerId)).toEqual(['1', '2', '4']);
-    expect(players[0]).toEqual({ msfPlayerId: '1', firstName: 'Ann', lastName: 'Arbor', position: 'QB', team: 'KC', rosterStatus: 'ROSTER', injuryStatus: 'Active' });
+    expect(players[0]).toEqual({ msfPlayerId: '1', firstName: 'Ann', lastName: 'Arbor', position: 'QB', team: 'KC', rosterStatus: 'ROSTER', injuryStatus: 'Active', birthDate: null });
     expect(JSON.stringify(players)).not.toMatch(/http|image|headshot|social|@ann/i);
     expect(players[1]).toMatchObject({ team: null, injuryStatus: 'Out' });
     expect(players[2]).toMatchObject({ injuryStatus: 'IR' });
@@ -128,7 +128,9 @@ describe('AC11: players parser keeps text only', () => {
     expect(by('79822')).toMatchObject({ team: 'MIA', rosterStatus: 'INJURY_LIST', injuryStatus: 'IR' });
     expect(by('47387')).toMatchObject({ team: null, rosterStatus: 'UFA' });
     expect(players.find((p) => p.msfPlayerId === '79874')).toBeUndefined(); // LB
-    expect(JSON.stringify(players)).not.toMatch(/http|static\.www|birth/i);
+    // The birth date is kept in memory only, for duplicate detection (PRD-006 §7.5); nothing else leaks through.
+    expect(JSON.stringify(players.map(({ birthDate: _b, ...rest }) => rest))).not.toMatch(/http|static\.www|birth/i);
+    expect(players.every((p) => p.birthDate === null || /^\d{4}-\d{2}-\d{2}$/.test(p.birthDate!))).toBe(true);
   });
 
   it('real injuries.json sample (2026-10-27): flat player entries parse the same way', () => {

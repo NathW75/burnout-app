@@ -28,7 +28,7 @@ export interface Eligibility {
   freePlayThroughWeek: number | null;
 }
 
-export type VoidReason = 'GAME_CANCELED' | 'ADMIN_VOID' | 'PLAYER_NO_GAME' | 'PLAYER_INACTIVE';
+export type VoidReason = 'GAME_CANCELED' | 'ADMIN_VOID' | 'PLAYER_NO_GAME' | 'PLAYER_INACTIVE' | 'PLAYER_MERGED';
 
 export interface DescribedSlot {
   slot: SlotKey;

@@ -207,7 +207,7 @@ export function noticeText(n: Notification): { tag: string; tone: string; text: 
       return {
         tag: 'VOIDED',
         tone: 'text-bulb',
-        text: `${name ?? 'Your pick'} was voided${p.reason === 'PLAYER_INACTIVE' ? `: listed ${typeof p.injuryStatus === 'string' ? p.injuryStatus : 'Out'} before his lock` : p.reason === 'PLAYER_NO_GAME' ? ': no game this week' : ''}. Not burned.${slot ? ` ${slot} is open.` : ''}`,
+        text: `${name ?? 'Your pick'} was voided${p.reason === 'PLAYER_INACTIVE' ? `: listed ${typeof p.injuryStatus === 'string' ? p.injuryStatus : 'Out'} before his lock` : p.reason === 'PLAYER_NO_GAME' ? ': no game this week' : p.reason === 'PLAYER_MERGED' ? ': he was listed twice and is already in your lineup' : ''}. Not burned.${slot ? ` ${slot} is open.` : ''}`,
       };
     case 'SUBMISSION_REPOINTED':
       return { tag: 'MOVED', tone: 'text-bulb', text: `${name ?? 'Your pick'} changed teams. ${slot ?? 'His slot'} now locks with ${typeof p.newWindowLabel === 'string' ? p.newWindowLabel : 'his new game'}.` };
