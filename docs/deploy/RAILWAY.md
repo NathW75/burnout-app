@@ -56,6 +56,17 @@ Generate a random value in cmd (once per variable, per environment):
 node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
 ```
 
+**Notice emails (PRD-008).** The worker emails lock, burn, lineup-change and
+receipt notices when `NOTIFY_EMAIL=on` (staging: on; production: off until
+SendGrid's domain is authenticated). They come from `NOTIFY_FROM`
+(`Burnout League <alerts@burnoutfantasy.com>`), group notices within
+`NOTIFY_GROUP_SECONDS` (120), and put one-click unsubscribe links on
+`API_PUBLIC_URL`. All four are set in `.railway/railway.ts`; after pulling a
+change to them, run `railway config plan` and `railway config apply`. They use
+the existing `SENDGRID_API_KEY`. In SendGrid, authenticate the
+`burnoutfantasy.com` domain (Settings → Sender Authentication) or notices land
+in spam.
+
 `DATABASE_URL` and `REDIS_URL` are references to the Postgres and Redis
 services, and the rest (`CURRENT_SEASON`, `APP_BASE_URL`, `CORS_ORIGINS`,
 `PORT`, `TRUST_PROXY`, `PAYMENTS_LIVE=false`, …) are set in

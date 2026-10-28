@@ -17,6 +17,7 @@ import { Client, Pool } from 'pg';
 import { createPaymentsService, FakeProcessor } from '@burnout/payments';
 import { createApp } from '../../../packages/api/src/app';
 import { createJobs, type MsfFetcher } from '../../../packages/api/src/jobs';
+import { DEFAULT_NOTIFY_CONFIG } from '../../../packages/api/src/notify/dispatcher';
 import { MemoryMailer } from '../../../packages/api/src/mailer';
 import { pgDatabase } from '../../../packages/api/src/sql';
 
@@ -127,6 +128,9 @@ async function main() {
     if (!m) return res.status(404).json({ error: 'NO_MAIL' });
     res.json({ link: m.data.link });
   });
+  app.get('/__e2e/notices', (req, res) => {
+    res.json({ notices: mailer.notices.filter((m) => m.to === String(req.query.to)) });
+  });
   app.post('/__e2e/windows/:label/lock-now', async (req, res) => {
     // Moves a window's scheduled kickoff into the past: it is now locked for every rule that reads scheduled_et.
     const rows = await db.query(`UPDATE game_windows SET scheduled_et = now() - interval '1 second' WHERE season = $1 AND week = 8 AND label LIKE $2 RETURNING 1`, [SEASON, `${req.params.label}%`]);
@@ -189,9 +193,12 @@ async function main() {
         throw new Error(`e2e msf: no fixture for ${path}`);
       },
     };
-    const jobs = createJobs({ db, redis, namespace, payments, msf, season: SEASON, now: () => new Date(), log: () => {}, apiContext: ctx, msfRetryDelayMs: 0 });
+    // Email delivery with no grouping wait, so the test sees the email at once (PRD-008).
+    const notify = { ...DEFAULT_NOTIFY_CONFIG, groupSeconds: 0, apiBaseUrl: `http://localhost:${PORT}` };
+    const jobs = createJobs({ db, redis, namespace, payments, msf, season: SEASON, now: () => new Date(), log: () => {}, apiContext: ctx, msfRetryDelayMs: 0, notify });
     const locks = await jobs.jobs.locks();
     const scoring = await jobs.jobs.scoring();
+    await jobs.jobs.notify();
     await redis.del(`${namespace}field:${SEASON}`); // the field board is cached for 30 s
     res.json({ locks, scoring });
   }

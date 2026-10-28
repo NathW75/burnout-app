@@ -29,6 +29,8 @@ const AuthenticatorPage = lazy(() => import('./account/Security').then((m) => ({
 const BackupCodesPage = lazy(() => import('./account/Security').then((m) => ({ default: m.BackupCodesPage })));
 const SessionsPage = lazy(() => import('./account/Sessions').then((m) => ({ default: m.SessionsPage })));
 const ReceiptsPage = lazy(() => import('./account/Sessions').then((m) => ({ default: m.ReceiptsPage })));
+const NotificationsPage = lazy(() => import('./account/Notifications').then((m) => ({ default: m.NotificationsPage })));
+const UnsubscribePage = lazy(() => import('./account/Notifications').then((m) => ({ default: m.UnsubscribePage })));
 
 function NotFound() {
   useScreen('not_found', 'Not found');
@@ -75,11 +77,14 @@ export function AppRoutes() {
         <Route path="/account/backup-codes" element={<BackupCodesPage />} />
         <Route path="/account/sessions" element={<SessionsPage />} />
         <Route path="/account/receipts" element={<ReceiptsPage />} />
+        <Route path="/account/notifications" element={<NotificationsPage />} />
         <Route path="/board" element={<StandingsPage />} />
         <Route path="/board/:handle" element={<ManagerPage />} />
         <Route path="/burned" element={<BurnedPage />} />
         <Route path="/inbox" element={<InboxPage />} />
       </Route>
+      {/* Public: the email's unsubscribe link works signed in or out (PRD-008 §5). */}
+      <Route path="/unsubscribe" element={<UnsubscribePage />} />
       <Route path="*" element={<NotFound />} />
     </Routes>
     </Suspense>

@@ -50,6 +50,13 @@ export function AccountPage() {
       </section>
 
       <section className="flex flex-col gap-3 px-4 pt-6">
+        <SectionTitle>NOTIFICATIONS</SectionTitle>
+        <ul className="m-0 flex list-none flex-col overflow-hidden rounded-sm border border-rule p-0" aria-label="Notifications">
+          <Row to="/account/notifications" title="Email notices" detail="Locks, burns, lineup changes and receipts" last />
+        </ul>
+      </section>
+
+      <section className="flex flex-col gap-3 px-4 pt-6">
         <SectionTitle>LINEUPS</SectionTitle>
         <ul className="m-0 flex list-none flex-col overflow-hidden rounded-sm border border-rule p-0" aria-label="Lineups">
           <Row to="/account/receipts" title="Receipts" detail="Every confirmed lineup, with its checksum" last />

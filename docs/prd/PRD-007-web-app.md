@@ -174,7 +174,7 @@ In-app notices from the same events that queue emails, newest first, 30 at a tim
   - sessions: list with device and last seen, revoke one, sign out everywhere
 - **Receipts:** every confirmed lineup's receipt with its checksum, recomputable per PRD-006 §9.4.
 
-**As built (v1.6):** Account lists Profile (handle with an inline change, two changes a season per PRD-003; email), Security (Password, Authenticator app, Backup codes, Sessions, each its own screen), Lineups (Receipts), Appearance (Dark, Light, Match device), Rules and Sign out.
+**As built (v1.6):** Account lists Profile (handle with an inline change, two changes a season per PRD-003; email), Security (Password, Authenticator app, Backup codes, Sessions, each its own screen), Notifications (email notices, PRD-008 §6), Lineups (Receipts), Appearance (Dark, Light, Match device), Rules and Sign out. A public `/unsubscribe` page confirms the email's unsubscribe link.
 - Password: current, new and repeat; other sessions are signed out and this one stays.
 - Replace authenticator and new backup codes ask for a fresh code first (step-up), in place, and ask again if the server says it's stale. New codes are shown once with download, copy and an "I've saved these" tick.
 - Sessions: device named from the browser (e.g. "Chrome on Android"), last active and signed-in times ET, "This device", sign out any other device, and sign out everywhere.

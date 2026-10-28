@@ -12,6 +12,9 @@ import * as lineups from '../lineups/service';
 import { listIdentities, setIdentity } from '../players/identity';
 import { getPool } from '../players/pool';
 import * as views from '../season/views';
+import * as notifyPrefs from '../notify/preferences';
+import { notifyStats } from '../notify/dispatcher';
+import { verifyUnsubscribeToken } from '../notify/unsubscribe';
 import { adminSession, ah, body, enrollmentGate, enrollmentSession, financialSession, ipRateLimit, pendingSession, session } from './middleware';
 
 const email = z.string().trim().email().max(254);
@@ -177,6 +180,30 @@ export function buildRouter(ctx: ApiContext): Router {
   r.post('/me/notifications/read', ah(async (req, res) => {
     const b = body(z.union([z.object({ ids: z.array(uuid).min(1).max(200) }).strict(), z.object({ all: z.literal(true) }).strict()]), req);
     res.json({ marked: await views.markNotificationsRead(ctx, session(req).userId, b) });
+  }));
+
+  // ── notification preferences (PRD-008 §6) ───────────────────────────────
+  r.get('/me/notification-preferences', ah(async (req, res) => {
+    res.json(await notifyPrefs.getPreferences(ctx, session(req).userId));
+  }));
+
+  r.put('/me/notification-preferences', ah(async (req, res) => {
+    const b = body(z.object({
+      emailNotifications: z.enum(['on', 'off']).optional(),
+      email: z.object({ locks_burns: z.boolean(), lineup_changes: z.boolean(), receipts: z.boolean() }).partial().strict().optional(),
+    }).strict(), req);
+    res.json(await notifyPrefs.setPreferences(ctx, session(req).userId, b));
+  }));
+
+  /**
+   * One-click unsubscribe (RFC 8058): mail providers POST here with no session;
+   * the signed token is the only credential and it can only turn optional email off.
+   */
+  r.post('/notifications/unsubscribe', ipRateLimit(ctx, 'unsubscribe', 30, 60), ah(async (req, res) => {
+    const token = z.string().max(80).parse(req.query.token ?? '');
+    const userId = verifyUnsubscribeToken(ctx.notifyKey, token);
+    if (!userId || !(await notifyPrefs.unsubscribe(ctx, userId))) throw new HttpError(400, 'TOKEN_INVALID', 'That unsubscribe link is invalid');
+    res.json({ unsubscribed: true });
   }));
 
   r.get('/me/receipts', ah(async (req, res) => {
@@ -410,6 +437,11 @@ export function buildRouter(ctx: ApiContext): Router {
     const playerId = z.string().min(1).max(50).parse(req.params.id);
     const b = body(z.object({ canonicalId: z.string().min(1).max(50).nullable(), reason: z.string().min(3).max(500) }).strict(), req);
     res.json(await setIdentity(ctx, s, playerId, b.canonicalId, b.reason));
+  }));
+
+  r.get('/admin/notifications/stats', ah(async (req, res) => {
+    adminSession(ctx, req);
+    res.json(await notifyStats(ctx));
   }));
 
   r.get('/admin/feedback', ah(async (req, res) => {

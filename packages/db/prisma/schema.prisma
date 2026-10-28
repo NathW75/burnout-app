@@ -24,6 +24,7 @@ model User {
   updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz
   // PRD-006 §6
   status            String    @default("active") @db.VarChar(12)   // active | suspended
+  emailNotifications String   @default("on") @map("email_notifications") @db.VarChar(3)   // on | off (PRD-008 unsubscribe)
   role              String    @default("user") @db.VarChar(12)     // user | admin
   emailVerifiedAt   DateTime? @map("email_verified_at") @db.Timestamptz
   passwordChangedAt DateTime? @map("password_changed_at") @db.Timestamptz
@@ -51,6 +52,7 @@ model User {
   lineupConfirmations LineupConfirmation[]
   feedback            Feedback[] @relation("FeedbackAuthor")
   feedbackReviewed    Feedback[] @relation("FeedbackReviewer")
+  notificationPrefs   NotificationPreference[]
 
   @@map("users")
 }
@@ -239,10 +241,30 @@ model NotificationQueue {
   createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz
   dispatchedAt  DateTime? @map("dispatched_at") @db.Timestamptz
   readAt        DateTime? @map("read_at") @db.Timestamptz   // PRD-007 §8.3 in-app inbox
+  // PRD-008 delivery bookkeeping
+  dispatchClaimedAt DateTime? @map("dispatch_claimed_at") @db.Timestamptz
+  dispatchAttempts  Int       @default(0) @map("dispatch_attempts") @db.SmallInt
+  dispatchNextAt    DateTime? @map("dispatch_next_at") @db.Timestamptz
+  dispatchResult    String?   @map("dispatch_result") @db.VarChar(60)   // sent | skipped:<reason> | failed:<status>
+  dispatchRef       String?   @map("dispatch_ref") @db.VarChar(120)
 
   @@index([dispatchedAt, createdAt], name: "idx_notification_queue_pending")
   @@index([userId, createdAt(sort: Desc)], name: "idx_notification_queue_user_created")
   @@map("notification_queue")
+}
+
+/// PRD-008 §6: per-user notification choices. No row = the default.
+model NotificationPreference {
+  userId    String   @map("user_id") @db.Uuid
+  channel   String   @db.VarChar(10)   // email | push
+  kind      String   @db.VarChar(30)
+  enabled   Boolean
+  updatedAt DateTime @default(now()) @map("updated_at") @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, channel, kind])
+  @@map("notification_preferences")
 }
 
 /// PRD-007 §8.5 / SPEC-feedback-system.md. Body length 1–2000 is a CHECK in the

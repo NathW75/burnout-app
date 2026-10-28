@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { FeedbackSheet } from '../components/Feedback';
 import { AuthenticatorPage, BackupCodesPage, PasswordPage } from './Security';
 import { deviceName, SessionsPage } from './Sessions';
+import { NotificationsPage, UnsubscribePage } from './Notifications';
 
 type Reply = { status?: number; body: unknown } | ((init?: RequestInit) => { status?: number; body: unknown });
 
@@ -33,7 +34,7 @@ function renderAt(path: string, el: React.ReactNode) {
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
       <MemoryRouter initialEntries={[path]}>
         <Routes>
-          <Route path={path} element={el} />
+          <Route path={path.split("?")[0]} element={el} />
           <Route path="/login" element={<p>login screen</p>} />
         </Routes>
       </MemoryRouter>
@@ -188,5 +189,45 @@ describe('feedback (§10)', () => {
     await user.click(screen.getByRole('button', { name: 'SEND FEEDBACK' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('Couldn’t send. Too many tries.');
     expect(screen.getByRole('textbox')).toHaveValue('hello');
+  });
+});
+
+describe('email notices (PRD-008 §6)', () => {
+  const prefs = (over: object = {}) => ({ emailNotifications: 'on', email: { locks_burns: true, lineup_changes: true, receipts: true }, ...over });
+
+  it('shows the three groups; a switch saves just that group; "nothing optional" turns the rest off', async () => {
+    let state = prefs();
+    const calls = mockApi({
+      'GET /me/notification-preferences': () => ({ body: state }),
+      'PUT /me/notification-preferences': (init) => {
+        const b = JSON.parse(String(init!.body));
+        state = { ...state, ...(b.emailNotifications ? { emailNotifications: b.emailNotifications } : {}), email: { ...state.email, ...(b.email ?? {}) } };
+        return { body: state };
+      },
+    });
+    renderAt('/account/notifications', <NotificationsPage />);
+    const user = userEvent.setup();
+    const list = await screen.findByRole('list', { name: 'Email notices' });
+    const switches = within(list).getAllByRole('switch');
+    expect(switches).toHaveLength(3);
+    switches.forEach((s) => expect(s).toBeChecked());
+    await user.click(within(list).getByRole('switch', { name: /Locks and burns/ }));
+    await waitFor(() => expect(within(list).getByRole('switch', { name: /Locks and burns/ })).not.toBeChecked());
+    expect(calls.find((c) => c.method === 'PUT')?.body).toEqual({ email: { locks_burns: false } });
+
+    await user.click(screen.getByRole('switch', { name: /Email me nothing optional/ }));
+    await waitFor(() => within(list).getAllByRole('switch').forEach((s) => expect(s).toBeDisabled()));
+    expect(calls.filter((c) => c.method === 'PUT').at(-1)?.body).toEqual({ emailNotifications: 'off' });
+  });
+
+  it('the unsubscribe page confirms first, then posts the token; a missing token says so', async () => {
+    const calls = mockApi({ 'POST /notifications/unsubscribe': { body: { unsubscribed: true } } });
+    renderAt('/unsubscribe?token=abc.def', <UnsubscribePage />);
+    const user = userEvent.setup();
+    expect(screen.getByRole('heading', { name: 'Unsubscribe from emails?' })).toBeInTheDocument();
+    expect(calls).toHaveLength(0);
+    await user.click(screen.getByRole('button', { name: 'UNSUBSCRIBE' }));
+    expect(await screen.findByRole('heading', { name: 'You’re unsubscribed' })).toBeInTheDocument();
+    expect(calls[0]).toMatchObject({ method: 'POST', path: '/notifications/unsubscribe' });
   });
 });

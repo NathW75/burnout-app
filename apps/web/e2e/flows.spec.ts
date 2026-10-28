@@ -156,6 +156,14 @@ test('after a lock and a burn: burned roster, inbox with read state, standings, 
   const jobs = (await r.json()) as { locks: { windowsLocked: number }; scoring: { weeks: Array<{ week: number; burns?: number }> } };
   expect(jobs.scoring.weeks.find((w) => w.week === 7)?.burns).toBeGreaterThanOrEqual(3);
 
+  // Email (PRD-008): the lock and the burn arrive as one email, naming the players, linking to the app.
+  const mail = (await (await fetch(`${API}/__e2e/notices?to=${encodeURIComponent(acc.email)}`)).json()) as { notices: Array<{ subject: string; text: string; html: string; unsubscribeUrl: string }> };
+  expect(mail.notices).toHaveLength(1);
+  expect(mail.notices[0].subject).toBe('Burned: Quinn Kay, Ray Dent and Wes Kay (+1 more)');
+  expect(mail.notices[0].text).toContain('QB: Quinn Kay (QB, KC)');
+  expect(mail.notices[0].text).toContain('Burned roster: http://localhost:4173/burned');
+  expect(mail.notices[0].text).not.toContain('rival_e2e');
+
   // Burned roster (§6.4).
   await page.goto('/burned');
   await expect(page.getByRole('heading', { name: 'Burned' })).toBeVisible();
@@ -198,6 +206,18 @@ test('after a lock and a burn: burned roster, inbox with read state, standings, 
   await expect(slots.getByText('Hidden until its window locks')).toHaveCount(8);
   await noPlayerImages(page);
   await noSeriousA11yIssues(page, 'reveal');
+  // Notifications settings, and the email's unsubscribe link.
+  await page.goto('/account/notifications');
+  await expect(page.getByRole('switch', { name: /Locks and burns/ })).toBeChecked();
+  await noSeriousA11yIssues(page, 'notifications');
+  const unsub = /Unsubscribe from optional emails: (\S+)/.exec(mail.notices[0].text)![1];
+  await page.goto(unsub.replace('http://localhost:4173', ''));
+  await page.getByRole('button', { name: 'UNSUBSCRIBE' }).click();
+  await expect(page.getByRole('heading', { name: 'You’re unsubscribed' })).toBeVisible();
+  await page.goto('/account/notifications');
+  await expect(page.getByRole('switch', { name: /Email me nothing optional/ })).toBeChecked();
+  await page.goto('/board/rival_e2e');
+
   // Last week: the rival's locked pick from Week 7.
   await page.getByRole('combobox').selectOption('7');
   const w7 = page.getByRole('list', { name: 'rival_e2e, Week 7' });

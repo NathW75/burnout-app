@@ -1,6 +1,7 @@
 /**
  * Express app — PRD-006
  */
+import { createHmac } from 'node:crypto';
 import compression from 'compression';
 import cors from 'cors';
 import express, { type Express } from 'express';
@@ -53,6 +54,7 @@ export function createContext(deps: CreateAppDeps): ApiContext {
     leaderboard: createLeaderboardService({ db: deps.db, redis: deps.redis, namespace: ns, handleBlocklist: deps.handleBlocklist, log }),
     payments: deps.payments,
     verifyTurnstile: config.turnstileSecret ? (deps.verifyTurnstile ?? cloudflareTurnstile(config.turnstileSecret, log)) : null,
+    notifyKey: createHmac('sha256', Buffer.from(deps.totpEncryptionKey, 'base64')).update('burnout:notify:unsubscribe:v1').digest(),
   };
 }
 

@@ -11,6 +11,7 @@ import { createScoringStore, parseGamelogs, parseGames, type GameStatus } from '
 import type { Redis } from 'ioredis';
 import type { ApiContext, Log } from './context';
 import { classifyPending, type FeedbackClassifier } from './feedback/service';
+import { checkStalled, runNotify, type NotifyConfig } from './notify/dispatcher';
 import { aliasMap, normalizeStatLines, resolveIdentities } from './players/identity';
 import { parsePlayers } from './players/msf-players';
 import { reresolveSubmissions, syncInjuries, syncPlayers } from './players/roster';
@@ -56,6 +57,8 @@ export interface JobsDeps {
   classifier?: FeedbackClassifier;
   /** Pause before the one retry of a refused MSF read (403/429/5xx). Default 2 s; tests pass 0. */
   msfRetryDelayMs?: number;
+  /** Email delivery (PRD-008). Absent = NOTIFY_EMAIL is off: notices stay in the inbox only. */
+  notify?: NotifyConfig;
 }
 
 /** MSF answers worth one more try: throttling shows up as 403 or 429, and a 5xx is on their side. */
@@ -63,7 +66,7 @@ export function msfRetryable(err: unknown): boolean {
   return err instanceof MsfHttpError && (err.status === 403 || err.status === 429 || err.status >= 500);
 }
 
-export type JobName = 'locks' | 'payments' | 'scoring' | 'roster' | 'injuries' | 'schedule' | 'feedback';
+export type JobName = 'locks' | 'payments' | 'scoring' | 'roster' | 'injuries' | 'schedule' | 'feedback' | 'notify';
 
 /** Regular-season weeks, for the week-by-week schedule fallback. */
 export const REGULAR_SEASON_WEEKS = 18;
@@ -228,6 +231,14 @@ export function createJobs(deps: JobsDeps) {
       return { source, ...r, review: r.review.length };
     },
 
+    /** Runs on its own 30-second loop in the worker when NOTIFY_EMAIL=on (PRD-008 §7). */
+    async notify() {
+      if (!deps.notify) return { skipped: 'NOTIFY_EMAIL_OFF' };
+      const r = await runNotify(deps.apiContext, deps.notify);
+      await checkStalled(deps.apiContext, deps.notify);
+      return r;
+    },
+
     /** Runs on its own 15-second loop in the worker, so tags land within 30 seconds (feedback spec AC4). */
     async feedback() {
       if (!deps.classifier) return { skipped: 'NO_CLASSIFIER' };
@@ -245,7 +256,9 @@ export function createJobs(deps: JobsDeps) {
         return jobs[name]();
       });
       // The 15-second feedback loop stays quiet when there was nothing to tag.
-      const idle = name === 'feedback' && result !== null && (result as { claimed?: number }).claimed === 0;
+      const idle =
+        (name === 'feedback' && result !== null && (result as { claimed?: number }).claimed === 0) ||
+        (name === 'notify' && result !== null && (result as { users?: number }).users === 0 && Object.keys((result as { skipped?: object }).skipped ?? {}).length === 0);
       if (!idle) log('info', `job ${name}`, { job: name, ms: Date.now() - started, result: result ?? 'skipped (held elsewhere)' });
       return result;
     } catch (err) {

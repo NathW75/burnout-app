@@ -32,7 +32,7 @@ export async function createRuntime() {
   const payments = await createPaymentsService({ db, processor: new FakeProcessor(requireEnv('PAYMENT_WEBHOOK_SECRET')), log: jsonLog });
 
   const mailer: Mailer = process.env.SENDGRID_API_KEY
-    ? new SendGridMailer(process.env.SENDGRID_API_KEY, requireEnv('MAIL_FROM'))
+    ? new SendGridMailer(process.env.SENDGRID_API_KEY, requireEnv('MAIL_FROM'), process.env.NOTIFY_FROM || 'Burnout League <alerts@burnoutfantasy.com>')
     : new MemoryMailer();
   if (!process.env.SENDGRID_API_KEY) jsonLog('warn', 'SENDGRID_API_KEY not set: verification and reset emails are not delivered');
 

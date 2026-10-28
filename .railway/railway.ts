@@ -32,6 +32,8 @@ export default defineRailway((ctx, project) => {
   const source = github(REPO, { branch: 'main', checkSuites: production });
   // The web app (PRD-007 §4): email links and checkout returns land here.
   const appOrigin = production ? 'https://app.burnoutfantasy.com' : 'https://app-staging.burnoutfantasy.com';
+  // The API's public origin: one-click unsubscribe links in notice emails point here (PRD-008 §5).
+  const apiOrigin = production ? 'https://api.burnoutfantasy.com' : 'https://api-staging.burnoutfantasy.com';
 
   // Both processes load the same runtime (packages/api/src/runtime.ts).
   const common = {
@@ -91,6 +93,11 @@ export default defineRailway((ctx, project) => {
       MSF_BASE_URL: 'https://api.mysportsfeeds.com/v2.1/pull/nfl',
       ANTHROPIC_API_KEY: secret('ANTHROPIC_API_KEY'), // feedback tagging (PRD-007 §10); empty = stored untagged
       FEEDBACK_MODEL: 'claude-haiku-5-5',
+      // Notice emails (PRD-008): on in staging; production once SendGrid's domain is authenticated.
+      NOTIFY_EMAIL: production ? 'off' : 'on',
+      NOTIFY_FROM: 'Burnout League <alerts@burnoutfantasy.com>',
+      NOTIFY_GROUP_SECONDS: '120', // grouping window (PRD-008 §12.1): widen here if a busy Sunday sends too many
+      API_PUBLIC_URL: apiOrigin,
     },
   });
 

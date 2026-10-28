@@ -4,6 +4,7 @@
 import { createContext } from './app';
 import { anthropicClassifier } from './feedback/service';
 import { createJobs, dueJobs, msfFetcher } from './jobs';
+import { DEFAULT_NOTIFY_CONFIG, type NotifyConfig } from './notify/dispatcher';
 import { createRuntime, jsonLog, requireEnv } from './runtime';
 
 async function main() {
@@ -17,8 +18,19 @@ async function main() {
   const anthropicKey = process.env.ANTHROPIC_API_KEY;
   const classifier = anthropicKey ? anthropicClassifier(anthropicKey, process.env.FEEDBACK_MODEL || 'claude-haiku-5-5') : undefined;
   if (!classifier) jsonLog('warn', 'ANTHROPIC_API_KEY not set: feedback is stored untagged');
+  // Email delivery (PRD-008): off unless NOTIFY_EMAIL=on. The grouping window is a setting (§12.1).
+  const notify: NotifyConfig | undefined =
+    process.env.NOTIFY_EMAIL === 'on'
+      ? {
+          ...DEFAULT_NOTIFY_CONFIG,
+          groupSeconds: Number(process.env.NOTIFY_GROUP_SECONDS ?? DEFAULT_NOTIFY_CONFIG.groupSeconds),
+          apiBaseUrl: process.env.API_PUBLIC_URL ?? DEFAULT_NOTIFY_CONFIG.apiBaseUrl,
+        }
+      : undefined;
+  if (!notify) jsonLog('warn', 'NOTIFY_EMAIL is not on: notices stay in the in-app inbox only');
+  if (notify && !process.env.SENDGRID_API_KEY) jsonLog('warn', 'NOTIFY_EMAIL is on but SENDGRID_API_KEY is not set: notice emails are only recorded in memory');
   const jobs = createJobs({
-    db: rt.db, redis: rt.redis, payments: rt.payments, season, now: () => new Date(), log: jsonLog, apiContext, classifier,
+    db: rt.db, redis: rt.redis, payments: rt.payments, season, now: () => new Date(), log: jsonLog, apiContext, classifier, notify,
     msf: msfFetcher(process.env.MSF_BASE_URL ?? 'https://api.mysportsfeeds.com/v2.1/pull/nfl', requireEnv('MSF_API_KEY')),
   });
 
@@ -53,7 +65,15 @@ async function main() {
       void jobs.run('feedback').finally(() => { tagging = false; });
     }, 15_000);
   }
-  jsonLog('info', 'worker started', { season, firstTickInMs: startIn, feedbackTagging: !!classifier });
+  if (notify) {
+    let sending = false;
+    setInterval(() => {
+      if (sending) return;
+      sending = true;
+      void jobs.run('notify').finally(() => { sending = false; });
+    }, 30_000);
+  }
+  jsonLog('info', 'worker started', { season, firstTickInMs: startIn, feedbackTagging: !!classifier, notifyEmail: !!notify, notifyGroupSeconds: notify?.groupSeconds ?? null });
 }
 
 main().catch((err) => {

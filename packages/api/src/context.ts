@@ -84,6 +84,8 @@ export interface ApiContext {
   payments: PaymentsService;
   /** Set when turnstileSecret is configured; sign-up then requires a passing token. */
   verifyTurnstile: TurnstileVerifier | null;
+  /** Signs one-click unsubscribe tokens (PRD-008 §6); derived from the TOTP key, never stored. */
+  notifyKey: Buffer;
 }
 
 /** The all-zero UUID records system actions in security_audit_log (§6.8). */

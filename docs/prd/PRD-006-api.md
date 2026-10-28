@@ -1,6 +1,6 @@
 # PRD-006 — API, Accounts and Lineup Submission
 **Burnout League · packages/api**
-Version 1.9 · 2026-10-28
+Version 1.10 · 2026-10-28
 Status: APPROVED 2026-10-27 — scope and auth decisions locked by Nath (§3); rules calls Q1, Q2, Q4 resolved in v1.1
 
 ---
@@ -390,6 +390,10 @@ The user can recompute it from their email.
 | `GET /v1/me/burns?season=` | Every burned player: week, slot, name, position, team, points, window, burned time |
 | `GET /v1/me/notifications?before&limit` | Inbox, newest first, with `unread`, `players` (`{ [playerId]: { name, position, team } }` for players the notices name) and `nextBefore` (an opaque time-and-id cursor; a bare timestamp is also accepted) |
 | `POST /v1/me/notifications/read` | `{ ids }` or `{ all: true }`; my items only. Read state (`read_at`) is separate from delivery (`dispatched_at`) |
+| `GET /v1/me/notification-preferences` | PRD-008 §6: `{ emailNotifications, email: { locks_burns, lineup_changes, receipts } }` (emailNotifications is on or off); no stored choice = the default (on) |
+| `PUT /v1/me/notification-preferences` | Any of `emailNotifications` and `email.{group}`; groups are stored per kind |
+| `POST /v1/notifications/unsubscribe?token=` | Public, no session (RFC 8058 one-click; mail providers post a form body). The signed token's only power is turning optional email off. 400 `TOKEN_INVALID` for a bad token; 30/min per IP |
+| `GET /v1/admin/notifications/stats` | Admin + step-up: last 24 hours by kind and result, oldest pending notice |
 | `GET /v1/me/receipts?season=` | Receipt summaries `{ id, week, confirmedAt, sha256 }`, newest first |
 
 ### 10.3 Leaderboard
@@ -465,6 +469,7 @@ Setup: `docs/deploy/RAILWAY.md`.
 | Injury reports and re-resolve (§7.3) | Every 15 minutes Wednesday–Sunday (Tech Summary §5) |
 | Season schedule import and re-resolve (§11.6) | At worker startup, then hourly at :30 |
 | Feedback tagging (PRD-007 §10): up to 10 untagged items per run through the Anthropic Messages API (`FEEDBACK_MODEL`); the reply is validated against the spec's schema; the feedback text is fenced as untrusted input and never logged; 3 attempts per item | Every 15 seconds, only when `ANTHROPIC_API_KEY` is set (quiet when idle) |
+| Notice email (PRD-008 §7): claims due notices (`FOR UPDATE SKIP LOCKED` plus a claim time), skips stale, turned-off and unusable-account ones, sends one email per user, retries with backoff, records the result | Every 30 seconds, only when `NOTIFY_EMAIL=on` (quiet when idle); logs an error when the oldest pending notice is over 10 minutes old |
 
 Each job:
 - runs under a Postgres advisory lock, so two workers never run it at once;
@@ -620,6 +625,7 @@ Every critical rule also gets a mutation check, as with PRD-001 to PRD-004.
 |---------|------|---------|
 | 1.7 | 2026-10-28 | §7.5: one person, one player. Duplicate MSF IDs for the same person become aliases of one kept ID; aliases can't be picked (DB-enforced); burns and stats follow the person; admin review and override. Roster sync also runs at worker startup. |
 | 1.8 | 2026-10-28 | §11: scoring works newest week first, retries a refused MSF read once, and skips only the week whose feed stays refused. |
+| 1.10 | 2026-10-28 | PRD-008 Phase 1: notification preferences, one-click unsubscribe, admin stats; the `notify` worker job; `notification_queue` dispatch columns, `notification_preferences`, `users.email_notifications`. |
 | 1.9 | 2026-10-28 | §10.2.1: notices return the named players' names; the inbox cursor includes the id so notices sharing a timestamp never drop at a page edge; reveal `LOCKED` slots say whether the player has burned. |
 | 1.6 | 2026-10-27 | PRD-007 §8: D3 amended (a second factor for all use, §6.9; admin factor reset §6.7); Turnstile on sign-up; web app reads (§10.2.1); feedback and its worker tagging; `read_at`, `feedback`. |
 | 1.5 | 2026-10-27 | §11.6: season schedule import. One window per exact kickoff; frozen windows fixed (enforced by a trigger); picks re-resolved after changes; review list for decisions the import won't make; backfill through the normal jobs; pools close at the Week 3 lock at publish. |
