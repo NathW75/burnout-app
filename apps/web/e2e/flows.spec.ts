@@ -458,6 +458,7 @@ test('patch c: the picker filters by position first, sorts by stat columns, scro
   await noSeriousA11yIssues(page, 'picker');
 
   await pills.getByRole('button', { name: 'WR' }).click();
+  await expect(pills.getByRole('button', { name: 'WR' })).toHaveAttribute('aria-pressed', 'true');
   const rows = table.getByRole('rowheader');
   const positions = await rows.locator('b').allTextContents();
   expect(positions.length).toBeGreaterThan(0);
@@ -521,7 +522,10 @@ test('patch c: the tabs stay on every signed-in screen, LINEUP stays lit through
   await page.getByRole('button', { name: /CONTINUE/ }).click();
   await expect(page).toHaveURL(/\/lineup\/acknowledge$/);
   await expect(nav).toBeVisible();
-  for (const box of await page.getByRole('checkbox').all()) await box.check();
+  // The tabs now stay up while a gate's code loads, so wait for the gate itself: all three boxes, each ticked in turn.
+  const acks = page.getByRole('checkbox');
+  await expect(acks).toHaveCount(3);
+  for (let i = 0; i < 3; i++) await acks.nth(i).check();
   await page.getByRole('button', { name: 'CONTINUE' }).click();
   await expect(page).toHaveURL(/\/lineup\/confirm$/);
   await expect(nav.getByRole('link', { name: 'LINEUP' })).toHaveAttribute('aria-current', 'page');
