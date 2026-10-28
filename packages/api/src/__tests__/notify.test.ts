@@ -17,7 +17,7 @@ describeDbRedis('PRD-008 email notifications (Postgres + Redis)', () => {
   let w: World;
   let win: Awaited<ReturnType<typeof buildWeek>>;
   beforeEach(async () => {
-    w = await createWorld({ sessionIdleMs: 7 * 24 * 3600_000 });
+    w = await createWorld();
     win = await buildWeek(w);
   });
   afterEach(async () => {

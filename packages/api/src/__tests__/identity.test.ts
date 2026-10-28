@@ -96,7 +96,7 @@ describe('PRD-006 §7.5 matching (pure)', () => {
 describeDbRedis('PRD-006 §7.5 one person, one player (Postgres + Redis)', () => {
   let w: World;
   beforeEach(async () => {
-    w = await createWorld({ sessionIdleMs: 7 * 24 * 3600_000 });
+    w = await createWorld();
     await buildWeek(w);
   });
   afterEach(async () => {

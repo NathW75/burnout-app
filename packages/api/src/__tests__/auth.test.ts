@@ -130,24 +130,28 @@ describeDbRedis('PRD-006 auth (HTTP, Postgres + Redis)', () => {
     expect((await login(new Client(w), a.email, 'third password, quite long')).status).toBe(200);
   });
 
-  it('AC3: 24 h idle and 30-day hard expiry; listing and deleting sessions', async () => {
+  it('AC3: signed in until you sign out: 90-day idle (each visit restarts it), 1-year hard limit; listing and deleting sessions', async () => {
     const a = await account(w);
-    w.clock.advanceMs(23 * HOUR);
+    w.clock.advanceMs(7 * DAY); // a week away: still signed in
     expect((await a.client.get('/v1/me')).status).toBe(200); // touches last_seen_at
-    w.clock.advanceMs(23 * HOUR);
-    expect((await a.client.get('/v1/me')).status).toBe(200);
-    w.clock.advanceMs(24 * HOUR + MIN);
+    w.clock.advanceMs(89 * DAY);
+    expect((await a.client.get('/v1/me')).status).toBe(200); // 89 days since the last visit
+    w.clock.advanceMs(90 * DAY + MIN);
     expect((await a.client.get('/v1/me')).status).toBe(401); // idle
 
-    // Active every 20 h (never idle) until just short of 30 days, then just past it.
+    // Visiting every 60 days (never idle) until just short of a year, then just past it.
     const b = await account(w);
     const born = w.clock.get().getTime();
-    while (w.clock.get().getTime() + 20 * HOUR < born + 30 * DAY) {
-      w.clock.advanceMs(20 * HOUR);
+    while (w.clock.get().getTime() + 60 * DAY < born + 365 * DAY) {
+      w.clock.advanceMs(60 * DAY);
       expect((await b.client.get('/v1/me')).status).toBe(200);
     }
-    w.clock.set(new Date(born + 30 * DAY + MIN)); // < 24 h since last request: only the hard limit applies
+    w.clock.set(new Date(born + 365 * DAY + MIN)); // < 90 days since the last visit: only the hard limit applies
     expect((await b.client.get('/v1/me')).status).toBe(401);
+
+    // The cookie outlives closing the browser: it lasts as long as the hard limit.
+    const cookie = (await login(new Client(w), b.email)).headers['set-cookie']?.[0] ?? '';
+    expect(cookie).toMatch(/Max-Age=31536000/);
 
     const c = await account(w);
     const other = new Client(w);

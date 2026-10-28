@@ -1,6 +1,6 @@
 # PRD-006 — API, Accounts and Lineup Submission
 **Burnout League · packages/api**
-Version 1.12 · 2026-10-28
+Version 1.13 · 2026-10-28
 Status: APPROVED 2026-10-27 — scope and auth decisions locked by Nath (§3); rules calls Q1, Q2, Q4 resolved in v1.1
 
 ---
@@ -36,7 +36,7 @@ It computes no points, ranks or prizes. Those come from PRD-002, PRD-003 and PRD
 
 | # | Decision | Source |
 |---|----------|--------|
-| D1 | **Revocable server-side sessions**, not JWTs. Idle timeout 24 h, hard limit 30 days. Logout, password change and suspension take effect at once. | Decision 2026-10-27 (supersedes Tech Summary §6.1 "JWT 24-hour") |
+| D1 | **Revocable server-side sessions**, not JWTs. **Signed in until you sign out:** idle timeout 90 days (each visit restarts it), hard limit 1 year. Paid entries, payouts, security changes and admin still need a fresh second-factor code (step-up, 5 minutes). Logout, password change and suspension take effect at once. | Decision 2026-10-27 (supersedes Tech Summary §6.1 "JWT 24-hour"); limits changed 2026-10-28 by Nath (were 24 h idle, 30 days hard) so weekly players aren't asked for a code on nearly every visit |
 | D2 | Web sends the token as an httpOnly cookie. Mobile sends it as a bearer token. It is the same session either way. | Decision 2026-10-27 |
 | D3 | ~~Signing up doesn't require two-factor.~~ **Amended by PRD-007 §8.6 (v1.6): every account needs a confirmed second factor to use the API.** Enrolment is part of sign-up; until it's done the session is enrollment-only (§6.9). | Decision 2026-10-27 |
 | D4 | This build has TOTP plus backup codes. Twilio SMS and WebAuthn passkeys are specified behind the same factor interface and built later. | Decision 2026-10-27 |
@@ -73,10 +73,10 @@ It computes no points, ranks or prizes. Those come from PRD-002, PRD-003 and PRD
 
 ## 5. Sessions (D1, D2)
 
-1. **Issuing:** sign-in creates a `sessions` row holding the token's SHA-256 hash, `user_id`, `client` (web or mobile), IP, user agent, `created_at`, `last_seen_at`, `expires_at` (+30 days), `mfa_pending` and `step_up_at`.
+1. **Issuing:** sign-in creates a `sessions` row holding the token's SHA-256 hash, `user_id`, `client` (web or mobile), IP, user agent, `created_at`, `last_seen_at`, `expires_at` (+1 year), `mfa_pending` and `step_up_at`.
 2. **Web cookie:** named `bl_session`, with `HttpOnly`, `Secure` in production, `SameSite=Lax` and `Path=/`.
 3. **Mobile:** the token comes back once in the response body and is sent as `Authorization: Bearer <token>`.
-4. **Validity:** a session is valid when it isn't revoked, `now < expires_at`, `now − last_seen_at < 24 h`, and the user is `active`. `last_seen_at` is refreshed at most once every 5 minutes.
+4. **Validity:** a session is valid when it isn't revoked, `now < expires_at`, `now − last_seen_at < 90 days`, and the user is `active`. The cookie lasts as long as the hard limit, so closing the browser or app doesn't sign anyone out. `last_seen_at` is refreshed at most once every 5 minutes.
 5. **Cache:** valid sessions are cached in Redis for up to 60 seconds, keyed by token hash. Revoking a session deletes its cache key in the same request, so revocation takes effect at once. When Redis is down, the API falls back to Postgres.
 6. **Revocation:** these events revoke sessions:
    - logout (this session) and logout-all;
@@ -578,7 +578,7 @@ The `schedule` job builds `game_windows` and `nfl_games` from the MySportsFeeds 
 |---|-----------|
 | AC1 | Signup returns 202 for new and existing emails alike, with identical bodies. The password is stored only as a bcrypt hash. A password under 12 characters is rejected. A taken or reserved handle is rejected. Verification links work once and expire. |
 | AC2 | A wrong email and a wrong password give the same 401. The sixth failure for one email in 15 minutes is rate-limited, and so is the IP limit. |
-| AC3 | Logout, logout-all, password change, password reset and suspension each invalidate the affected sessions on the very next request, Redis cache included. Idle (24 h) and hard (30 days) expiry are enforced. |
+| AC3 | Logout, logout-all, password change, password reset and suspension each invalidate the affected sessions on the very next request, Redis cache included. Idle (90 days) and hard (1 year) expiry are enforced. |
 | AC4 | TOTP passes the RFC 6238 vectors. Enrolment needs the password. Confirmation returns 10 single-use backup codes. Once enrolled, sign-in requires the second factor. A replayed code is rejected. No plaintext secret is stored. |
 | AC5 | Each financial route returns `EMAIL_UNVERIFIED`, then `MFA_ENROLLMENT_REQUIRED`, then `STEP_UP_REQUIRED` as each gate is missing, and succeeds when all are met. Step-up lapses after 5 minutes. Step-up codes are rate-limited. |
 | AC6 | A cookie-authenticated state change without the CSRF header, or from a disallowed Origin, gets 403. Bearer requests are exempt. |
@@ -643,6 +643,7 @@ Every critical rule also gets a mutation check, as with PRD-001 to PRD-004.
 |---------|------|---------|
 | 1.7 | 2026-10-28 | §7.5: one person, one player. Duplicate MSF IDs for the same person become aliases of one kept ID; aliases can't be picked (DB-enforced); burns and stats follow the person; admin review and override. Roster sync also runs at worker startup. |
 | 1.8 | 2026-10-28 | §11: scoring works newest week first, retries a refused MSF read once, and skips only the week whose feed stays refused. |
+| 1.13 | 2026-10-28 | D1 limits changed (Nath): signed in until you sign out, 90-day idle (each visit restarts it) and 1-year hard limit, were 24 h and 30 days. Step-up for money, security and admin unchanged. §5 and AC3 updated. |
 | 1.12 | 2026-10-28 | PRD-008 Phase 2: push config, device subscriptions, push preference groups; signing out everywhere revokes push devices; the `push` worker job; `push_subscriptions` and `notification_queue` push columns. |
 | 1.11 | 2026-10-28 | §6.10: invite-only sign-up (per-person single-use codes, optional email lock, expiry and revoke), `invite_codes`, `SIGNUP_INVITE_ONLY`. |
 | 1.10 | 2026-10-28 | PRD-008 Phase 1: notification preferences, one-click unsubscribe, admin stats; the `notify` worker job; `notification_queue` dispatch columns, `notification_preferences`, `users.email_notifications`. |

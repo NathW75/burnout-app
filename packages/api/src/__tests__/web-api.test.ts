@@ -86,7 +86,7 @@ describeDbRedis('PRD-007 §8 web app API additions (HTTP, Postgres + Redis)', ()
   let win: Awaited<ReturnType<typeof buildWeek>>;
   beforeEach(async () => {
     // Tests jump the clock days ahead to fire locks: keep sessions alive across the jumps.
-    w = await createWorld({ sessionIdleMs: 7 * 24 * 3600_000 });
+    w = await createWorld();
     win = await buildWeek(w);
   });
   afterEach(async () => {

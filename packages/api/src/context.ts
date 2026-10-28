@@ -48,8 +48,10 @@ export interface ApiConfig {
 
 export const DEFAULT_API_CONFIG: ApiConfig = {
   bcryptCost: 12,
-  sessionIdleMs: 24 * 3600_000,
-  sessionMaxMs: 30 * 24 * 3600_000,
+  // Signed in until you sign out (Nath, 2026-10-28; PRD-006 D1 v1.13): 90 days idle, each visit restarts it; 1-year hard limit.
+  // Money, security changes and admin still ask for a fresh code (step-up).
+  sessionIdleMs: 90 * 24 * 3600_000,
+  sessionMaxMs: 365 * 24 * 3600_000,
   pendingMfaMs: 5 * 60_000,
   touchIntervalMs: 5 * 60_000,
   sessionCacheSeconds: 60,

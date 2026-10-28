@@ -10,7 +10,7 @@ describeDbRedis('PRD-006 §6.10 invite-only sign-up (HTTP, Postgres + Redis)', (
   let w: World;
   let admin: Account;
   beforeEach(async () => {
-    w = await createWorld({ signupInviteOnly: true, sessionIdleMs: 7 * 24 * 3600_000 });
+    w = await createWorld({ signupInviteOnly: true });
     // The first admin predates the gate.
     w.ctx.config.signupInviteOnly = false;
     admin = await account(w, { handle: 'boss', admin: true });

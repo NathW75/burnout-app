@@ -31,7 +31,7 @@ describeDbRedis('PRD-008 web push (Postgres + Redis)', () => {
   let w: World;
   let push: ReturnType<typeof fakePush>;
   beforeEach(async () => {
-    w = await createWorld({ sessionIdleMs: 7 * 24 * 3600_000, vapidPublicKey: KEY });
+    w = await createWorld({ vapidPublicKey: KEY });
     await buildWeek(w);
     push = fakePush();
   });

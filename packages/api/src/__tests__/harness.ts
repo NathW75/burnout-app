@@ -126,7 +126,7 @@ export async function account(
   return acc;
 }
 
-/** Sign in again after a test jumps the clock past the 24 h idle timeout (D1 working as designed). */
+/** Sign in again after a test jumps the clock past the idle timeout (D1 working as designed). */
 export async function relogin(a: Account) {
   const res = await login(a.client, a.email);
   if (res.status !== 200) throw new Error(`relogin ${res.status}`);
