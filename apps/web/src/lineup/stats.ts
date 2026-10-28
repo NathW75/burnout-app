@@ -49,32 +49,32 @@ export const PTS: Column = { id: 'pts', label: 'PTS', name: 'Fantasy points per 
 
 export const GROUP_COLUMNS: Record<Group, Column[]> = {
   rush: [
-    { id: 'rush.att', label: 'ATT', name: 'Rush attempts', group: 'rush', get: (b) => b.rush?.att ?? null },
-    { id: 'rush.yds', label: 'YDS', name: 'Rush yards', group: 'rush', get: (b) => b.rush?.yds ?? null },
+    { id: 'rush.att', label: 'ATT', name: 'Rush attempts, total', group: 'rush', get: (b) => b.rush?.att ?? null },
+    { id: 'rush.yds', label: 'YDS', name: 'Rush yards per game', group: 'rush', get: (b) => b.rush?.yds ?? null },
     { id: 'rush.ypc', label: 'Y/C', name: 'Yards per carry', group: 'rush', get: (b) => b.rush?.ypc ?? null },
-    { id: 'rush.tds', label: 'TD', name: 'Rush touchdowns', group: 'rush', get: (b) => b.rush?.tds ?? null },
+    { id: 'rush.tds', label: 'TD', name: 'Rush touchdowns, total', group: 'rush', get: (b) => b.rush?.tds ?? null },
   ],
   rec: [
-    { id: 'rec.tgt', label: 'TGT', name: 'Targets', group: 'rec', get: (b) => b.rec?.tgt ?? null },
-    { id: 'rec.rec', label: 'REC', name: 'Receptions', group: 'rec', get: (b) => b.rec?.rec ?? null },
-    { id: 'rec.yds', label: 'YDS', name: 'Receiving yards', group: 'rec', get: (b) => b.rec?.yds ?? null },
+    { id: 'rec.tgt', label: 'TGT', name: 'Targets, total', group: 'rec', get: (b) => b.rec?.tgt ?? null },
+    { id: 'rec.rec', label: 'REC', name: 'Receptions, total', group: 'rec', get: (b) => b.rec?.rec ?? null },
+    { id: 'rec.yds', label: 'YDS', name: 'Receiving yards per game', group: 'rec', get: (b) => b.rec?.yds ?? null },
     { id: 'rec.ypr', label: 'Y/R', name: 'Yards per reception', group: 'rec', get: (b) => b.rec?.ypr ?? null },
-    { id: 'rec.tds', label: 'TD', name: 'Receiving touchdowns', group: 'rec', get: (b) => b.rec?.tds ?? null },
+    { id: 'rec.tds', label: 'TD', name: 'Receiving touchdowns, total', group: 'rec', get: (b) => b.rec?.tds ?? null },
   ],
   pass: [
-    { id: 'pass.att', label: 'ATT', name: 'Pass attempts', group: 'pass', get: (b) => b.pass?.att ?? null },
-    { id: 'pass.cmp', label: 'CMP', name: 'Completions', group: 'pass', get: (b) => b.pass?.cmp ?? null },
-    { id: 'pass.yds', label: 'YDS', name: 'Passing yards', group: 'pass', get: (b) => b.pass?.yds ?? null },
+    { id: 'pass.att', label: 'ATT', name: 'Pass attempts, total', group: 'pass', get: (b) => b.pass?.att ?? null },
+    { id: 'pass.cmp', label: 'CMP', name: 'Completions, total', group: 'pass', get: (b) => b.pass?.cmp ?? null },
+    { id: 'pass.yds', label: 'YDS', name: 'Passing yards per game', group: 'pass', get: (b) => b.pass?.yds ?? null },
     { id: 'pass.ypa', label: 'Y/A', name: 'Yards per attempt', group: 'pass', get: (b) => b.pass?.ypa ?? null },
-    { id: 'pass.tds', label: 'TD', name: 'Passing touchdowns', group: 'pass', get: (b) => b.pass?.tds ?? null },
-    { id: 'pass.int', label: 'INT', name: 'Interceptions', group: 'pass', get: (b) => b.pass?.int ?? null },
+    { id: 'pass.tds', label: 'TD', name: 'Passing touchdowns, total', group: 'pass', get: (b) => b.pass?.tds ?? null },
+    { id: 'pass.int', label: 'INT', name: 'Interceptions, total', group: 'pass', get: (b) => b.pass?.int ?? null },
   ],
 };
 
 export const KICKER_COLUMNS: Column[] = [
-  { id: 'k.fg', label: 'FGM/FGA', name: 'Field goals made and attempted', group: 'k', get: (b) => b.k?.fgm ?? null, pair: (b) => (b.k ? [b.k.fgm, b.k.fga] : null) },
+  { id: 'k.fg', label: 'FGM/FGA', name: 'Field goals made and attempted, total', group: 'k', get: (b) => b.k?.fgm ?? null, pair: (b) => (b.k ? [b.k.fgm, b.k.fga] : null) },
   { id: 'k.fgPct', label: 'FG%', name: 'Field goal percentage', group: 'k', get: (b) => b.k?.fgPct ?? null },
-  { id: 'k.xp', label: 'XPM/XPA', name: 'Extra points made and attempted', group: 'k', get: (b) => b.k?.xpm ?? null, pair: (b) => (b.k ? [b.k.xpm, b.k.xpa] : null) },
+  { id: 'k.xp', label: 'XPM/XPA', name: 'Extra points made and attempted, total', group: 'k', get: (b) => b.k?.xpm ?? null, pair: (b) => (b.k ? [b.k.xpm, b.k.xpa] : null) },
   { id: 'k.pts', label: 'PTS', name: 'Fantasy points per game', group: 'k', get: (b) => b.k?.pts ?? b.pts },
 ];
 

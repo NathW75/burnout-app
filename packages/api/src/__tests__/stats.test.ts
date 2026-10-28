@@ -41,18 +41,18 @@ describe('parsing and averages', () => {
     expect(lines[2].ptsX100).toBe(300 + 400 + 300); // 20-29 + 40-49 + 3 XP (miss 0)
   });
 
-  it('season = per-game averages with rates from totals; last 3 = the last three games played; zero denominators are null', () => {
+  it('counts are totals and yards and points per game, with rates from totals; last 3 = the last three games played; zero denominators are null', () => {
     const g = (week: number, att: number, yds: number): GameLine => ({
       playerId: '10', gameId: `g${week}`, week, start: `2026-10-${String(week).padStart(2, '0')}T17:00:00Z`,
       rush: { att, yds, tds: 0 }, rec: { tgt: 0, rec: 0, yds: 0, tds: 0 }, pass: { att: 0, cmp: 0, yds: 0, tds: 0, int: 0 }, k: { fgm: 0, fga: 0, xpm: 0, xpa: 0 }, ptsX100: yds * 10,
     });
     const games = [g(1, 10, 40), g(2, 20, 100), g(4, 10, 30), g(5, 0, 0), g(6, 15, 75)];
     const out = aggregate(games, new Map(), new Map([['10', 'RB']]));
-    expect(out['10'].season).toMatchObject({ gamesPlayed: 5, rush: { att: 11, yds: 49, ypc: 4.5 }, pts: 4.9, ptsTotal: 24.5 });
+    expect(out['10'].season).toMatchObject({ gamesPlayed: 5, rush: { att: 55, yds: 49, ypc: 4.5 }, pts: 4.9, ptsTotal: 24.5 });
     expect(out['10'].season.rec).toEqual({ tgt: 0, rec: 0, yds: 0, ypr: null, tds: 0 });
     expect(out['10'].season.pass?.ypa).toBeNull();
     expect(out['10'].season.k).toBeNull();
-    expect(out['10'].last3).toMatchObject({ gamesPlayed: 3, rush: { att: 8.3, yds: 35, ypc: 4.2 } }); // weeks 4, 5, 6
+    expect(out['10'].last3).toMatchObject({ gamesPlayed: 3, rush: { att: 25, yds: 35, ypc: 4.2 } }); // weeks 4, 5, 6
     expect(block([], false).gamesPlayed).toBe(0);
   });
 
@@ -65,16 +65,39 @@ describe('parsing and averages', () => {
     const out = aggregate([line('10', 'a'), line('99', 'a'), line('99', 'b'), line('99', 'b')], new Map([['99', '10']]), new Map([['10', 'RB']]));
     expect(Object.keys(out)).toEqual(['10']);
     expect(out['10'].season.gamesPlayed).toBe(2);
-    expect(out['10'].season.rush?.att).toBe(10);
+    expect(out['10'].season.rush?.att).toBe(20); // 10 a game, two games
   });
 
-  it('kickers get the kicking block only, with FG% from totals', () => {
+  it('kickers get the kicking block only: kicks are totals, FG% from totals, points per game', () => {
     const k = (gameId: string, fgm: number, fga: number): GameLine => ({
       playerId: '12', gameId, week: 1, start: `2026-09-${gameId}T17:00:00Z`, rush: { att: 0, yds: 0, tds: 0 }, rec: { tgt: 0, rec: 0, yds: 0, tds: 0 },
       pass: { att: 0, cmp: 0, yds: 0, tds: 0, int: 0 }, k: { fgm, fga, xpm: 2, xpa: 2 }, ptsX100: fgm * 300 + 200,
     });
     const out = aggregate([k('10', 2, 3), k('17', 1, 1)], new Map(), new Map([['12', 'K']]));
-    expect(out['12'].season).toMatchObject({ rush: null, rec: null, pass: null, k: { fgm: 1.5, fga: 2, fgPct: 75, xpm: 2, xpa: 2, pts: 6.5 } });
+    expect(out['12'].season).toMatchObject({ rush: null, rec: null, pass: null, k: { fgm: 3, fga: 4, fgPct: 75, xpm: 4, xpa: 4, pts: 6.5 } });
+  });
+
+  it('every count is a whole-number total over the period; only yards and points are per game (Nath, 2026-10-28)', () => {
+    const g = (gameId: string, start: string, n: number): GameLine => ({
+      playerId: '30', gameId, week: n, start,
+      rush: { att: 3 * n, yds: 10 * n, tds: n }, rec: { tgt: 2 * n, rec: n, yds: 7 * n, tds: n },
+      pass: { att: 5 * n, cmp: 3 * n, yds: 40 * n, tds: n, int: n }, k: { fgm: 0, fga: 0, xpm: 0, xpa: 0 }, ptsX100: 1000 * n,
+    });
+    // Two games: n = 1 and n = 2. Totals: n sums to 3. Per game: n averages to 1.5.
+    const out = aggregate([g('a', '2026-10-01T17:00:00Z', 1), g('b', '2026-10-08T17:00:00Z', 2)], new Map(), new Map([['30', 'QB']]))['30'];
+    expect(out.season).toEqual({
+      gamesPlayed: 2, pts: 15, ptsTotal: 30,
+      rush: { att: 9, yds: 15, ypc: 3.3, tds: 3 },
+      rec: { tgt: 6, rec: 3, yds: 10.5, ypr: 7, tds: 3 },
+      pass: { att: 15, cmp: 9, yds: 60, ypa: 8, tds: 3, int: 3 },
+      k: null,
+    });
+    const kick = (gameId: string, fgm: number, fga: number, xpm: number, xpa: number): GameLine => ({
+      playerId: '31', gameId, week: 1, start: `2026-10-0${gameId}T17:00:00Z`, rush: { att: 0, yds: 0, tds: 0 }, rec: { tgt: 0, rec: 0, yds: 0, tds: 0 },
+      pass: { att: 0, cmp: 0, yds: 0, tds: 0, int: 0 }, k: { fgm, fga, xpm, xpa }, ptsX100: 500,
+    });
+    const k = aggregate([kick('1', 1, 2, 2, 3), kick('2', 2, 2, 1, 1), kick('3', 0, 1, 3, 3)], new Map(), new Map([['31', 'K']]))['31'];
+    expect(k.last3.k).toEqual({ fgm: 3, fga: 5, fgPct: 60, xpm: 6, xpa: 7, pts: 5 });
   });
 
   it('a kicker with no field-goal tries has no FG% (null, shown as "—"), not 0%', () => {
@@ -154,11 +177,11 @@ describeDbRedis('stats job and the pool (Postgres + Redis)', () => {
     clearStatsMemo();
     pool = await a.client.get(`/v1/seasons/${SEASON}/weeks/8/pool`);
     const den = pool.body.players.find((p: { playerId: string }) => p.playerId === 'rbDEN').stats;
-    expect(den.season).toMatchObject({ gamesPlayed: 3, rush: { att: 10, yds: 60, ypc: 6, tds: 0.3 }, rec: { tgt: 0, ypr: null }, pass: { ypa: null }, k: null });
+    expect(den.season).toMatchObject({ gamesPlayed: 3, rush: { att: 30, yds: 60, ypc: 6, tds: 1 }, rec: { tgt: 0, ypr: null }, pass: { ypa: null }, k: null });
     expect(den.season.ptsTotal).toBe(5 + 6 + 7 + 6);
     expect(den.last3.gamesPlayed).toBe(3);
     const k = pool.body.players.find((p: { playerId: string }) => p.playerId === 'kDET').stats;
-    expect(k.season).toMatchObject({ rush: null, rec: null, pass: null, k: { fgm: 1, fga: 2, fgPct: 50, xpm: 2, xpa: 2, pts: 5 } });
+    expect(k.season).toMatchObject({ rush: null, rec: null, pass: null, k: { fgm: 3, fga: 6, fgPct: 50, xpm: 6, xpa: 6, pts: 5 } });
     expect(pool.body.players.find((p: { playerId: string }) => p.playerId === 'qbKC').stats).toBeNull(); // no games logged
 
     // Next run: the frozen week comes from the cache; open weeks are refetched.

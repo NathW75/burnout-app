@@ -468,7 +468,7 @@ test('patch c: the picker filters by position first, sorts by stat columns, scro
   await page.getByLabel('SEARCH WRS').fill('');
 
   // Sort by targets: ▼ then ▲, values in order.
-  const tgt = table.getByRole('button', { name: /Targets, sort/ });
+  const tgt = table.getByRole('button', { name: /Targets, total, sort/ });
   await tgt.click();
   await expect(tgt).toContainText('▼');
   const col = async () => {
@@ -481,8 +481,8 @@ test('patch c: the picker filters by position first, sorts by stat columns, scro
   await tgt.click();
   const up = await col();
   expect(up).toEqual([...up].sort((a, b) => a - b));
-  await page.getByRole('group', { name: 'Stat period' }).getByRole('button', { name: 'LAST 3 AVG' }).click();
-  await expect(page.getByRole('group', { name: 'Stat period' }).getByRole('button', { name: 'LAST 3 AVG' })).toHaveAttribute('aria-pressed', 'true');
+  await page.getByRole('group', { name: 'Stat period' }).getByRole('button', { name: 'LAST 3' }).click();
+  await expect(page.getByRole('group', { name: 'Stat period' }).getByRole('button', { name: 'LAST 3' })).toHaveAttribute('aria-pressed', 'true');
 
   // Sideways scroll: the stats move, the name column stays put.
   const region = page.getByRole('region', { name: /scrolls sideways/ });

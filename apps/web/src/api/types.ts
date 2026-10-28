@@ -68,11 +68,11 @@ export interface PlayerCard {
   burnState: 'available' | 'locked' | 'burned';
   selectable: boolean;
   unavailableReason: 'BURNED' | 'LOCKED' | 'INACTIVE' | 'BYE' | 'WINDOW_CLOSED' | null;
-  /** Per-game averages (PRD-007 §8.7); null until the stats job has run, or for a player with no games. */
+  /** Season and last-3 stats (PRD-007 §8.7); null until the stats job has run, or for a player with no games. */
   stats?: PlayerStats | null;
 }
 
-/** One period of per-game averages. Rates are null when their denominator is 0. */
+/** One period: counts are totals, yards and points per game. Rates are null when their denominator is 0. */
 export interface StatBlock {
   gamesPlayed: number;
   pts: number;

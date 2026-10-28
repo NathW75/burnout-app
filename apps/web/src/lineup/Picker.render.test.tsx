@@ -25,7 +25,7 @@ const POOL: PlayerCard[] = [
   card('t1', 'Ty Sfo', 'TE', { stats: null }),
   card('r3', 'Ron Chi', 'RB', { unavailableReason: 'BURNED', burnState: 'burned', selectable: false, stats: { season: blk(200, 100, 0), last3: blk(60, 100, 0) } }),
   card('q1', 'Quade Buff', 'QB', { stats: { season: blk(150, 20, 0, { pass: { att: 33, cmp: 22, yds: 260, ypa: 7.9, tds: 2, int: 0 } }), last3: blk(60, 10, 0) } }),
-  card('k1', 'Kai Mia', 'K', { stats: { season: blk(70, 0, 0, { rush: null, rec: null, pass: null, k: { fgm: 1.7, fga: 2, fgPct: 85, xpm: 2.3, xpa: 2.4, pts: 10 } }), last3: blk(30, 0, 0, { rush: null, rec: null, pass: null, k: { fgm: 2, fga: 2, fgPct: 100, xpm: 3, xpa: 3, pts: 12 } }) } }),
+  card('k1', 'Kai Mia', 'K', { stats: { season: blk(70, 0, 0, { rush: null, rec: null, pass: null, k: { fgm: 12, fga: 14, fgPct: 86, xpm: 16, xpa: 17, pts: 10 } }), last3: blk(30, 0, 0, { rush: null, rec: null, pass: null, k: { fgm: 2, fga: 2, fgPct: 100, xpm: 3, xpa: 3, pts: 12 } }) } }),
 ];
 
 function renderPicker(slot: SlotKey) {
@@ -87,11 +87,11 @@ describe('picker (patch c)', () => {
     expect(within(ty).getAllByRole('cell').every((c) => c.textContent === '—')).toBe(true);
   });
 
-  it('sort: a header tap goes ▼ then ▲ then back to default; SEASON AVG ↔ LAST 3 AVG changes the numbers without refetching', async () => {
+  it('sort: a header tap goes ▼ then ▲ then back to default; SEASON ↔ LAST 3 changes the numbers without refetching', async () => {
     renderPicker('rb1');
     const user = userEvent.setup();
     const table = await screen.findByRole('table');
-    const yds = () => within(table).getByRole('button', { name: /Rush yards, sort/ });
+    const yds = () => within(table).getByRole('button', { name: /Rush yards per game, sort/ });
     await user.click(yds());
     expect(yds().closest('th')).toHaveAttribute('aria-sort', 'descending');
     expect(yds()).toHaveTextContent('▼');
@@ -106,7 +106,7 @@ describe('picker (patch c)', () => {
     const rex = () => within(table).getByRole('rowheader', { name: /Rex Mia/ }).closest('tr')!;
     expect(within(rex()).getAllByRole('cell')[2]).toHaveTextContent('60');
     const calls = (fetch as unknown as { mock: { calls: unknown[] } }).mock.calls.length;
-    await user.click(within(screen.getByRole('group', { name: 'Stat period' })).getByRole('button', { name: 'LAST 3 AVG' }));
+    await user.click(within(screen.getByRole('group', { name: 'Stat period' })).getByRole('button', { name: 'LAST 3' }));
     expect(within(rex()).getAllByRole('cell')[2]).toHaveTextContent('90');
     expect((fetch as unknown as { mock: { calls: unknown[] } }).mock.calls.length).toBe(calls);
   });
@@ -122,7 +122,7 @@ describe('picker (patch c)', () => {
     table = await screen.findByRole('table');
     expect(screen.queryByRole('group', { name: 'Stat groups' })).not.toBeInTheDocument();
     expect(within(table).getAllByRole('columnheader').map((h) => h.textContent)).toEqual(['PLAYER', 'KICKING', 'FGM/FGA', 'FG%', 'XPM/XPA', 'PTS']);
-    expect(within(within(table).getByRole('rowheader', { name: /Kai Mia/ }).closest('tr')!).getAllByRole('cell').map((c) => c.textContent)).toEqual(['1.7/2', '85', '2.3/2.4', '10']);
+    expect(within(within(table).getByRole('rowheader', { name: /Kai Mia/ }).closest('tr')!).getAllByRole('cell').map((c) => c.textContent)).toEqual(['12/14', '86', '16/17', '10']);
   });
 
   it('show burned: burned players appear muted at the bottom and can’t be selected', async () => {

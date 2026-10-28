@@ -141,7 +141,7 @@ export function PickerPage() {
           <div role="group" aria-label="Stat period" className="flex flex-none overflow-hidden rounded-sm border border-frame">
             {(['season', 'last3'] as const).map((p) => (
               <button key={p} type="button" aria-pressed={period === p} onClick={() => setPeriod(p)} className={`min-h-9 px-3 font-mono text-[12px] ${period === p ? 'bg-type text-newsprint' : 'bg-paper text-type'}`}>
-                {p === 'season' ? 'SEASON AVG' : 'LAST 3 AVG'}
+                {p === 'season' ? 'SEASON' : 'LAST 3'}
               </button>
             ))}
           </div>
@@ -162,10 +162,14 @@ export function PickerPage() {
       ) : pool.isError ? (
         <div className="p-4"><ErrorNote>{errorText(pool.error)}</ErrorNote></div>
       ) : (
-        <div className="mx-4 mt-[12px] overflow-x-auto rounded-sm border border-rule" tabIndex={0} role="region" aria-label="Players and stats; scrolls sideways">
+        <>
+        <p className="mx-4 mt-[10px] mb-0 font-mono text-[11px] text-muted" aria-hidden="true">
+          {kicker ? 'KICKS: TOTALS · PTS: PER GAME' : 'COUNTS: TOTALS · YDS, PTS: PER GAME'}
+        </p>
+        <div className="mx-4 mt-[6px] overflow-x-auto rounded-sm border border-rule" tabIndex={0} role="region" aria-label="Players and stats; scrolls sideways">
           <table className="w-full border-collapse text-left" aria-label={`Players for ${SLOT_LABEL[slot]}`}>
             <caption className="sr-only">
-              {`Players for ${SLOT_LABEL[slot]}, per-game ${period === 'season' ? 'season averages' : 'averages over the last 3 games'}. ${sort ? `Sorted by ${columns.find((c) => c.id === sort.col)?.name}, ${sort.dir === 'desc' ? 'highest' : 'lowest'} first.` : 'Sorted by fantasy points this season.'}`}
+              {`Players for ${SLOT_LABEL[slot]}, ${period === 'season' ? 'this season' : 'over the last 3 games'}: counts are totals, yards and points are per game. ${sort ? `Sorted by ${columns.find((c) => c.id === sort.col)?.name}, ${sort.dir === 'desc' ? 'highest' : 'lowest'} first.` : 'Sorted by fantasy points this season.'}`}
             </caption>
             <thead>
               <tr className="bg-chrome font-mono text-[10px] tracking-[1px] text-muted">
@@ -198,6 +202,7 @@ export function PickerPage() {
             </tbody>
           </table>
         </div>
+        </>
       )}
 
       {burnedCount > 0 && (

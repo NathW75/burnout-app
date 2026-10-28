@@ -25,6 +25,7 @@ export interface GameLine {
   ptsX100: number;
 }
 
+/** Counts are totals over the period; yards and points are per game (see block()). */
 export interface StatBlock {
   gamesPlayed: number;
   /** Fantasy points per game; season blocks also carry the season total for sorting. */
@@ -95,7 +96,13 @@ export function parseGameLines(feed: unknown): GameLine[] {
 const r1 = (x: number) => Math.round(x * 10) / 10;
 const rate = (n: number, d: number) => (d > 0 ? r1(n / d) : null);
 
-/** Per-game averages over some games; rates (Y/C, Y/R, Y/A, FG%) from the totals, null when the denominator is 0. */
+/**
+ * One period's numbers (Nath, 2026-10-28): counts (attempts, completions,
+ * targets, receptions, TDs, INTs, kicks made and tried) are whole-number
+ * totals over the period, since nobody makes 0.3 of an attempt; yards and
+ * points are per-game averages; rates (Y/C, Y/R, Y/A, FG%) come from the
+ * totals and are null when the denominator is 0.
+ */
 export function block(games: GameLine[], kicker: boolean, withTotal = false): StatBlock {
   const n = games.length;
   const sum = (f: (g: GameLine) => number) => games.reduce((a, g) => a + f(g), 0);
@@ -106,13 +113,13 @@ export function block(games: GameLine[], kicker: boolean, withTotal = false): St
   if (kicker) {
     const fgm = sum((g) => g.k.fgm);
     const fga = sum((g) => g.k.fga);
-    return { ...base, k: { fgm: per((g) => g.k.fgm), fga: per((g) => g.k.fga), fgPct: fga > 0 ? Math.round((fgm * 100) / fga) : null, xpm: per((g) => g.k.xpm), xpa: per((g) => g.k.xpa), pts } };
+    return { ...base, k: { fgm, fga, fgPct: fga > 0 ? Math.round((fgm * 100) / fga) : null, xpm: sum((g) => g.k.xpm), xpa: sum((g) => g.k.xpa), pts } };
   }
   return {
     ...base,
-    rush: { att: per((g) => g.rush.att), yds: per((g) => g.rush.yds), ypc: rate(sum((g) => g.rush.yds), sum((g) => g.rush.att)), tds: per((g) => g.rush.tds) },
-    rec: { tgt: per((g) => g.rec.tgt), rec: per((g) => g.rec.rec), yds: per((g) => g.rec.yds), ypr: rate(sum((g) => g.rec.yds), sum((g) => g.rec.rec)), tds: per((g) => g.rec.tds) },
-    pass: { att: per((g) => g.pass.att), cmp: per((g) => g.pass.cmp), yds: per((g) => g.pass.yds), ypa: rate(sum((g) => g.pass.yds), sum((g) => g.pass.att)), tds: per((g) => g.pass.tds), int: per((g) => g.pass.int) },
+    rush: { att: sum((g) => g.rush.att), yds: per((g) => g.rush.yds), ypc: rate(sum((g) => g.rush.yds), sum((g) => g.rush.att)), tds: sum((g) => g.rush.tds) },
+    rec: { tgt: sum((g) => g.rec.tgt), rec: sum((g) => g.rec.rec), yds: per((g) => g.rec.yds), ypr: rate(sum((g) => g.rec.yds), sum((g) => g.rec.rec)), tds: sum((g) => g.rec.tds) },
+    pass: { att: sum((g) => g.pass.att), cmp: sum((g) => g.pass.cmp), yds: per((g) => g.pass.yds), ypa: rate(sum((g) => g.pass.yds), sum((g) => g.pass.att)), tds: sum((g) => g.pass.tds), int: sum((g) => g.pass.int) },
   };
 }
 

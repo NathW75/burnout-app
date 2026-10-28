@@ -1,6 +1,6 @@
 # PRD-007 — Web App (Player Portal)
 **Burnout League · apps/web**
-*Status: v1.10 — **APPROVED 2026-10-27** (Nath), decisions Q1–Q7 in §14; mockups approved on the landing-page design system (§11); API additions (§8) built; web app patch (a) built; patch (b) built 2026-10-28 in two parts (standings, burned roster, inbox; then account, feedback, light theme). Phase A screens complete. Push notifications (PRD-008 §9) built 2026-10-28. Patch (c) (tester feedback: position filter, bottom nav on every screen, player stat columns) specced and built 2026-10-28.*
+*Status: v1.11 — **APPROVED 2026-10-27** (Nath), decisions Q1–Q7 in §14; mockups approved on the landing-page design system (§11); API additions (§8) built; web app patch (a) built; patch (b) built 2026-10-28 in two parts (standings, burned roster, inbox; then account, feedback, light theme). Phase A screens complete. Push notifications (PRD-008 §9) built 2026-10-28. Patch (c) (tester feedback: position filter, bottom nav on every screen, player stat columns) specced and built 2026-10-28.*
 *Author: Build thread · 2026-10-27*
 
 ---
@@ -209,7 +209,8 @@ Both modes use the same column set. The toggle label shows the active mode and u
 - A **PTS column** (fantasy points per game, current scoring rules) leads the non-kicker table, since the default order is fantasy points; then the groups that are on, always in RUSH, REC, PASS order.
 - The table is a real table: a group header row, sortable column headers (`aria-sort`, named "YDS: Rush yards, sort" so the spoken name matches the label), a caption that says the period and sort, and a sideways-scrolling region with the name column pinned.
 - Pickable players come first, then greyed ones, each part in the chosen order; players with no value for a sorted column go last whichever way. Players with no stats yet read "—" everywhere and sort after those with stats.
-- One decimal for averages, whole numbers stay whole; kicking pairs read "1.7/2".
+- **Counts are totals, not averages (Nath, 2026-10-28, v1.11):** attempts, completions, rushes, targets, receptions, TDs, INTs, and kicks made and tried are whole-number totals over the period (a kicker can't make 0.3 of a try). Yards and points stay per-game averages; rates (Y/C, Y/R, Y/A, FG%) are unchanged. This applies to both periods, so the toggle reads **SEASON / LAST 3**, and a key above the table reads "COUNTS: TOTALS · YDS, PTS: PER GAME" (kickers: "KICKS: TOTALS · PTS: PER GAME"). Screen-reader names say which, e.g. "Rush attempts, total", "Rush yards per game".
+- Averages show one decimal, whole numbers stay whole; kicking pairs read "14/16".
 
 #### 6.3.3 Remaining picker behavior
 
@@ -415,6 +416,7 @@ Per-game averages (season totals ÷ `gamesPlayed`) are computed server-side and 
 - **Source and storage, changed:** only the **worker** holds the MySportsFeeds key (a standing rule: the key lives in the worker's Railway variables only), so the API can't call MSF. A worker job, `stats`, runs at :05 and :35 and at worker start: it reads every started week's `player_gamelogs` feed, keeps each week's parsed lines in Redis (a frozen week is fetched once and kept 30 days; an open week is refetched each run), averages them per player and writes one blob, `stats:<season>`, that the pool reads (held in memory for 60 seconds per API process). Still no new Postgres tables. A refused feed keeps that week's last copy. If Redis has nothing, the pool still works and every stat reads "—".
 - **Per person:** another MSF ID for the same person counts as that person (PRD-006 §7.5).
 - **Points:** each block also carries `pts` (fantasy points per game under the current scoring rules, from the scoring engine's own parser and rules), and the season block carries `ptsTotal`, which the default sort uses.
+- **Counts are totals (v1.11):** in both `season` and `last3`, `att`, `cmp`, `tgt`, `rec`, `tds`, `int`, `fgm`, `fga`, `xpm` and `xpa` are totals over the period's games, not per-game averages; `yds` and `pts` are per-game averages. (The response example above predates this: its count fields read as totals now.)
 - **Rates** (Y/C, Y/R, Y/A, FG%) come from the period's totals, not an average of per-game rates; averages are rounded to one decimal.
 
 ## 9. Behavior details
@@ -588,6 +590,7 @@ Depends on: PRD-001, PRD-003, PRD-004 (Phase B), PRD-006, `SPEC-feedback-system.
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.11 | 2026-10-28 | §6.3.2, §8.7: count stats (attempts, completions, rushes, targets, receptions, TDs, INTs, kicks made and tried) are whole-number totals over the period in both SEASON and LAST 3; yards and points stay per game (Nath). Toggle reads SEASON / LAST 3; a key above the table says which is which. |
 | 1.10 | 2026-10-28 | Patch (c), merged from the project copy's spec (written there as v1.8 and v1.9 by the spec thread, while the repo's v1.8 and v1.9 recorded the feedback screen and the AI connector) and built: §6.3.1 position pills, §6.3.2 stat columns, §6.3.3 picker behavior, §6.2.1 persistent bottom nav, §8.7 stats in the pool, §12 tests, §13 eight new acceptance criteria (checked). As built: FB folded into the RB pill and no FLEX pill; a PTS column; compact rows with the name cell as the select button; footers sit on the tabs; §8.7 stats from a worker job into Redis, because only the worker holds the MSF key; sign-up steps keep their Sign out link without tabs. |
 | 1.9 | 2026-10-28 | §6.7: Account gains CONNECTIONS → AI connector (PRD-011 §8): connector tokens, made after a fresh code and shown once; the notifications row reads "Email and push". |
 | 1.8 | 2026-10-28 | §10.1: the admin feedback screen (moved up from Phase B) and an email to admins for each new piece of feedback, for the Week 8 testers. |
