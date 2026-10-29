@@ -270,15 +270,15 @@ describeDbRedis('PRD-006 lineups, players, payments routes (HTTP, Postgres + Red
     await submitLineup(w, b, { ...LINEUP, wr3: 'wrBUF' });
     await fireLocks(new Date(WINDOWS.tnf.getTime() + 30_000));
     await w.t.sql(`UPDATE pool_entries SET burned = true, burned_at = now() WHERE user_id = $1 AND player_id = 'kDET'`, [a.userId]);
-    await w.r.redis.del(`${w.r.namespace}own:${SEASON}:8`);
+    await w.r.redis.del(`${w.r.namespace}own2:${SEASON}:8`);
     await relogin(a);
 
     const pool = await a.client.get(`/v1/seasons/${SEASON}/weeks/8/pool`);
     expect(pool.status).toBe(200);
     const card = (id: string) => pool.body.players.find((p: { playerId: string }) => p.playerId === id);
-    expect(card('rbDEN')).toMatchObject({ burnState: 'locked', opponent: 'KC', homeAway: 'home', windowOpen: false, weekOwnershipPct: 100 });
+    expect(card('rbDEN')).toMatchObject({ burnState: 'locked', opponent: 'KC', homeAway: 'home', windowOpen: false, weekOwnershipPct: null }); // 2 managers: below the launch floor of 50
     expect(card('kDET')).toMatchObject({ burnState: 'burned' });
-    expect(card('wrPHI')).toMatchObject({ burnState: 'available', weekOwnershipPct: 50, windowOpen: true });
+    expect(card('wrPHI')).toMatchObject({ burnState: 'available', weekOwnershipPct: null, seasonOwnershipPct: null, windowOpen: true });
     expect(card('rbCHI')).toMatchObject({ bye: true, opponent: null, scheduledEt: null, selectable: false, unavailableReason: 'BYE' });
     expect(card('fbSF')).toMatchObject({ position: 'FB', selectable: true, unavailableReason: null });
     expect(card('rbDEN')).toMatchObject({ selectable: false, unavailableReason: 'LOCKED' });
@@ -293,6 +293,35 @@ describeDbRedis('PRD-006 lineups, players, payments routes (HTTP, Postgres + Red
     expect(JSON.stringify(pool.body)).not.toMatch(/https?:\/\//);
   });
 
+
+  it('ownership counts LOCKED picks only (pre-lock anonymity, T&C §11.2) and stays hidden below the floor', async () => {
+    const a = await account(w);
+    const b = await account(w);
+    const c = await account(w);
+    await submitLineup(w, a); // qb, rb1 (rbDEN, Thursday), ... wr3 wrPHI (Sunday)
+    await submitLineup(w, b, { ...LINEUP, wr3: 'wrBUF' });
+    await submitLineup(w, c, { ...LINEUP, rb1: 'rbMIA', rb2: 'fbSF', wr3: 'wrBUF' });
+    const pct = async (floor: number) => {
+      w.ctx.config.ownershipMinLineups = floor;
+      await w.r.redis.del(`${w.r.namespace}own2:${SEASON}:8`);
+      const pool = await a.client.get(`/v1/seasons/${SEASON}/weeks/8/pool`);
+      const card = (id: string) => pool.body.players.find((p: { playerId: string }) => p.playerId === id);
+      return { rbDEN: card('rbDEN').weekOwnershipPct, wrPHI: card('wrPHI').weekOwnershipPct, wrBUF: card('wrBUF').weekOwnershipPct, rbMIA: card('rbMIA').weekOwnershipPct };
+    };
+
+    // Before any lock: every pick is open, so nothing counts, even though all three lineups are confirmed.
+    expect(await pct(3)).toEqual({ rbDEN: 0, wrPHI: 0, wrBUF: 0, rbMIA: 0 });
+
+    // Thursday locks: rbDEN (a and b, rb1) counts; Sunday picks (wrPHI, wrBUF) still don't.
+    await fireLocks(new Date(WINDOWS.tnf.getTime() + 30_000));
+    await relogin(a);
+    const after = await pct(3);
+    expect(after.rbDEN).toBe(66.7); // 2 of 3 managers
+    expect(after).toMatchObject({ wrPHI: 0, wrBUF: 0 });
+
+    // Below the floor (3 managers, floor 4): withheld entirely, so nothing can be inferred.
+    expect(await pct(4)).toEqual({ rbDEN: null, wrPHI: null, wrBUF: null, rbMIA: null });
+  });
   // ── Free play (decision 2026-10-27) ──────────────────────────────────────
   it('free play: anyone may submit until the paid-entry cutoff week; after that only entrants can', async () => {
     const free = await account(w);

@@ -19,8 +19,10 @@ export interface PlayerCard {
   windowOpen: boolean;
   injuryStatus: string;
   projectedPoints: number | null;
-  weekOwnershipPct: number;
-  seasonOwnershipPct: number;
+  /** Share of this week's field whose pick of him has LOCKED; unlocked picks never count (pre-lock anonymity). Null below the floor. */
+  weekOwnershipPct: number | null;
+  /** Share of this season's burners who burned him. Null below the floor. */
+  seasonOwnershipPct: number | null;
   burnState: 'available' | 'locked' | 'burned';
   /** False → shown greyed out. Out/IR players are greyed but never burned. */
   selectable: boolean;
@@ -55,13 +57,22 @@ export async function availablePlayerIds(q: SqlRunner, userId: string, season: s
 }
 
 interface Ownership {
-  week: Record<string, number>;
-  season: Record<string, number>;
+  /** Null: the field is below the floor, so nothing is shown. */
+  week: Record<string, number> | null;
+  season: Record<string, number> | null;
 }
 
-/** Week: share of this week's submitters who submitted the player. Season: share of burners who burned him. Cached 5 min. */
+/**
+ * Ownership (PRD-007 §5.5, PRD-003 pre-lock anonymity, T&C §11.2).
+ * Week: of the managers with a confirmed lineup this week, the share whose
+ * pick of the player has LOCKED (not voided). A pick that hasn't locked never
+ * counts, so the number can't reveal anyone's open slots. Season: of the
+ * managers with a burn this season, the share who burned him (burns are
+ * post-lock by definition). Each is withheld (null) until its field reaches
+ * config.ownershipMinLineups. Cached 5 min.
+ */
 async function ownership(ctx: ApiContext, season: string, week: number): Promise<Ownership> {
-  const key = `${ctx.ns}own:${season}:${week}`;
+  const key = `${ctx.ns}own2:${season}:${week}`;
   if (ctx.redis) {
     try {
       const hit = await ctx.redis.get(key);
@@ -70,21 +81,30 @@ async function ownership(ctx: ApiContext, season: string, week: number): Promise
       /* compute from Postgres */
     }
   }
-  const weekRows = await ctx.db.query<{ player_id: string; pct: number }>(
-    `WITH subs AS (SELECT DISTINCT user_id, player_id FROM season_submissions WHERE season = $1 AND week = $2 AND void_reason IS NULL),
-          n AS (SELECT count(DISTINCT user_id)::float AS n FROM subs)
-     SELECT player_id, round((count(*) * 100.0 / NULLIF((SELECT n FROM n), 0))::numeric, 1)::float AS pct FROM subs GROUP BY player_id`,
+  const floor = ctx.config.ownershipMinLineups;
+  const [{ n: weekField }] = await ctx.db.query<{ n: number }>(
+    `SELECT count(DISTINCT user_id)::int AS n FROM season_submissions WHERE season = $1 AND week = $2 AND void_reason IS NULL`,
     [season, week]
   );
-  const seasonRows = await ctx.db.query<{ player_id: string; pct: number }>(
-    `WITH b AS (SELECT DISTINCT user_id, player_id FROM burn_records WHERE season = $1),
-          n AS (SELECT count(DISTINCT user_id)::float AS n FROM b)
-     SELECT player_id, round((count(*) * 100.0 / NULLIF((SELECT n FROM n), 0))::numeric, 1)::float AS pct FROM b GROUP BY player_id`,
-    [season]
-  );
+  const weekRows = weekField >= floor
+    ? await ctx.db.query<{ player_id: string; pct: number }>(
+        `SELECT player_id, round((count(DISTINCT user_id) * 100.0 / $3)::numeric, 1)::float AS pct
+           FROM season_submissions
+          WHERE season = $1 AND week = $2 AND void_reason IS NULL AND locked_at IS NOT NULL
+          GROUP BY player_id`,
+        [season, week, weekField]
+      )
+    : null;
+  const [{ n: burners }] = await ctx.db.query<{ n: number }>(`SELECT count(DISTINCT user_id)::int AS n FROM burn_records WHERE season = $1`, [season]);
+  const seasonRows = burners >= floor
+    ? await ctx.db.query<{ player_id: string; pct: number }>(
+        `SELECT player_id, round((count(DISTINCT user_id) * 100.0 / $2)::numeric, 1)::float AS pct FROM burn_records WHERE season = $1 GROUP BY player_id`,
+        [season, burners]
+      )
+    : null;
   const result: Ownership = {
-    week: Object.fromEntries(weekRows.map((r) => [r.player_id, Number(r.pct)])),
-    season: Object.fromEntries(seasonRows.map((r) => [r.player_id, Number(r.pct)])),
+    week: weekRows && Object.fromEntries(weekRows.map((r) => [r.player_id, Number(r.pct)])),
+    season: seasonRows && Object.fromEntries(seasonRows.map((r) => [r.player_id, Number(r.pct)])),
   };
   if (ctx.redis) {
     try {
@@ -141,8 +161,8 @@ export async function getPool(ctx: ApiContext, userId: string, season: string, w
     windowOpen,
     injuryStatus: r.injury_status,
     projectedPoints: null, // PRD-006 Q3
-    weekOwnershipPct: own.week[r.id] ?? 0,
-    seasonOwnershipPct: own.season[r.id] ?? 0,
+    weekOwnershipPct: own.week ? (own.week[r.id] ?? 0) : null,
+    seasonOwnershipPct: own.season ? (own.season[r.id] ?? 0) : null,
     burnState: r.burned ? 'burned' : r.locked ? 'locked' : 'available',
     selectable: unavailableReason === null,
     unavailableReason,

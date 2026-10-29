@@ -14,6 +14,8 @@ export interface ApiConfig {
   bcryptCost: number;
   /** Requests per minute from one client IP, across the whole API (PRD-006 §10). */
   ipRateLimitPerMinute: number;
+  /** Ownership percentages appear only once this many managers are in the field (PRD-007 §5.5; 50 at launch, lower on staging). */
+  ownershipMinLineups: number;
   sessionIdleMs: number;
   sessionMaxMs: number;
   pendingMfaMs: number;
@@ -51,6 +53,7 @@ export interface ApiConfig {
 export const DEFAULT_API_CONFIG: ApiConfig = {
   bcryptCost: 12,
   ipRateLimitPerMinute: 300,
+  ownershipMinLineups: 50,
   // Signed in until you sign out (Nath, 2026-10-28; PRD-006 D1 v1.13): 90 days idle, each visit restarts it; 1-year hard limit.
   // Money, security changes and admin still ask for a fresh code (step-up).
   sessionIdleMs: 90 * 24 * 3600_000,

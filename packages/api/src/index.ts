@@ -26,6 +26,7 @@ async function main() {
       currentSeason: process.env.CURRENT_SEASON ?? '2026-2027-regular',
       turnstileSecret: process.env.TURNSTILE_SECRET_KEY || null,
       signupInviteOnly: process.env.SIGNUP_INVITE_ONLY === 'on',
+      ...(Number.isInteger(Number(process.env.OWNERSHIP_MIN_LINEUPS)) && Number(process.env.OWNERSHIP_MIN_LINEUPS) >= 1 ? { ownershipMinLineups: Number(process.env.OWNERSHIP_MIN_LINEUPS) } : {}),
       vapidPublicKey: process.env.NOTIFY_PUSH === 'on' ? process.env.VAPID_PUBLIC_KEY || null : null,
     },
   });

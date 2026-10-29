@@ -78,6 +78,8 @@ export default defineRailway((ctx, project) => {
       TURNSTILE_SECRET_KEY: secret('TURNSTILE_SECRET_KEY'), // PRD-007 §8.4: sign-up bot check
       // Invite-only sign-up (PRD-006 §6.10): on for staging testers; production decided before launch.
       SIGNUP_INVITE_ONLY: production ? 'off' : 'on',
+      // Ownership % floor (PRD-007 §5.5): 50 at launch; 1 on staging so testers can see it work (locked picks are public anyway).
+      OWNERSHIP_MIN_LINEUPS: production ? '50' : '1',
       // Web push (PRD-008 §9): the API hands browsers the public key to subscribe with.
       NOTIFY_PUSH: production ? 'off' : 'on',
       VAPID_PUBLIC_KEY: secret('VAPID_PUBLIC_KEY'),
