@@ -5,7 +5,7 @@
 import { createContext, Suspense, useContext, useEffect, useRef, type ReactNode } from 'react';
 import { Link, NavLink, useLocation } from 'react-router';
 import { setCurrentScreen } from '../api/client';
-import { useUnread } from '../api/hooks';
+import { useRefreshOnNewNotices, useUnread } from '../api/hooks';
 import { clockET } from '../lib/format';
 import { useServerNow } from '../lib/useClock';
 import { BackIcon, BellIcon, BoardIcon, FlameIcon, HomeIcon, LineupIcon, UserIcon } from './icons';
@@ -41,6 +41,7 @@ export function Wordmark() {
 /** The inbox bell with its unread count (PRD-007 §6.6). The count is text, not just a dot. */
 export function InboxBell() {
   const inbox = useUnread();
+  useRefreshOnNewNotices();
   const n = inbox.data?.unread ?? 0;
   return (
     <NavLink

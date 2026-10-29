@@ -1,6 +1,6 @@
 # PRD-007 — Web App (Player Portal)
 **Burnout League · apps/web**
-*Status: v1.15 — **APPROVED 2026-10-27** (Nath), decisions Q1–Q7 in §14; mockups approved on the landing-page design system (§11); API additions (§8) built; web app patch (a) built; patch (b) built 2026-10-28 in two parts (standings, burned roster, inbox; then account, feedback, light theme). Phase A screens complete. Push notifications (PRD-008 §9) built 2026-10-28. Patch (c) (tester feedback: position filter, bottom nav on every screen, player stat columns) specced and built 2026-10-28.*
+*Status: v1.16 — **APPROVED 2026-10-27** (Nath), decisions Q1–Q7 in §14; mockups approved on the landing-page design system (§11); API additions (§8) built; web app patch (a) built; patch (b) built 2026-10-28 in two parts (standings, burned roster, inbox; then account, feedback, light theme). Phase A screens complete. Push notifications (PRD-008 §9) built 2026-10-28. Patch (c) (tester feedback: position filter, bottom nav on every screen, player stat columns) specced and built 2026-10-28.*
 *Author: Build thread · 2026-10-27*
 
 ---
@@ -117,6 +117,7 @@ A user who stops partway resumes at the step they left on their next sign-in (th
 - **Header:** official clock, current week, my season rank and points (from the field board).
 - **Windows:** each window this week with its label ("Sunday Late · 4:25 PM ET"), a countdown, its status (open, locked, final), and how many of my slots sit in it.
 - **My lineup:** the nine slots in order (QB, RB1, RB2, WR1, WR2, WR3, TE, FLEX, K), each in one of the states in §6.3, with "Edit lineup" while any window is open.
+  - **Tile treatments (v1.16, Nath 2026-10-29):** a locked tile is amber (border plus 14% amber tint, "· LIVE"); a **burned** tile is red the same way (red border plus 14% red tint, "· BURNED", the name struck through, points underneath). Burned text uses `--color-burnt` (dark #FF5C66, light #A50D26), which stays at 4.5:1 or better on the red tint (4.89 dark, 5.34 light); the light theme's usual red would fall to 4.0:1 there.
 - **Since your last visit:** unread inbox items, e.g. "Saquon was voided: Out before his lock," "3 players burned."
 - **Free play banner:** shows free-play status from `eligibility`. After the Week 3 cutoff in a season with paid pools, a non-entrant sees why they can't submit.
 
@@ -428,6 +429,7 @@ Per-game averages (season totals ÷ `gamesPlayed`) are computed server-side and 
 
 - **Freshness:**
   - Lineup and pool data refetch on focus, after any mutation, and at every countdown zero.
+  - **Burns arrive without a reload (v1.16):** burns land whenever a game goes Final, so there's no time to schedule. The inbox bell already checks for notices every minute; when a new notice arrives (a burn, lock, voided or re-pointed pick), the app refetches the lineup, windows, pool, burned roster, boards and reveals, so This Week turns red within about a minute. Locks were already live (refetch at each lock time and a minute after). Instant server push (a live connection per tab) isn't needed at this cadence.
   - The leaderboard polls every 60 seconds while visible during live windows and sends `If-None-Match` with the board's `ETag` (`304` when unchanged).
 - **Offline or flaky network:** read screens show the last data with a "last updated" time. Nothing is submitted offline, and Gate 3 needs a live response.
 - **Errors:** API error codes map to plain messages. `WEEK_CLOSED`, `PAID_ENTRY_REQUIRED`, `PLAYER_INACTIVE`, `TURNSTILE_FAILED` and stale confirmations each get a specific explanation and next step.
@@ -596,6 +598,7 @@ Depends on: PRD-001, PRD-003, PRD-004 (Phase B), PRD-006, `SPEC-feedback-system.
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.16 | 2026-10-29 | §6.2: burned lineup tiles red-tinted like locked tiles are amber (new `--color-burnt` text token for contrast). §9: a new notice refreshes lineup, windows, burns and boards, so burns appear within about a minute without a reload. |
 | 1.15 | 2026-10-29 | §6.3: open slots may be left empty (Nath); the builder warns instead of blocking, Gate 1 shows an empty-slot warning, rules page updated (PRD-006 §9.1 v1.16). |
 | 1.14 | 2026-10-29 | §6.8: rules page gains "IT'S NEVER TOO LATE" (set a lineup any time a game hasn't started, including after Thursday); covered by an API test and the end-to-end suite. |
 | 1.13 | 2026-10-29 | §5.5: ownership counts locked picks only and is withheld below `OWNERSHIP_MIN_LINEUPS` (50 launch, 1 staging); fixes the API counting unlocked picks with no floor (pre-lock anonymity, T&C §11.2). Lineup-tile "##% in play" display noted as next. |

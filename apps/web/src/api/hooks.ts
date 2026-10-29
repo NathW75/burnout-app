@@ -3,7 +3,7 @@
  * these hooks only fetch and cache what it says (PRD-007 §1).
  */
 import { keepPreviousData, QueryCache, QueryClient, useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { serverClock } from '../lib/clock';
 import { api, ApiError } from './client';
 import type { Burn, FieldBoard, FieldMe, GameWindow, Lineup, Me, Notifications, Pool, Receipt, Reveal, SeasonCurrent } from './types';
@@ -151,6 +151,27 @@ export function useMarkRead() {
     mutationFn: (sel: { ids: string[] } | { all: true }) => api<{ marked: number }>('/me/notifications/read', { body: sel }),
     onSettled: () => qc.invalidateQueries({ queryKey: qk.notifications }),
   });
+}
+
+/**
+ * Burns land whenever a game goes Final, so there's no time to schedule a
+ * refetch for (locks have useRefetchAtLocks). The bell already checks for
+ * notices every minute; when a new one arrives (a burn, a lock, a voided or
+ * re-pointed pick), refresh everything it can change, so This Week, the
+ * burned roster and the boards update without a reload. Mounted once, in the
+ * header.
+ */
+export function useRefreshOnNewNotices() {
+  const qc = useQueryClient();
+  const newest = useUnread().data?.items[0]?.id;
+  const seen = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    if (newest === undefined) return;
+    if (seen.current !== undefined && seen.current !== newest) {
+      for (const key of ['lineup', 'windows', 'pool', 'burns', 'fieldMe', 'fieldBoard', 'reveal']) void qc.invalidateQueries({ queryKey: [key] });
+    }
+    seen.current = newest;
+  }, [newest, qc]);
 }
 
 export function useUnread() {

@@ -148,7 +148,7 @@ function WindowRow({ w, now, slots, windows, isNext, last }: { w: GameWindow; no
   );
 }
 
-function SlotTile({ s, windows, burnPts }: { s: LineupSlot; windows: GameWindow[]; burnPts?: number }) {
+export function SlotTile({ s, windows, burnPts }: { s: LineupSlot; windows: GameWindow[]; burnPts?: number }) {
   const state = slotState(s, windows);
   const label = SLOT_LABEL[s.slot];
   const box = 'flex flex-col gap-1 rounded-sm p-[10px]';
@@ -156,10 +156,10 @@ function SlotTile({ s, windows, burnPts }: { s: LineupSlot; windows: GameWindow[
   switch (state) {
     case 'BURNED':
       return (
-        <li className={`${box} border border-rule bg-paper`}>
-          <span className="font-mono text-[11px] text-pencil">{label} · BURNED</span>
-          <span className="text-[13px] font-semibold text-pencil line-through">{shortName(s.name)}</span>
-          <span className="tnum text-[11px] text-steel">{burnPts !== undefined ? `${points(burnPts)} pts` : 'Final'}</span>
+        <li className={`${box} border border-pencil bg-pencil/14`}>
+          <span className="font-mono text-[11px] text-burnt">{label} · BURNED</span>
+          <span className="text-[13px] font-semibold text-burnt line-through">{shortName(s.name)}</span>
+          <span className="tnum text-[11px] text-muted">{burnPts !== undefined ? `${points(burnPts)} pts` : 'Final'}</span>
         </li>
       );
     case 'LOCKED':

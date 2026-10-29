@@ -23,6 +23,8 @@
   /* App additions for theming: accents used as text or strokes, and the chrome behind the header and bars. */
   --color-accent: #e6ff3d;
   --color-live: #ffb81c;
+  /* Burned text: on its 14% red tile it must stay at 4.5:1 or better (dark 4.89, light 5.34). */
+  --color-burnt: #ff5c66;
   --color-chrome: #0d0e0f;
   /* Brand marks: the header flame and the /// section markers. Lime in dark, the darker red in light. */
   --color-mark: #e6ff3d;
@@ -61,6 +63,7 @@
   --color-slate-edge: #b3bfc6;
   --color-accent: #4f5e00;
   --color-live: #8a5300;
+  --color-burnt: #a50d26;
   --color-chrome: #f7f8f5;
   --color-mark: #c8102e;
   --btn-bg: #141414;
