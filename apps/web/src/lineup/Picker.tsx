@@ -121,6 +121,7 @@ export function PickerPage() {
           ))}
         </div>
       </header>
+      <main className="flex flex-1 flex-col">
 
       <div className="flex flex-col gap-[10px] px-4 pt-[12px]">
         <label htmlFor="player-search" className="font-mono text-[11px] tracking-[1px] text-muted">SEARCH {pill === 'ALL' ? 'PLAYERS' : `${pill}S`}</label>
@@ -212,6 +213,7 @@ export function PickerPage() {
         </div>
       )}
       <div className="pb-24" />
+      </main>
     </Page>
   );
 }

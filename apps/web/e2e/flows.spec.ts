@@ -521,7 +521,9 @@ test('patch c: the tabs stay on every signed-in screen, LINEUP stays lit through
   for (const path of ['/', '/lineup', '/lineup/pick/qb', '/board', '/burned', '/inbox', '/help', '/account', '/account/password', '/account/authenticator', '/account/backup-codes', '/account/sessions', '/account/receipts', '/account/notifications', '/account/connector']) {
     await page.goto(path);
     await expect(nav, path).toBeInViewport({ ratio: 1 }); // pinned, fully on screen
-    await expect(page.locator('main')).not.toBeEmpty();
+    // Wait for the screen itself, not its loading state, before reading it.
+    await expect(page.getByRole('status').filter({ hasText: /^LOADING/ }), path).toHaveCount(0);
+    await expect(page.locator('main'), path).toHaveCount(1);
     await noMoneyWording(page, path);
   }
   await page.goto('/help');
