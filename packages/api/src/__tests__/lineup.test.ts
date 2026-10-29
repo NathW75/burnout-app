@@ -294,6 +294,17 @@ describeDbRedis('PRD-006 lineups, players, payments routes (HTTP, Postgres + Red
   });
 
 
+  it('never too late: after Thursday locks, a brand-new manager can still confirm a full lineup from games that haven’t started', async () => {
+    await fireLocks(new Date(WINDOWS.tnf.getTime() + 30_000)); // TNF (DEN at KC) is locked
+    const late = await account(w);
+    // A Thursday player can't be picked any more...
+    const tnf = await late.client.post(`/v1/seasons/${SEASON}/weeks/8/lineup/review`, { slots: { ...LINEUP, rb1: 'rbMIA', rb2: 'rbSF', wr1: 'wrKC' } });
+    expect(codes(tnf)).toContain('wr1:GAME_WINDOW_LOCKED');
+    // ...but every slot can still be filled from Sunday and Monday games.
+    const res = await submitLineup(w, late, { qb: 'qbBUF', rb1: 'rbMIA', rb2: 'rbSF', wr1: 'wrBUF', wr2: 'wrDAL', wr3: 'wrPHI', te: 'teSF', flex: 'wrNYG', k: 'kDET' });
+    expect(res.status).toBe(200);
+  });
+
   it('ownership counts LOCKED picks only (pre-lock anonymity, T&C §11.2) and stays hidden below the floor', async () => {
     const a = await account(w);
     const b = await account(w);

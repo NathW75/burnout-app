@@ -32,6 +32,10 @@ export function HelpPage() {
         <p>Each slot locks at its game’s <b>scheduled</b> kickoff, the time the NFL published, not when the ball is actually kicked. The official clock at the top of the screen is Burnout League time from our server; your device’s clock doesn’t count.</p>
         <p>Games that kick off at the same time share a window. A locked slot can’t change.</p>
       </Rule>
+      <Rule id="late" title="IT’S NEVER TOO LATE">
+        <p>You can set or change your lineup any time there’s still a game that hasn’t started, including after Thursday night. Missed Thursday? Fill your lineup from Sunday and Monday games: any slot can take any eligible player whose game hasn’t locked.</p>
+        <p>The later you are, the fewer games are left to pick from. By Monday, only Monday night’s players remain.</p>
+      </Rule>
       <Rule id="slots" title="NINE SLOTS">
         <p>QB, RB1, RB2, WR1, WR2, WR3, TE, FLEX and K. A fullback (FB) can play RB or FLEX. FLEX takes an RB, FB, WR or TE.</p>
         <p>An <b>empty slot</b> scores 0 and burns nothing. To confirm a lineup, though, every slot that hasn’t locked needs a player; a slot ends up empty only when a pick is voided after you confirmed.</p>

@@ -528,6 +528,9 @@ test('patch c: the tabs stay on every signed-in screen, LINEUP stays lit through
   }
   await page.goto('/help');
   await expect(nav.getByRole('link', { name: 'ACCOUNT' })).toHaveClass(/text-accent/);
+  // Rules: it's never too late while a game hasn't started (Nath, 2026-10-29).
+  await expect(page.locator('#late')).toContainText('IT’S NEVER TOO LATE');
+  await expect(page.locator('#late')).toContainText('including after Thursday night');
 
   await fillLineup(page);
   await page.getByRole('button', { name: 'REVIEW LINEUP' }).click();

@@ -1,6 +1,6 @@
 # PRD-007 — Web App (Player Portal)
 **Burnout League · apps/web**
-*Status: v1.13 — **APPROVED 2026-10-27** (Nath), decisions Q1–Q7 in §14; mockups approved on the landing-page design system (§11); API additions (§8) built; web app patch (a) built; patch (b) built 2026-10-28 in two parts (standings, burned roster, inbox; then account, feedback, light theme). Phase A screens complete. Push notifications (PRD-008 §9) built 2026-10-28. Patch (c) (tester feedback: position filter, bottom nav on every screen, player stat columns) specced and built 2026-10-28.*
+*Status: v1.14 — **APPROVED 2026-10-27** (Nath), decisions Q1–Q7 in §14; mockups approved on the landing-page design system (§11); API additions (§8) built; web app patch (a) built; patch (b) built 2026-10-28 in two parts (standings, burned roster, inbox; then account, feedback, light theme). Phase A screens complete. Push notifications (PRD-008 §9) built 2026-10-28. Patch (c) (tester feedback: position filter, bottom nav on every screen, player stat columns) specced and built 2026-10-28.*
 *Author: Build thread · 2026-10-27*
 
 ---
@@ -300,6 +300,8 @@ In-app notices from the same events that queue emails, newest first, 30 at a tim
 
 The rules page explains the burn, lock at scheduled kickoff, empty slots, Out/IR, team changes mid-week, cancellations and postponements, free play, and the Week 3 cutoff. It's linked from every screen that mentions a rule.
 
+- **It's never too late (v1.14, Nath 2026-10-29):** a lineup can be set or changed any time a game hasn't started, including after Thursday night; any slot takes any eligible player whose game hasn't locked. The later you are, the fewer games are left (by Monday, only Monday night's players). Tested in the API (a new manager confirms a full lineup after the Thursday lock) and on the page. (Free play and the Week 3 cutoff are off the page while testing, §5.8.)
+
 ---
 
 ## 7. The three gates (PRD-001 §9, PRD-006 §9)
@@ -594,6 +596,7 @@ Depends on: PRD-001, PRD-003, PRD-004 (Phase B), PRD-006, `SPEC-feedback-system.
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.14 | 2026-10-29 | §6.8: rules page gains "IT'S NEVER TOO LATE" (set a lineup any time a game hasn't started, including after Thursday); covered by an API test and the end-to-end suite. |
 | 1.13 | 2026-10-29 | §5.5: ownership counts locked picks only and is withheld below `OWNERSHIP_MIN_LINEUPS` (50 launch, 1 staging); fixes the API counting unlocked picks with no floor (pre-lock anonymity, T&C §11.2). Lineup-tile "##% in play" display noted as next. |
 | 1.12 | 2026-10-28 | §5.8: no financial wording anywhere while in staging and testing (Nath): Gate 2's third box is "IT'S FINAL" (was "NO REFUNDS"); "Free play" tag, "not prize standings" line and the rules page's FREE PLAY section removed; "Account emails" in notification settings; neutral season-closed message. End-to-end guard on every screen; §13 criterion checked. |
 | 1.11 | 2026-10-28 | §6.3.2, §8.7: count stats (attempts, completions, rushes, targets, receptions, TDs, INTs, kicks made and tried) are whole-number totals over the period in both SEASON and LAST 3; yards and points stay per game (Nath). Toggle reads SEASON / LAST 3; a key above the table says which is which. |
