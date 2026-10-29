@@ -1,6 +1,6 @@
 # PRD-007 — Web App (Player Portal)
 **Burnout League · apps/web**
-*Status: v1.16 — **APPROVED 2026-10-27** (Nath), decisions Q1–Q7 in §14; mockups approved on the landing-page design system (§11); API additions (§8) built; web app patch (a) built; patch (b) built 2026-10-28 in two parts (standings, burned roster, inbox; then account, feedback, light theme). Phase A screens complete. Push notifications (PRD-008 §9) built 2026-10-28. Patch (c) (tester feedback: position filter, bottom nav on every screen, player stat columns) specced and built 2026-10-28.*
+*Status: v1.17 — **APPROVED 2026-10-27** (Nath), decisions Q1–Q7 in §14; mockups approved on the landing-page design system (§11); API additions (§8) built; web app patch (a) built; patch (b) built 2026-10-28 in two parts (standings, burned roster, inbox; then account, feedback, light theme). Phase A screens complete. Push notifications (PRD-008 §9) built 2026-10-28. Patch (c) (tester feedback: position filter, bottom nav on every screen, player stat columns) specced and built 2026-10-28.*
 *Author: Build thread · 2026-10-27*
 
 ---
@@ -117,7 +117,8 @@ A user who stops partway resumes at the step they left on their next sign-in (th
 - **Header:** official clock, current week, my season rank and points (from the field board).
 - **Windows:** each window this week with its label ("Sunday Late · 4:25 PM ET"), a countdown, its status (open, locked, final), and how many of my slots sit in it.
 - **My lineup:** the nine slots in order (QB, RB1, RB2, WR1, WR2, WR3, TE, FLEX, K), each in one of the states in §6.3, with "Edit lineup" while any window is open.
-  - **Tile treatments (v1.16, Nath 2026-10-29):** a locked tile is amber (border plus 14% amber tint, "· LIVE"); a **burned** tile is red the same way (red border plus 14% red tint, "· BURNED", the name struck through, points underneath). Burned text uses `--color-burnt` (dark #FF5C66, light #A50D26), which stays at 4.5:1 or better on the red tint (4.89 dark, 5.34 light); the light theme's usual red would fall to 4.0:1 there.
+  - **Tile treatments (v1.16, Nath 2026-10-29):** a locked tile is amber (border plus 14% amber tint, "· LIVE"); a **burned** tile is red the same way (red border plus 14% red tint, "· BURNED", the name struck through, points underneath). Burned text uses `--color-burnt` (dark #FF5C66, light #9B0B22), which stays at 4.5:1 or better on the red tint; the light theme's usual red would fall to 4.0:1 there.
+  - **Light mode goes halogen (v1.17, Nath: "a touch more neon"):** the tiles' edge and tint are tokens (`--tile-live-edge/-bg`, `--tile-burn-edge/-bg`). Dark is unchanged (amber #FFB81C and red #FF5C66 at 14%); light uses penalty-flag yellow #FFC400 at 30% and pure red #FF0033 at 18%. Text on them: LIVE label 4.89:1, burned 5.46:1. The builder's locked rows use the same amber tint.
 - **Since your last visit:** unread inbox items, e.g. "Saquon was voided: Out before his lock," "3 players burned."
 - **Free play banner:** shows free-play status from `eligibility`. After the Week 3 cutoff in a season with paid pools, a non-entrant sees why they can't submit.
 
@@ -598,6 +599,7 @@ Depends on: PRD-001, PRD-003, PRD-004 (Phase B), PRD-006, `SPEC-feedback-system.
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.17 | 2026-10-29 | §6.2: light-mode tiles go vivid (Nath): penalty-flag yellow #FFC400 30% for locked, pure red #FF0033 18% for burned; dark unchanged; tile colors are tokens. |
 | 1.16 | 2026-10-29 | §6.2: burned lineup tiles red-tinted like locked tiles are amber (new `--color-burnt` text token for contrast). §9: a new notice refreshes lineup, windows, burns and boards, so burns appear within about a minute without a reload. |
 | 1.15 | 2026-10-29 | §6.3: open slots may be left empty (Nath); the builder warns instead of blocking, Gate 1 shows an empty-slot warning, rules page updated (PRD-006 §9.1 v1.16). |
 | 1.14 | 2026-10-29 | §6.8: rules page gains "IT'S NEVER TOO LATE" (set a lineup any time a game hasn't started, including after Thursday); covered by an API test and the end-to-end suite. |

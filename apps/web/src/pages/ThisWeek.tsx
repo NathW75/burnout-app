@@ -156,7 +156,7 @@ export function SlotTile({ s, windows, burnPts }: { s: LineupSlot; windows: Game
   switch (state) {
     case 'BURNED':
       return (
-        <li className={`${box} border border-pencil bg-pencil/14`}>
+        <li className={`${box} border border-[var(--tile-burn-edge)] bg-[var(--tile-burn-bg)]`}>
           <span className="font-mono text-[11px] text-burnt">{label} · BURNED</span>
           <span className="text-[13px] font-semibold text-burnt line-through">{shortName(s.name)}</span>
           <span className="tnum text-[11px] text-muted">{burnPts !== undefined ? `${points(burnPts)} pts` : 'Final'}</span>
@@ -164,7 +164,7 @@ export function SlotTile({ s, windows, burnPts }: { s: LineupSlot; windows: Game
       );
     case 'LOCKED':
       return (
-        <li className={`${box} border border-live bg-bulb/14`}>
+        <li className={`${box} border border-[var(--tile-live-edge)] bg-[var(--tile-live-bg)]`}>
           <span className="font-mono text-[11px] text-live">{label} · LIVE</span>
           <span className="text-[13px] font-semibold">{shortName(s.name)}</span>
           <span className="text-[11px] text-muted">Locked {when}</span>

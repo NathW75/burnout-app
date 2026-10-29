@@ -183,7 +183,7 @@ function SlotRow({ server, draftValue, effectiveId, card, state, burnPts, canEdi
   }
   if (state === 'LOCKED') {
     return (
-      <li className={`${row} border border-rule bg-bulb/14${ring}`}>
+      <li className={`${row} border border-rule bg-[var(--tile-live-bg)]${ring}`}>
         <span className={`${labelCls} text-live`}>{label}</span>
         <div className="flex min-w-0 flex-1 flex-col gap-[2px]">
           <span className="text-[15px] font-semibold">{shortName(server.name)}</span>

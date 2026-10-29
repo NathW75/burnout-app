@@ -23,8 +23,13 @@
   /* App additions for theming: accents used as text or strokes, and the chrome behind the header and bars. */
   --color-accent: #e6ff3d;
   --color-live: #ffb81c;
-  /* Burned text: on its 14% red tile it must stay at 4.5:1 or better (dark 4.89, light 5.34). */
+  /* Burned text: on its red tile it must stay at 4.5:1 or better (dark 4.89, light 5.46). */
   --color-burnt: #ff5c66;
+  /* Locked and burned tiles (This Week, the builder): edge and tint. Light mode uses vivid, halogen versions (Nath, 2026-10-29). */
+  --tile-live-edge: #ffb81c;
+  --tile-live-bg: rgb(255 184 28 / 0.14);
+  --tile-burn-edge: #ff5c66;
+  --tile-burn-bg: rgb(255 92 102 / 0.14);
   --color-chrome: #0d0e0f;
   /* Brand marks: the header flame and the /// section markers. Lime in dark, the darker red in light. */
   --color-mark: #e6ff3d;
@@ -63,7 +68,11 @@
   --color-slate-edge: #b3bfc6;
   --color-accent: #4f5e00;
   --color-live: #8a5300;
-  --color-burnt: #a50d26;
+  --color-burnt: #9b0b22;
+  --tile-live-edge: #ffc400;
+  --tile-live-bg: rgb(255 196 0 / 0.3);
+  --tile-burn-edge: #ff0033;
+  --tile-burn-bg: rgb(255 0 51 / 0.18);
   --color-chrome: #f7f8f5;
   --color-mark: #c8102e;
   --btn-bg: #141414;

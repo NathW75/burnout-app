@@ -19,8 +19,8 @@ describe('lineup tiles', () => {
   it('a burned player is red-tinted with a red border, struck through, and says BURNED in words (Nath, 2026-10-29)', () => {
     render(<ul><SlotTile s={slot({})} windows={win('final')} burnPts={1230} /></ul>);
     const tile = screen.getByRole('listitem');
-    expect(tile.className).toMatch(/border-pencil/);
-    expect(tile.className).toMatch(/bg-pencil\/14/);
+    expect(tile.className).toMatch(/border-\[var\(--tile-burn-edge\)\]/);
+    expect(tile.className).toMatch(/bg-\[var\(--tile-burn-bg\)\]/);
     expect(screen.getByText('WR1 · BURNED')).toHaveClass('text-burnt');
     expect(screen.getByText('W. Kay', { exact: false })).toHaveClass('line-through');
     expect(screen.getByText('12.3 pts')).toBeInTheDocument();
@@ -29,8 +29,8 @@ describe('lineup tiles', () => {
   it('a locked, not yet Final player keeps the amber treatment', () => {
     render(<ul><SlotTile s={slot({})} windows={win('locked')} /></ul>);
     const tile = screen.getByRole('listitem');
-    expect(tile.className).toMatch(/border-live/);
-    expect(tile.className).toMatch(/bg-bulb\/14/);
+    expect(tile.className).toMatch(/border-\[var\(--tile-live-edge\)\]/);
+    expect(tile.className).toMatch(/bg-\[var\(--tile-live-bg\)\]/);
     expect(screen.getByText('WR1 · LIVE')).toBeInTheDocument();
   });
 });
