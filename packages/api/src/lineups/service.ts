@@ -81,7 +81,9 @@ async function mergeAndValidate(q: SqlRunner, userId: string, season: string, we
   const errors: ValidationError[] = [];
   for (const slot of SLOT_ORDER) {
     const row = current.get(slot);
-    const want = requested[slot] ?? null;
+    // null = leave this slot empty (allowed: Nath, 2026-10-29); not sent at all = keep the current open pick.
+    const keep = row && !frozen(row, now) && row.void_reason === null ? row.player_id : null;
+    const want = requested[slot] === undefined ? keep : requested[slot];
     if (row && frozen(row, now)) {
       if (want !== null && want !== row.player_id) errors.push({ code: 'SLOT_LOCKED', message: `Slot ${slot} is locked`, slot, playerId: want });
       merged[slot] = row.player_id;
@@ -96,7 +98,7 @@ async function mergeAndValidate(q: SqlRunner, userId: string, season: string, we
   const result = await validateLineupDraft(
     { userId, season, week, slots: draftSlots, savedAt: now, expiresAt: now },
     validatorDeps(q, now),
-    { fixedSlots: fixed }
+    { fixedSlots: fixed, allowEmpty: true }
   );
   if (!result.valid) throw new LineupInvalidError(result.errors);
   return { merged, fixed, current };
@@ -195,7 +197,10 @@ export async function review(ctx: ApiContext, s: SessionInfo, season: string, we
   );
   if (!open.open) throw conflict('WEEK_CLOSED', 'Every game window this week has locked');
   await assertMayPlay(ctx.db, s.userId, season, week);
-  const { merged, fixed } = await mergeAndValidate(ctx.db, s.userId, season, week, slots, now);
+  const { merged, fixed, current } = await mergeAndValidate(ctx.db, s.userId, season, week, slots, now);
+  // Leaving slots empty is the manager's call, but a lineup with nothing in it and nothing to remove confirms nothing.
+  const hasOpenPick = [...current.values()].some((r) => r.void_reason === null && !frozen(r, now));
+  if (SLOT_ORDER.every((slot) => merged[slot] === null) && !hasOpenPick) throw new LineupInvalidError([{ code: 'LINEUP_EMPTY', message: 'Pick at least one player' }]);
   const expiresAt = new Date(now.getTime() + ctx.config.confirmationTtlMs);
   const [c] = await ctx.db.query<{ id: string }>(
     `INSERT INTO lineup_confirmations (user_id, season, week, slots, status, gate1_at, expires_at, ip_address, user_agent)
@@ -262,15 +267,22 @@ export async function confirm(ctx: ApiContext, s: SessionInfo, id: string) {
 
     // Resolve each changed slot's window and share-lock every window involved (old and new).
     const changes: Array<{ slot: SlotKey; playerId: string; windowId: string; row?: CurrentRow }> = [];
+    // Open picks the manager removed: the slot is left empty (scores 0, burns nothing).
+    const cleared: Array<{ slot: SlotKey; row: CurrentRow }> = [];
     for (const slot of SLOT_ORDER) {
       if (Object.prototype.hasOwnProperty.call(fixed, slot)) continue;
-      const playerId = merged[slot]!;
+      const playerId = merged[slot];
       const row = current.get(slot);
+      if (playerId === null) {
+        if (row && row.void_reason === null) cleared.push({ slot, row });
+        continue;
+      }
       const windowId = (await playerWindow(tx, playerId, c.season, c.week))!;
       if (row && row.player_id === playerId && row.game_window_id === windowId && row.void_reason === null) continue; // unchanged
       changes.push({ slot, playerId, windowId, row });
     }
-    const windowIds = [...new Set(changes.flatMap((ch) => [ch.windowId, ch.row?.game_window_id].filter((w): w is string => !!w)))];
+    if (SLOT_ORDER.every((slot) => merged[slot] === null) && !cleared.length) throw new LineupInvalidError([{ code: 'LINEUP_EMPTY', message: 'Pick at least one player' }]);
+    const windowIds = [...new Set([...changes.flatMap((ch) => [ch.windowId, ch.row?.game_window_id]), ...cleared.map((x) => x.row.game_window_id)].filter((w): w is string => !!w))];
     if (windowIds.length) {
       const ws = await tx.query<{ id: string; status: string; scheduled_et: Date }>(
         `SELECT id::text AS id, status, scheduled_et FROM game_windows WHERE id = ANY ($1::uuid[]) ORDER BY id FOR SHARE`,
@@ -278,8 +290,12 @@ export async function confirm(ctx: ApiContext, s: SessionInfo, id: string) {
       );
       const closed = ws.filter((w) => w.status !== 'pending' || new Date(w.scheduled_et) <= now);
       const touched = changes.filter((ch) => closed.some((w) => w.id === ch.windowId || (ch.row && ch.row.void_reason === null && w.id === ch.row.game_window_id)));
-      if (touched.length) {
-        throw new LineupInvalidError(touched.map((ch) => ({ code: 'GAME_WINDOW_LOCKED', message: `Slot ${ch.slot} locked before confirmation`, slot: ch.slot, playerId: ch.playerId })));
+      const clearedLate = cleared.filter((x) => closed.some((w) => w.id === x.row.game_window_id));
+      if (touched.length || clearedLate.length) {
+        throw new LineupInvalidError([
+          ...touched.map((ch) => ({ code: 'GAME_WINDOW_LOCKED', message: `Slot ${ch.slot} locked before confirmation`, slot: ch.slot, playerId: ch.playerId })),
+          ...clearedLate.map((x) => ({ code: 'GAME_WINDOW_LOCKED', message: `Slot ${x.slot} locked before confirmation`, slot: x.slot, playerId: x.row.player_id })),
+        ]);
       }
     }
 
@@ -287,7 +303,7 @@ export async function confirm(ctx: ApiContext, s: SessionInfo, id: string) {
     const snapshot = SLOT_ORDER.map((slot) => ({
       slot,
       playerId: merged[slot],
-      gameWindowId: windowFor.get(slot) ?? current.get(slot)?.game_window_id ?? null,
+      gameWindowId: merged[slot] === null ? null : (windowFor.get(slot) ?? current.get(slot)?.game_window_id ?? null),
       locked: Object.prototype.hasOwnProperty.call(fixed, slot),
     }));
     const sha = lineupChecksum({ userId: s.userId, season: c.season, week: c.week, gate3At: now, slots: snapshot });
@@ -312,6 +328,10 @@ export async function confirm(ctx: ApiContext, s: SessionInfo, id: string) {
         );
       }
     }
+    for (const x of cleared) {
+      // Only an open pick can go (the database refuses to delete a locked one).
+      await tx.query(`DELETE FROM season_submissions WHERE id = $1::uuid AND locked_at IS NULL`, [x.row.id]);
+    }
     if (changes.length) {
       await tx.query(
         `INSERT INTO pool_entries (user_id, player_id, season) SELECT $1::uuid, p, $2 FROM unnest($3::text[]) AS p
@@ -320,11 +340,11 @@ export async function confirm(ctx: ApiContext, s: SessionInfo, id: string) {
       );
     }
     await tx.query(`UPDATE lineup_confirmations SET status = 'confirmed', gate3_at = $2 WHERE id = $1::uuid`, [id, now]);
-    await audit(tx, { event: 'LINEUP_CONFIRMED', userId: s.userId, at: now, metadata: { receiptId: receipt.id, season: c.season, week: c.week, changed: changes.map((ch) => ch.slot), sha256: sha } });
+    await audit(tx, { event: 'LINEUP_CONFIRMED', userId: s.userId, at: now, metadata: { receiptId: receipt.id, season: c.season, week: c.week, changed: changes.map((ch) => ch.slot), cleared: cleared.map((x) => x.slot), sha256: sha } });
     await tx.query(`INSERT INTO notification_queue (user_id, kind, payload) VALUES ($1, 'LINEUP_RECEIPT', $2::jsonb)`, [
       s.userId, JSON.stringify({ receiptId: receipt.id, season: c.season, week: c.week, sha256: sha, gate3At: now.toISOString(), slots: snapshot }),
     ]);
-    return { receiptId: receipt.id, gate3At: now.toISOString(), sha256: sha, changedSlots: changes.map((ch) => ch.slot), slots: snapshot };
+    return { receiptId: receipt.id, gate3At: now.toISOString(), sha256: sha, changedSlots: [...changes.map((ch) => ch.slot), ...cleared.map((x) => x.slot)], slots: snapshot };
   });
   return out;
 }

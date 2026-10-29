@@ -38,7 +38,7 @@ export function HelpPage() {
       </Rule>
       <Rule id="slots" title="NINE SLOTS">
         <p>QB, RB1, RB2, WR1, WR2, WR3, TE, FLEX and K. A fullback (FB) can play RB or FLEX. FLEX takes an RB, FB, WR or TE.</p>
-        <p>An <b>empty slot</b> scores 0 and burns nothing. To confirm a lineup, though, every slot that hasn’t locked needs a player; a slot ends up empty only when a pick is voided after you confirmed.</p>
+        <p>An <b>empty slot</b> scores 0 and burns nothing. You can leave any slot empty and confirm the rest: the app warns you, and you can fill it any time before its game locks. That also covers the late-season squeeze: if every kicker left this week is one you’ve already burned, leave K empty and play the other eight.</p>
       </Rule>
       <Rule id="out" title="OUT, IR AND MOVES">
         <p>Players listed Out or on IR can’t be picked. If your pick is listed Out or IR before his lock, the pick is voided: he isn’t burned and the slot opens again.</p>

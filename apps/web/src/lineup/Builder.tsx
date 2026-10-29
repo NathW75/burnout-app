@@ -28,7 +28,7 @@ export function BuilderPage() {
   const freePlayOver = elig.freePlayThroughWeek !== null && week > elig.freePlayThroughWeek;
   const next = nextLock(windows, now);
   const [issueSlots, setIssueSlots] = useState<Set<SlotKey>>(new Set());
-  // Every open slot must be filled to submit (PRD-006 §9: SLOT_EMPTY). Locked and burned slots stay as they are.
+  // Open slots may stay empty (Nath, 2026-10-29): they score 0 and burn nothing. The footer and Gate 1 say so.
   const missing = SLOT_ORDER.filter((slot) => {
     const s = lineup.slots.find((x) => x.slot === slot)!;
     return !effective[slot] && (!s.locked || s.voidReason !== null);
@@ -39,7 +39,8 @@ export function BuilderPage() {
     const c = id ? cards.get(id) : undefined;
     return !!c && !c.selectable;
   });
-  const blocked = [...missing, ...stale];
+  const blocked = stale;
+  const allEmpty = SLOT_ORDER.every((slot) => !effective[slot]);
 
   const review = useMutation({
     mutationFn: () => api<ReviewResponse>(`/seasons/${season}/weeks/${week}/lineup/review`, { body: { slots: effective } }),
@@ -119,13 +120,15 @@ export function BuilderPage() {
             <span className="text-[14px] font-semibold">{changes === 0 ? 'No changes' : `${changes} change${changes === 1 ? '' : 's'} not submitted`}</span>
             <span className="text-[12px] text-muted">
               {blocked.length > 0
-                ? `${missing.length ? 'Fill' : 'Replace'} ${blocked.map((m) => SLOT_LABEL[m]).join(', ')} to review`
+                ? `Replace ${blocked.map((m) => SLOT_LABEL[m]).join(', ')} to review`
                 : changes === 0
                   ? 'Pick or change a slot to start'
-                  : 'Draft saved on this device only'}
+                  : missing.length > 0
+                    ? <span className="text-live">{`${missing.map((m) => SLOT_LABEL[m]).join(', ')} empty: scores 0`}</span>
+                    : 'Draft saved on this device only'}
             </span>
           </div>
-          <button type="button" className="btn-primary flex-none text-[14px] disabled:opacity-50" disabled={changes === 0 || blocked.length > 0 || review.isPending} onClick={() => review.mutate()}>
+          <button type="button" className="btn-primary flex-none text-[14px] disabled:opacity-50" disabled={changes === 0 || blocked.length > 0 || allEmpty || review.isPending} onClick={() => review.mutate()}>
             {review.isPending ? 'CHECKING…' : 'REVIEW LINEUP'}
           </button>
         </div>

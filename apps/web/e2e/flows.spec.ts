@@ -94,10 +94,17 @@ test('sign up → verify → authenticator → a lineup through all three gates 
   await expect(page.getByRole('button', { name: 'Select Fred Sfo' })).toHaveCount(0);
   await page.getByRole('link', { name: 'Back to lineup' }).click();
 
-  // Every open slot is needed to submit (PRD-006 §9): review waits until all nine are filled.
+  // Empty slots are the manager's call (Nath, 2026-10-29): the builder warns, review is allowed, and Gate 1 spells it out.
+  await expect(page.getByRole('button', { name: 'REVIEW LINEUP' })).toBeDisabled(); // nothing picked yet
   await pick(page, 'QB', 'Quade Buff');
-  await expect(page.getByText('Fill RB1, RB2, WR1, WR2, WR3, TE, FLEX, K to review')).toBeVisible();
-  await expect(page.getByRole('button', { name: 'REVIEW LINEUP' })).toBeDisabled();
+  await expect(page.getByText('RB1, RB2, WR1, WR2, WR3, TE, FLEX, K empty: scores 0')).toBeVisible();
+  await page.getByRole('button', { name: 'REVIEW LINEUP' }).click();
+  await expect(page).toHaveURL(/\/lineup\/review$/);
+  await expect(page.getByRole('note')).toContainText('8 SLOTS ARE EMPTY');
+  await expect(page.getByRole('note')).toContainText('will score 0 and burn nothing');
+  await noSeriousA11yIssues(page, 'gate 1 with empty slots');
+  await page.getByRole('link', { name: 'edit lineup', exact: true }).click();
+  await expect(page).toHaveURL(/\/lineup$/);
   for (const [slot, player] of FULL_LINEUP.slice(1)) await pick(page, slot, player);
   await expect(page.getByText('9 changes not submitted')).toBeVisible();
   await page.getByRole('button', { name: 'REVIEW LINEUP' }).click();

@@ -64,6 +64,12 @@ export interface ValidateOptions {
    * part of the week has locked (PRD-006 §9.1).
    */
   fixedSlots?: Partial<Record<SlotKey, string | null>>;
+  /**
+   * Allow open slots to stay empty (Nath, 2026-10-29: the manager decides; an
+   * empty slot scores 0 and burns nothing). Default false keeps the original
+   * "all nine filled" rule for other callers.
+   */
+  allowEmpty?: boolean;
 }
 
 /**
@@ -82,7 +88,7 @@ export async function validateLineupDraft(
 
   // 1. All 9 slots must be filled
   const requiredSlots: SlotKey[] = (['qb', 'rb1', 'rb2', 'wr1', 'wr2', 'wr3', 'te', 'flex', 'k'] as SlotKey[]).filter((slot) => !isFixed(slot));
-  for (const slot of requiredSlots) {
+  for (const slot of options.allowEmpty ? [] : requiredSlots) {
     if (!draft.slots[slot]) {
       errors.push({
         code: 'SLOT_EMPTY',

@@ -1,6 +1,6 @@
 # PRD-007 — Web App (Player Portal)
 **Burnout League · apps/web**
-*Status: v1.14 — **APPROVED 2026-10-27** (Nath), decisions Q1–Q7 in §14; mockups approved on the landing-page design system (§11); API additions (§8) built; web app patch (a) built; patch (b) built 2026-10-28 in two parts (standings, burned roster, inbox; then account, feedback, light theme). Phase A screens complete. Push notifications (PRD-008 §9) built 2026-10-28. Patch (c) (tester feedback: position filter, bottom nav on every screen, player stat columns) specced and built 2026-10-28.*
+*Status: v1.15 — **APPROVED 2026-10-27** (Nath), decisions Q1–Q7 in §14; mockups approved on the landing-page design system (§11); API additions (§8) built; web app patch (a) built; patch (b) built 2026-10-28 in two parts (standings, burned roster, inbox; then account, feedback, light theme). Phase A screens complete. Push notifications (PRD-008 §9) built 2026-10-28. Patch (c) (tester feedback: position filter, bottom nav on every screen, player stat columns) specced and built 2026-10-28.*
 *Author: Build thread · 2026-10-27*
 
 ---
@@ -230,7 +230,7 @@ Both modes use the same column set. The toggle label shows the active mode and u
 
 **Draft:** changes are a local draft until confirmed, saved per week in browser storage as a convenience only. The draft is cleared or reconciled on refetch: any slot the server now reports as locked or voided wins over the draft.
 
-**Submit:** "Review lineup" starts the three gates (§7). Only open slots can change; the API keeps locked slots fixed. **Every slot that hasn't locked needs a player to submit** (PRD-006 §9, `SLOT_EMPTY`): the button stays off and names the slots to fill. An empty slot happens only when a confirmed pick is voided later, and it then scores 0 and burns nothing. A draft pick whose window has since locked, or who is now listed Out, is flagged and must be replaced before review.
+**Submit:** "Review lineup" starts the three gates (§7). Only open slots can change; the API keeps locked slots fixed. **Empty slots are the manager's call (v1.15, Nath 2026-10-29):** "I do what I want" over nannying. Any open slot may be left empty (it scores 0 and burns nothing), which also covers the late-season squeeze where no eligible player is left for a slot, and a rushed manager who forgets one. The builder footer says which slots are empty ("K empty: scores 0", in amber) and review stays available; Gate 1 opens with a warning ("1 SLOT IS EMPTY · K will score 0 and burn nothing. You can fill it any time before its last game locks") linking back to the builder. Review needs at least one player (`LINEUP_EMPTY`). A draft pick whose window has since locked, or who is now listed Out, is flagged and must be replaced before review. The rules page's NINE SLOTS section says the same.
 
 ### 6.2.1 Navigation (patch c — persistent bottom nav, tester feedback 2026-10-28)
 
@@ -596,6 +596,7 @@ Depends on: PRD-001, PRD-003, PRD-004 (Phase B), PRD-006, `SPEC-feedback-system.
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.15 | 2026-10-29 | §6.3: open slots may be left empty (Nath); the builder warns instead of blocking, Gate 1 shows an empty-slot warning, rules page updated (PRD-006 §9.1 v1.16). |
 | 1.14 | 2026-10-29 | §6.8: rules page gains "IT'S NEVER TOO LATE" (set a lineup any time a game hasn't started, including after Thursday); covered by an API test and the end-to-end suite. |
 | 1.13 | 2026-10-29 | §5.5: ownership counts locked picks only and is withheld below `OWNERSHIP_MIN_LINEUPS` (50 launch, 1 staging); fixes the API counting unlocked picks with no floor (pre-lock anonymity, T&C §11.2). Lineup-tile "##% in play" display noted as next. |
 | 1.12 | 2026-10-28 | §5.8: no financial wording anywhere while in staging and testing (Nath): Gate 2's third box is "IT'S FINAL" (was "NO REFUNDS"); "Free play" tag, "not prize standings" line and the rules page's FREE PLAY section removed; "Account emails" in notification settings; neutral season-closed message. End-to-end guard on every screen; §13 criterion checked. |

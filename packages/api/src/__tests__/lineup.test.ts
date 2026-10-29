@@ -166,7 +166,7 @@ describeDbRedis('PRD-006 lineups, players, payments routes (HTTP, Postgres + Red
     expect(codes(await review(a, { ...LINEUP, rb2: 'rbSF' }))).toEqual(['rb2:PLAYER_INACTIVE']);
     expect(codes(await review(a, { ...LINEUP, te: 'teGB' }))).toEqual(['te:PLAYER_INACTIVE']);
     expect((await review(a, { ...LINEUP, wr3: 'wrBUF' })).status).toBe(201); // Doubtful is still selectable
-    expect(codes(await review(a, { ...LINEUP, te: null }))).toEqual(['te:SLOT_EMPTY']);
+    expect((await review(a, { ...LINEUP, te: null })).status).toBe(201); // empty is allowed (Nath, 2026-10-29): scores 0, burns nothing
     expect((await review(a, { ...LINEUP, extra: 'x' })).body.error).toBe('VALIDATION');
     expect((await a.client.post(`/v1/seasons/2025-2026-regular/weeks/8/lineup/review`, { slots: LINEUP })).body.error).toBe('SEASON_CLOSED');
   });
@@ -293,6 +293,67 @@ describeDbRedis('PRD-006 lineups, players, payments routes (HTTP, Postgres + Red
     expect(JSON.stringify(pool.body)).not.toMatch(/https?:\/\//);
   });
 
+
+  // ── Empty slots are the manager's call (Nath, 2026-10-29) ──────────────────
+  it('empty slots: confirm with K empty; it stays empty, scores nothing, and the receipt shows it', async () => {
+    const a = await account(w);
+    const res = await submitLineup(w, a, { ...LINEUP, k: null });
+    expect(res.status).toBe(200);
+    expect(res.body.slots.find((x: { slot: string }) => x.slot === 'k')).toMatchObject({ playerId: null, gameWindowId: null });
+    const rows = await w.t.sql<{ slot_key: string }>(`SELECT slot_key FROM season_submissions WHERE user_id = $1 AND week = 8`, [a.userId]);
+    expect(rows.map((r) => r.slot_key).sort()).toEqual(['flex', 'qb', 'rb1', 'rb2', 'te', 'wr1', 'wr2', 'wr3']);
+    const lineup = await a.client.get(`/v1/seasons/${SEASON}/weeks/8/lineup`);
+    expect(lineup.body.slots.find((x: { slot: string }) => x.slot === 'k').playerId).toBeNull();
+  });
+
+  it('empty slots: removing an open pick deletes it; a slot not sent keeps its pick; a locked pick can’t be removed', async () => {
+    const a = await account(w);
+    expect((await submitLineup(w, a)).status).toBe(200);
+    // Not sending wr3 keeps Wade Phi; sending flex: null removes Webb Gnat.
+    const { wr3: _keep, ...partial } = LINEUP;
+    const rev = await review(a, { ...partial, flex: null });
+    expect(rev.status).toBe(201);
+    expect(rev.body.slots.find((x: { slot: string }) => x.slot === 'wr3').playerId).toBe('wrPHI');
+    expect(rev.body.slots.find((x: { slot: string }) => x.slot === 'flex').playerId).toBeNull();
+    const res = await submitLineup(w, a, { ...partial, flex: null });
+    expect(res.status).toBe(200);
+    expect(res.body.changedSlots).toEqual(['flex']);
+    expect(await w.t.sql(`SELECT 1 FROM season_submissions WHERE user_id = $1 AND slot_key = 'flex'`, [a.userId])).toHaveLength(0);
+
+    // After Thursday locks, rb1 (Ray Dent, TNF) is frozen: null for a locked slot leaves it as it is.
+    await fireLocks(new Date(WINDOWS.tnf.getTime() + 30_000));
+    await relogin(a);
+    expect((await submitLineup(w, a, { ...partial, rb1: null, flex: null })).status).toBe(200);
+    const [rb1] = await w.t.sql<{ player_id: string; locked: boolean }>(`SELECT player_id, locked_at IS NOT NULL AS locked FROM season_submissions WHERE user_id = $1 AND slot_key = 'rb1'`, [a.userId]);
+    expect(rb1).toEqual({ player_id: 'rbDEN', locked: true });
+  });
+
+  it('empty slots: a lineup with nothing in it (and nothing to remove) is refused at review', async () => {
+    const a = await account(w);
+    const none = Object.fromEntries(Object.keys(LINEUP).map((k) => [k, null]));
+    const res = await review(a, none);
+    expect(res.status).toBe(422);
+    expect(res.body.errors.map((e: { code: string }) => e.code)).toEqual(['LINEUP_EMPTY']);
+    // Someone with open picks may clear them all (sitting the week out).
+    expect((await submitLineup(w, a)).status).toBe(200);
+    expect((await submitLineup(w, a, none)).status).toBe(200);
+    expect(await w.t.sql(`SELECT 1 FROM season_submissions WHERE user_id = $1`, [a.userId])).toHaveLength(0);
+  });
+
+  it('empty slots: Nath’s late-season squeeze: only Monday night is left and that game’s kicker is burned; he plays what he can', async () => {
+    const a = await account(w);
+    // Kip Det (DET, Monday night) was burned earlier in the season.
+    await w.t.sql(`INSERT INTO pool_entries (user_id, player_id, season, burned, burned_at) VALUES ($1, 'kDET', $2, true, now())`, [a.userId, SEASON]);
+    // Everything up to Sunday night has locked.
+    w.clock.set(new Date(WINDOWS.snf.getTime() + 60_000));
+    await relogin(a);
+    // K can't be filled (the only Monday kicker is burned)...
+    expect(codes(await review(a, { qb: null, rb1: null, rb2: null, wr1: null, wr2: null, wr3: null, te: 'teGB', flex: null, k: 'kDET' }))).toEqual(['k:PLAYER_BURNED_OR_UNAVAILABLE']);
+    // ...so he leaves it empty and still locks in his Monday tight end.
+    const res = await submitLineup(w, a, { qb: null, rb1: null, rb2: null, wr1: null, wr2: null, wr3: null, te: 'teGB', flex: null, k: null });
+    expect(res.status).toBe(200);
+    expect(res.body.slots.filter((x: { playerId: string | null }) => x.playerId)).toEqual([expect.objectContaining({ slot: 'te', playerId: 'teGB' })]);
+  });
 
   it('never too late: after Thursday locks, a brand-new manager can still confirm a full lineup from games that haven’t started', async () => {
     await fireLocks(new Date(WINDOWS.tnf.getTime() + 30_000)); // TNF (DEN at KC) is locked

@@ -1,6 +1,6 @@
 # PRD-006 — API, Accounts and Lineup Submission
 **Burnout League · packages/api**
-Version 1.15 · 2026-10-29
+Version 1.16 · 2026-10-29
 Status: APPROVED 2026-10-27 — scope and auth decisions locked by Nath (§3); rules calls Q1, Q2, Q4 resolved in v1.1
 
 ---
@@ -299,7 +299,7 @@ On the 2026-10-27 feed this merges 24 pairs. Six involve a rostered player: Bran
 
 1. **Merge:** the server merges in the user's **locked** slots, which can't change. Sending a different player for a locked slot returns `422 SLOT_LOCKED`.
 2. **Validate:** it runs the PRD-001 validator (`validateLineupDraft`) on the unlocked slots, checking:
-   - every slot filled (`SLOT_EMPTY`);
+   - ~~every slot filled (`SLOT_EMPTY`)~~ open slots may be empty (v1.16, see step 3);
    - no duplicates (`DUPLICATE_PLAYER`);
    - the player isn't burned (`PLAYER_BURNED_OR_UNAVAILABLE`);
    - the player exists (`PLAYER_NOT_FOUND`);
@@ -307,7 +307,7 @@ On the 2026-10-27 feed this merges 24 pairs. Six involve a rostered player: Bran
    - the player isn't listed Out or IR (`PLAYER_INACTIVE`; PRD-001 §3.1.1);
    - the player has a game this week (`PLAYER_ON_BYE`);
    - the window is still open (`GAME_WINDOW_LOCKED`). A window counts as locked once `now ≥ scheduled_et`.
-3. **Empty slots:** a slot may be left empty only when it is empty now (for example, voided) and no window in the week is still pending.
+3. **Empty slots (v1.16, Nath 2026-10-29: the manager's call):** any open slot may be left empty; it scores 0 and burns nothing, and the app warns before confirming. A slot sent as `null` is left empty (an open pick there is removed at Gate 3, guarded like any change: its window must still be open, and the database refuses to delete a locked pick). A slot **not sent** keeps its current open pick, so a partial request never clears picks by accident. A locked slot ignores `null`. A lineup with every slot empty and no open pick to remove is refused with `422 LINEUP_EMPTY` at Gate 1 (and re-checked at Gate 3); a manager with open picks may clear them all to sit the week out. The burn-engine validator keeps "all nine filled" by default; the API passes `allowEmpty: true`.
 4. **Create the confirmation:** it writes a `lineup_confirmations` row with `gate1_at = now`, which expires 10 minutes later.
 5. **Response:** the review screen data, with each slot's player, team, opponent, scheduled time and locked flag.
 
@@ -648,6 +648,7 @@ Every critical rule also gets a mutation check, as with PRD-001 to PRD-004.
 |---------|------|---------|
 | 1.7 | 2026-10-28 | §7.5: one person, one player. Duplicate MSF IDs for the same person become aliases of one kept ID; aliases can't be picked (DB-enforced); burns and stats follow the person; admin review and override. Roster sync also runs at worker startup. |
 | 1.8 | 2026-10-28 | §11: scoring works newest week first, retries a refused MSF read once, and skips only the week whose feed stays refused. |
+| 1.16 | 2026-10-29 | §9.1: open slots may be left empty (Nath: the manager's call, with a warning); `null` empties a slot and removes an open pick, an omitted slot keeps its pick, `LINEUP_EMPTY` for a lineup with nothing in it. |
 | 1.15 | 2026-10-29 | §6.10: send an invite by email from the admin screen (`send: true`; `invite` email template; `emailed` in the response; failed sends keep the invite; audited). |
 | 1.14 | 2026-10-28 | PRD-011 part 1: connector token routes (`/v1/me/mcp`), the `/mcp` endpoint and its credential boundary; revoking sessions user-wide also revokes connector tokens; `MCP_TOKEN_CREATED` / `MCP_TOKEN_REVOKED` audit events. |
 | 1.13 | 2026-10-28 | D1 limits changed (Nath): signed in until you sign out, 90-day idle (each visit restarts it) and 1-year hard limit, were 24 h and 30 days. Step-up for money, security and admin unchanged. §5 and AC3 updated. |

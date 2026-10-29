@@ -94,6 +94,7 @@ export function Gate1Page() {
   const changed = changedSlots(review.slots, lineup);
   const next = nextLock(windows, now);
   const nextT = next ? Date.parse(next.scheduledEt) : null;
+  const emptyOpen = SLOT_ORDER.filter((slot) => { const r = review.slots.find((x) => x.slot === slot)!; return !r.playerId && !r.locked; });
   const lockingNext = nextT === null ? 0 : review.slots.filter((s) => s.playerId && !s.locked && s.scheduledEt && Date.parse(s.scheduledEt) === nextT).length;
 
   return (
@@ -107,6 +108,13 @@ export function Gate1Page() {
         <h1 className="m-0 font-mono text-[30px] leading-[1.1] font-medium tracking-[-0.5px]">Review Week {week}</h1>
         <p className="m-0 text-[14px] leading-[1.5] text-muted">Each player locks at his window’s scheduled kickoff. When his game goes Final, he is burned for the rest of the season.</p>
       </section>
+      {emptyOpen.length > 0 && (
+        <p role="note" className="m-0 mx-4 mt-4 rounded-sm border border-dashed border-live px-[14px] py-3 text-[14px] leading-[1.5]">
+          <b className="font-mono text-[12px] tracking-[1px] text-live">{emptyOpen.length === 1 ? '1 SLOT IS EMPTY' : `${emptyOpen.length} SLOTS ARE EMPTY`}</b>
+          <br />
+          {emptyOpen.map((s) => SLOT_LABEL[s]).join(', ')} will score 0 and burn nothing. You can fill {emptyOpen.length === 1 ? 'it' : 'them'} any time before {emptyOpen.length === 1 ? 'its' : 'their'} last game locks: <Link to="/lineup">edit lineup</Link>.
+        </p>
+      )}
       <ol className="m-0 mx-4 mt-4 list-none overflow-hidden rounded-sm border border-rule p-0" aria-label="Your lineup as it will lock">
         {SLOT_ORDER.map((slot, i) => {
           const r = review.slots.find((s) => s.slot === slot)!;
