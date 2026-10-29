@@ -57,9 +57,13 @@ export interface CreatedInvite {
   email: string | null;
   note: string | null;
   expiresAt: Date | null;
+  /** Only when sending was asked for: whether the invite email went out. */
+  emailed?: boolean;
 }
 
-export async function createInvite(ctx: ApiContext, admin: SessionInfo, opts: { email?: string | null; note?: string | null; expiresInDays?: number | null }): Promise<CreatedInvite> {
+const etDate = new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+
+export async function createInvite(ctx: ApiContext, admin: SessionInfo, opts: { email?: string | null; note?: string | null; expiresInDays?: number | null; send?: boolean }): Promise<CreatedInvite> {
   const code = newInviteCode();
   const now = ctx.now();
   const expiresAt = opts.expiresInDays ? new Date(now.getTime() + opts.expiresInDays * 86_400_000) : null;
@@ -72,7 +76,20 @@ export async function createInvite(ctx: ApiContext, admin: SessionInfo, opts: { 
     await audit(tx, { event: 'ADMIN_ACTION', userId: admin.userId, at: now, metadata: { action: 'INVITE_CREATED', inviteId: r.id, forEmail: !!email } });
     return r;
   });
-  return { id: out.id, code, link: `${ctx.config.appBaseUrl.replace(/\/$/, '')}/signup?invite=${code}`, email, note: opts.note ?? null, expiresAt };
+  const link = `${ctx.config.appBaseUrl.replace(/\/$/, '')}/signup?invite=${code}`;
+  const created: CreatedInvite = { id: out.id, code, link, email, note: opts.note ?? null, expiresAt };
+  if (!opts.send || !email) return created;
+  // The code exists only now (it's stored hashed), so this is the one chance to email it. A failed send keeps the
+  // invite: the admin still sees the code and link to pass on another way.
+  let emailed = false;
+  try {
+    await ctx.mailer.send({ to: email, template: 'invite', data: { link, code, expires: expiresAt ? `${etDate.format(expiresAt)} ET` : '' } });
+    emailed = true;
+  } catch (err) {
+    ctx.log('warn', 'invite email failed', { inviteId: out.id, error: String(err) });
+  }
+  await audit(ctx.db, { event: 'ADMIN_ACTION', userId: admin.userId, at: ctx.now(), metadata: { action: emailed ? 'INVITE_EMAILED' : 'INVITE_EMAIL_FAILED', inviteId: out.id } });
+  return { ...created, emailed };
 }
 
 export async function listInvites(ctx: ApiContext) {

@@ -115,6 +115,48 @@ describeDbRedis('PRD-006 §6.10 invite-only sign-up (HTTP, Postgres + Redis)', (
     expect(n).toBe(1);
   });
 
+  it('send: emails the code and its sign-up link to their address, once; the emailed code signs them up', async () => {
+    const res = await admin.client.post('/v1/admin/invites', { email: 'Sam@Example.com', note: 'Sam', send: true });
+    expect(res.status).toBe(201);
+    expect(res.body).toMatchObject({ email: 'sam@example.com', emailed: true });
+    const mails = w.mailer.sent.filter((m) => m.template === 'invite');
+    expect(mails).toHaveLength(1);
+    expect(mails[0]).toMatchObject({ to: 'sam@example.com', data: { code: res.body.code, link: res.body.link } });
+    expect(mails[0].data.expires).toMatch(/ ET$/);
+    // The email carries a working code: it signs Sam up.
+    expect((await signup('sam@example.com', 'sam_tester', mails[0].data.code)).status).toBe(202);
+    expect(await userCount()).toBe(2);
+    const [{ n }] = await w.t.sql<{ n: number }>(`SELECT count(*)::int AS n FROM security_audit_log WHERE metadata->>'action' = 'INVITE_EMAILED'`);
+    expect(n).toBe(1);
+  });
+
+  it('send needs an email; without send nothing is emailed; a failed send keeps the invite so the admin can pass it on', async () => {
+    const noEmail = await admin.client.post('/v1/admin/invites', { send: true });
+    expect(noEmail.status).toBe(400);
+    expect(noEmail.body.error).toBe('VALIDATION');
+    const quiet = await invite({ email: 'quiet@example.com' });
+    expect(quiet).not.toHaveProperty('emailed');
+    expect(w.mailer.sent.filter((m) => m.template === 'invite')).toHaveLength(0);
+
+    w.mailer.failSend = new Error('SendGrid send failed: 503');
+    const res = await admin.client.post('/v1/admin/invites', { email: 'pat@example.com', send: true });
+    expect(res.status).toBe(201);
+    expect(res.body).toMatchObject({ emailed: false, email: 'pat@example.com' });
+    expect(res.body.code).toMatch(/^[0-9A-Z]{5}-[0-9A-Z]{5}$/);
+    w.mailer.failSend = null;
+    expect((await signup('pat@example.com', 'pat_tester', res.body.code)).status).toBe(202); // still usable
+    const [{ n }] = await w.t.sql<{ n: number }>(`SELECT count(*)::int AS n FROM security_audit_log WHERE metadata->>'action' = 'INVITE_EMAIL_FAILED'`);
+    expect(n).toBe(1);
+  });
+
+  it('the invite email says nothing financial (staging and testing, Nath 2026-10-28)', async () => {
+    await admin.client.post('/v1/admin/invites', { email: 'lee@example.com', send: true });
+    const m = w.mailer.sent.find((x) => x.template === 'invite')!;
+    const { renderForTest } = await import('../mailer');
+    expect(renderForTest(m)).not.toMatch(/\b(prizes?|refunds?|payments?|paid|money|cash|payouts?|winnings|entry fees?|free play)\b|\$\s?\d/i);
+    expect(renderForTest(m)).toContain(m.data.link);
+  });
+
   it('with the gate off, sign-up ignores codes entirely', async () => {
     w.ctx.config.signupInviteOnly = false;
     expect((await new Client(w).get('/v1/auth/signup-config')).body).toEqual({ inviteOnly: false });

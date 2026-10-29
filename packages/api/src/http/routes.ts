@@ -494,7 +494,9 @@ export function buildRouter(ctx: ApiContext): Router {
       email: email.nullable().optional(),
       note: z.string().trim().max(200).nullable().optional(),
       expiresInDays: z.number().int().min(1).max(90).nullable().optional(),
+      send: z.boolean().optional(),
     }).strict(), req);
+    if (b.send && !b.email) throw new HttpError(400, 'VALIDATION', 'Add their email to send the invite');
     res.status(201).json(await invites.createInvite(ctx, s, { expiresInDays: 14, ...b }));
   }));
 

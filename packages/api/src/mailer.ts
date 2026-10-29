@@ -3,7 +3,7 @@
  * These never go through the notification outbox, so the token is never
  * stored in plaintext (PRD-006 §6.1). Everything else uses the outbox.
  */
-export type MailTemplate = 'verify_email' | 'password_reset' | 'account_exists' | 'mfa_reset';
+export type MailTemplate = 'verify_email' | 'password_reset' | 'account_exists' | 'mfa_reset' | 'invite';
 
 export interface MailMessage {
   to: string;
@@ -54,7 +54,10 @@ export class MemoryMailer implements Mailer {
   failAdmin: MailSendError | null = null;
   /** Tests set this to make the next notice sends fail. */
   failNotices: MailSendError | null = null;
+  /** Tests set this to make secret-carrying sends (verification, invites) fail. */
+  failSend: Error | null = null;
   async send(msg: MailMessage): Promise<void> {
+    if (this.failSend) throw this.failSend;
     this.sent.push(msg);
   }
   async sendNotice(msg: NoticeMail): Promise<{ id: string | null }> {
@@ -76,6 +79,7 @@ const SUBJECTS: Record<MailTemplate, string> = {
   password_reset: 'Reset your Burnout League password',
   account_exists: 'You already have a Burnout League account',
   mfa_reset: 'Your Burnout League two-factor setup was reset',
+  invite: 'You’re invited to Burnout League',
 };
 
 function body(msg: MailMessage): string {
@@ -88,7 +92,23 @@ function body(msg: MailMessage): string {
       return `Someone tried to sign up with this email, but you already have an account. Sign in, or reset your password: ${msg.data.link}`;
     case 'mfa_reset':
       return `An administrator reset your two-factor authentication after verifying your identity. You've been signed out everywhere. Sign in and set up a new authenticator: ${msg.data.link}\n\nIf you didn't ask for this, reply to this email right away.`;
+    case 'invite':
+      return [
+        'You’re invited to test Burnout League: season-long fantasy football with one rule. Start him, lose him.',
+        '',
+        `Sign up here (your code is already filled in): ${msg.data.link}`,
+        '',
+        `Invite code: ${msg.data.code}`,
+        msg.data.expires ? `It works once and expires ${msg.data.expires}.` : 'It works once.',
+        '',
+        'Sign-up takes a couple of minutes, including setting up an authenticator app (Google Authenticator, 1Password or similar) to keep your account secure.',
+      ].join('\n');
   }
+}
+
+/** Subject and body as sent, for tests. */
+export function renderForTest(msg: MailMessage): string {
+  return `${SUBJECTS[msg.template]}\n\n${body(msg)}`;
 }
 
 /** SendGrid v3 mail send. The API key comes from SENDGRID_API_KEY (Railway env vars only). */
@@ -158,6 +178,8 @@ export class SendGridMailer implements Mailer {
         from: { email: this.from },
         subject: SUBJECTS[msg.template],
         content: [{ type: 'text/plain', value: body(msg) }],
+        // These links carry a one-time secret: never rewrite them through a click tracker.
+        tracking_settings: { click_tracking: { enable: false, enable_text: false }, open_tracking: { enable: false }, subscription_tracking: { enable: false } },
       }),
     });
     if (!res.ok) throw new Error(`SendGrid send failed: ${res.status}`);

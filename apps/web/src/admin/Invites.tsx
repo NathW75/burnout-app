@@ -1,6 +1,7 @@
 /**
  * Admin → Invites (PRD-006 §6.10): make a single-use code per tester
- * (optionally locked to their email), see who used which, revoke unused ones.
+ * (optionally locked to their email, and emailed to them straight from here),
+ * see who used which, revoke unused ones.
  * Admin only, behind a fresh code (step-up), as the API requires.
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -24,7 +25,7 @@ interface InviteRow {
   usedBy: string | null;
   status: 'active' | 'used' | 'revoked' | 'expired';
 }
-interface Created { id: string; code: string; link: string; email: string | null; expiresAt: string | null }
+interface Created { id: string; code: string; link: string; email: string | null; expiresAt: string | null; emailed?: boolean }
 
 const KEY = ['admin', 'invites'];
 const STATUS_TONE: Record<InviteRow['status'], string> = { active: 'text-accent', used: 'text-muted', revoked: 'text-pencil', expired: 'text-steel' };
@@ -37,12 +38,14 @@ export function InvitesPage() {
   const [email, setEmail] = useState('');
   const [note, setNote] = useState('');
   const [days, setDays] = useState('14');
+  const [sendIt, setSendIt] = useState(true);
   const [created, setCreated] = useState<Created | null>(null);
   const [copied, setCopied] = useState(false);
   const isAdmin = me.data?.role === 'admin';
   const list = useQuery({ queryKey: KEY, queryFn: () => api<{ inviteOnly: boolean; invites: InviteRow[] }>('/admin/invites'), enabled: isAdmin && fresh, retry: false });
+  const sending = !!email.trim() && sendIt;
   const make = useMutation({
-    mutationFn: () => api<Created>('/admin/invites', { body: { email: email.trim() || null, note: note.trim() || null, expiresInDays: Number(days) || null } }),
+    mutationFn: () => api<Created>('/admin/invites', { body: { email: email.trim() || null, note: note.trim() || null, expiresInDays: Number(days) || null, ...(sending ? { send: true } : {}) } }),
     onSuccess: (r) => {
       setCreated(r);
       setCopied(false);
@@ -71,6 +74,8 @@ export function InvitesPage() {
       {created && (
         <Panel className="flex flex-col gap-2">
           <span className="font-mono text-[11px] tracking-[1px] text-muted">NEW CODE · SHOWN ONCE{created.email ? ` · FOR ${created.email.toUpperCase()}` : ''}</span>
+          {created.emailed === true && <span role="status" className="font-mono text-[12px] font-medium text-accent">SENT · INVITE EMAILED TO {created.email!.toUpperCase()}</span>}
+          {created.emailed === false && <ErrorNote>Couldn’t send the email. The code still works: copy the link below and send it yourself.</ErrorNote>}
           <code className="font-mono text-[24px] tracking-[2px]">{created.code}</code>
           <span className="text-[13px] break-all text-muted">{created.link}</span>
           <button type="button" className="btn-outline self-start px-4" onClick={() => void navigator.clipboard?.writeText(created.link).then(() => setCopied(true))}>
@@ -82,10 +87,16 @@ export function InvitesPage() {
       <form onSubmit={(e) => (e.preventDefault(), make.mutate())} className="flex flex-col gap-3" noValidate>
         <SectionTitle>NEW INVITE</SectionTitle>
         <TextField label="Their email (optional)" type="email" autoComplete="off" value={email} onChange={(e) => setEmail(e.target.value)} hint="If set, only this address can use the code." />
+        {email.trim() && (
+          <label className="flex items-center gap-3 text-[14px]">
+            <input type="checkbox" checked={sendIt} onChange={(e) => setSendIt(e.target.checked)} className="size-6 flex-none accent-accent" />
+            Email the invite to them
+          </label>
+        )}
         <TextField label="Note (optional)" maxLength={200} value={note} onChange={(e) => setNote(e.target.value)} hint="Just for you, e.g. who it's for." />
         <TextField label="Expires in days" inputMode="numeric" value={days} onChange={(e) => setDays(e.target.value.replace(/\D/g, '').slice(0, 2))} hint="1 to 90. Blank for no expiry." />
         <ErrorNote>{make.isError ? errorText(make.error) : null}</ErrorNote>
-        <SubmitButton busy={make.isPending} disabled={!!days && (Number(days) < 1 || Number(days) > 90)}>MAKE CODE</SubmitButton>
+        <SubmitButton busy={make.isPending} disabled={!!days && (Number(days) < 1 || Number(days) > 90)}>{sending ? 'SEND INVITE' : 'MAKE CODE'}</SubmitButton>
       </form>
       <SectionTitle>ALL INVITES</SectionTitle>
       {list.error && !stale && <ErrorNote>{errorText(list.error)}</ErrorNote>}

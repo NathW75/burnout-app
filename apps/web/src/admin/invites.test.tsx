@@ -88,12 +88,42 @@ describe('admin invites', () => {
     expect(within(screen.getByRole('list', { name: 'Invites' })).getByText('USED · Watty18')).toBeInTheDocument();
     await user.type(screen.getByLabelText('THEIR EMAIL (OPTIONAL)'), 'cousin@example.com');
     await user.type(screen.getByLabelText('NOTE (OPTIONAL)'), 'cousin');
+    await user.click(screen.getByRole('checkbox', { name: 'Email the invite to them' })); // just the code this time
     await user.click(screen.getByRole('button', { name: 'MAKE CODE' }));
     expect(await screen.findByText('ABCDE-FGH12')).toBeInTheDocument();
     expect(screen.getByText('https://app.example/signup?invite=ABCDE-FGH12')).toBeInTheDocument();
     expect(calls.find((c) => c.method === 'POST' && c.path === '/admin/invites')?.body).toEqual({ email: 'cousin@example.com', note: 'cousin', expiresInDays: 14 });
     await user.click(await screen.findByRole('button', { name: 'Revoke invite for cousin@example.com, cousin' }));
     await waitFor(() => expect(within(screen.getByRole('list', { name: 'Invites' })).getByText('REVOKED')).toBeInTheDocument());
+  });
+
+  it('with an email, sends the invite by default and says so; a failed send keeps the code on screen to pass on', async () => {
+    let emailed = true;
+    const calls = mockApi({
+      'GET /me': { body: me() },
+      'GET /admin/invites': { body: { inviteOnly: true, invites: [] } },
+      'POST /admin/invites': (init) => {
+        const b = JSON.parse(String(init!.body));
+        return { status: 201, body: { id: 'i3', code: 'KQ7MX-2PRT9', link: 'https://app.example/signup?invite=KQ7MX-2PRT9', email: b.email, expiresAt: null, ...(b.send ? { emailed } : {}) } };
+      },
+    });
+    renderAt('/admin/invites', <InvitesPage />);
+    const user = userEvent.setup();
+    await screen.findByText(/Sign-up is invite-only here/);
+    expect(screen.queryByRole('checkbox', { name: 'Email the invite to them' })).toBeNull(); // no email yet: nothing to send to
+    expect(screen.getByRole('button', { name: 'MAKE CODE' })).toBeInTheDocument();
+    await user.type(screen.getByLabelText('THEIR EMAIL (OPTIONAL)'), 'sam@example.com');
+    expect(screen.getByRole('checkbox', { name: 'Email the invite to them' })).toBeChecked();
+    await user.click(screen.getByRole('button', { name: 'SEND INVITE' }));
+    expect(await screen.findByText('SENT · INVITE EMAILED TO SAM@EXAMPLE.COM')).toBeInTheDocument();
+    expect(calls.find((c) => c.method === 'POST' && c.path === '/admin/invites')?.body).toMatchObject({ email: 'sam@example.com', send: true });
+
+    emailed = false;
+    await user.type(screen.getByLabelText('THEIR EMAIL (OPTIONAL)'), 'pat@example.com');
+    await user.click(screen.getByRole('button', { name: 'SEND INVITE' }));
+    expect(await screen.findByText(/Couldn’t send the email. The code still works/)).toBeInTheDocument();
+    expect(screen.getByText('KQ7MX-2PRT9')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'COPY SIGN-UP LINK' })).toBeInTheDocument();
   });
 
   it('asks for a fresh code first, and a non-admin is told no', async () => {

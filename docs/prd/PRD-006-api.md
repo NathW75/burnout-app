@@ -1,6 +1,6 @@
 # PRD-006 — API, Accounts and Lineup Submission
 **Burnout League · packages/api**
-Version 1.14 · 2026-10-28
+Version 1.15 · 2026-10-29
 Status: APPROVED 2026-10-27 — scope and auth decisions locked by Nath (§3); rules calls Q1, Q2, Q4 resolved in v1.1
 
 ---
@@ -197,7 +197,8 @@ While testing, sign-up can require a per-person, single-use invite code (Nath: "
 - **Codes:** 10 characters from Crockford base32 (no I, L, O, U), shown as `7KX2M-QW9TD`, 50 bits. Stored only as a SHA-256 hash; the code is shown once, when made. Input is forgiving: case, spaces and dashes are ignored, O reads as 0 and I or L as 1.
 - **Rules:** a code works once; it can be tied to one email (case-insensitive); it can expire (default 14 days, 1–90, or none) and be revoked while unused. A bad, used, expired, revoked or wrong-email code is `400 INVITE_INVALID`, decided before anything about the email, so it reveals nothing about accounts. An email that already has an account gets the usual "you already have an account" email and the code is **not** spent. The code is spent in the same transaction that creates the account; two sign-ups racing for one code create one account.
 - **Admin:** `POST /v1/admin/invites { email?, note?, expiresInDays? }` → `{ id, code, link, email, expiresAt }` (the link is `/signup?invite=CODE`); `GET /v1/admin/invites` (no codes; status active, used, revoked or expired, and who used it); `POST /v1/admin/invites/:id/revoke`. Admin + step-up; creation and revocation are audited (`ADMIN_ACTION`).
-- **Web:** the sign-up form shows an "Invite code" field when invite-only and fills it from the link; Account → Admin → Invites (admins only).
+- **Send by email (v1.15, Nath 2026-10-29):** `POST /v1/admin/invites` also takes `send: true` (requires `email`). The code is emailed to that address at creation, the only moment it exists in plain text (codes are stored hashed), through the secret-carrying mailer (`invite` template: sign-up link with the code filled in, the code, its expiry ET; no click tracking; nothing financial). The response adds `emailed: true|false`. A failed send keeps the invite, so the admin can copy the link instead. Audited as `INVITE_EMAILED` or `INVITE_EMAIL_FAILED`. Resending means a new invite.
+- **Web:** the sign-up form shows an "Invite code" field when invite-only and fills it from the link; Account → Admin → Invites (admins only). With an email entered, "Email the invite to them" is ticked by default and the button reads SEND INVITE; the result says SENT or shows the code to pass on.
 
 ## 7. NFL Players and Roster Sync
 
@@ -413,7 +414,7 @@ The user can recompute it from their email.
 | `POST /v1/notifications/unsubscribe?token=` | Public, no session (RFC 8058 one-click; mail providers post a form body). The signed token's only power is turning optional email off. 400 `TOKEN_INVALID` for a bad token; 30/min per IP |
 | `GET /v1/admin/notifications/stats` | Admin + step-up: last 24 hours by kind and result, oldest pending notice |
 | `GET /v1/auth/signup-config` | Public: `{ inviteOnly }` (§6.10) |
-| `POST /v1/admin/invites` | Admin + step-up: a single-use invite code, shown once (§6.10) |
+| `POST /v1/admin/invites` | Admin + step-up: a single-use invite code, shown once, optionally emailed to the invitee (§6.10) |
 | `GET /v1/admin/invites` | Admin + step-up: invites with status and who used them (no codes) |
 | `POST /v1/admin/invites/:id/revoke` | Admin + step-up: revoke an unused invite |
 | `GET /v1/me/receipts?season=` | Receipt summaries `{ id, week, confirmedAt, sha256 }`, newest first |
@@ -647,6 +648,7 @@ Every critical rule also gets a mutation check, as with PRD-001 to PRD-004.
 |---------|------|---------|
 | 1.7 | 2026-10-28 | §7.5: one person, one player. Duplicate MSF IDs for the same person become aliases of one kept ID; aliases can't be picked (DB-enforced); burns and stats follow the person; admin review and override. Roster sync also runs at worker startup. |
 | 1.8 | 2026-10-28 | §11: scoring works newest week first, retries a refused MSF read once, and skips only the week whose feed stays refused. |
+| 1.15 | 2026-10-29 | §6.10: send an invite by email from the admin screen (`send: true`; `invite` email template; `emailed` in the response; failed sends keep the invite; audited). |
 | 1.14 | 2026-10-28 | PRD-011 part 1: connector token routes (`/v1/me/mcp`), the `/mcp` endpoint and its credential boundary; revoking sessions user-wide also revokes connector tokens; `MCP_TOKEN_CREATED` / `MCP_TOKEN_REVOKED` audit events. |
 | 1.13 | 2026-10-28 | D1 limits changed (Nath): signed in until you sign out, 90-day idle (each visit restarts it) and 1-year hard limit, were 24 h and 30 days. Step-up for money, security and admin unchanged. §5 and AC3 updated. |
 | 1.12 | 2026-10-28 | PRD-008 Phase 2: push config, device subscriptions, push preference groups; signing out everywhere revokes push devices; the `push` worker job; `push_subscriptions` and `notification_queue` push columns. |
