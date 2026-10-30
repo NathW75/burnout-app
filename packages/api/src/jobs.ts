@@ -40,23 +40,35 @@ export class MsfHttpError extends Error {
  * for the run instead of the whole job failing. Status 0 = no usable body.
  */
 export class MsfBadResponseError extends MsfHttpError {
-  constructor(path: string, bytes: number) {
-    super(0, path, bytes === 0 ? 'empty response' : `response cut off or not JSON (${bytes} bytes)`);
+  constructor(path: string, bytes: number, http?: { status: number; contentType: string | null }) {
+    const what = bytes === 0 ? 'empty response' : `response cut off or not JSON (${bytes} bytes)`;
+    super(0, path, http ? `${what}; HTTP ${http.status}, ${http.contentType ?? 'no content-type'}` : what);
     this.name = 'MsfBadResponseError';
   }
+}
+
+/**
+ * Every MSF read asks for the full feed (force=true). Without it MSF may
+ * withhold content it considers unchanged since this account's last read,
+ * and two jobs read the same weekly feeds (stats at :05/:35, scoring every
+ * 15 minutes), so the second reader could be told "nothing new" about data
+ * it has never seen; scoring would then never see a game go Final.
+ */
+export function withForce(path: string): string {
+  return /[?&]force=/.test(path) ? path : `${path}${path.includes('?') ? '&' : '?'}force=true`;
 }
 
 export function msfFetcher(baseUrl: string, apiKey: string): MsfFetcher {
   const auth = `Basic ${Buffer.from(`${apiKey}:MYSPORTSFEEDS`).toString('base64')}`;
   return {
     async get(path) {
-      const res = await fetch(`${baseUrl.replace(/\/$/, '')}/${path}`, { headers: { authorization: auth, 'accept-encoding': 'gzip' } });
+      const res = await fetch(`${baseUrl.replace(/\/$/, '')}/${withForce(path)}`, { headers: { authorization: auth, 'accept-encoding': 'gzip' } });
       if (!res.ok) throw new MsfHttpError(res.status, path);
       const body = await res.text();
       try {
         return JSON.parse(body) as unknown;
       } catch {
-        throw new MsfBadResponseError(path, body.length);
+        throw new MsfBadResponseError(path, body.length, { status: res.status, contentType: res.headers.get('content-type') });
       }
     },
   };

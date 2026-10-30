@@ -7,7 +7,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createPostgresBurnStore, evaluateAndFireLocks } from '@burnout/burn-engine';
 import { describeDbRedis, SEASON } from '@burnout/test-support';
-import { createJobs, MsfHttpError, msfFetcher, type MsfFetcher } from '../jobs';
+import { createJobs, MsfHttpError, msfFetcher, withForce, type MsfFetcher } from '../jobs';
 import { lineupChecksum } from '../lineups/service';
 import { reresolveSubmissions, syncInjuries, syncPlayers } from '../players/roster';
 import { account, buildWeek, createWorld, LINEUP, PLAYERS, relogin, stepUp, submitLineup, WINDOWS, type Account, type World } from './harness';
@@ -608,7 +608,11 @@ describeDbRedis('PRD-006 lineups, players, payments routes (HTTP, Postgres + Red
       expect(calls.filter((c) => c.includes('/week/8/games.json'))).toHaveLength(2); // one retry, then skipped
       expect(calls.filter((c) => c.includes('/week/7/games.json'))).toHaveLength(2); // cut off once, served on retry
       const err = logged.find(([lvl, , x]) => lvl === 'error' && x?.week === 8);
-      expect(err?.[2]).toMatchObject({ status: 0, error: expect.stringContaining('empty response') });
+      expect(err?.[2]).toMatchObject({ status: 0, error: expect.stringContaining('empty response; HTTP 200') });
+      expect(calls.every((c) => c.includes('force=true'))).toBe(true); // always the full feed, never "unchanged"
+      expect(withForce('2026-2027-regular/week/8/games.json')).toBe('2026-2027-regular/week/8/games.json?force=true');
+      expect(withForce('2026-2027-regular/player_stats_totals.json?position=QB')).toBe('2026-2027-regular/player_stats_totals.json?position=QB&force=true');
+      expect(withForce('x.json?force=false')).toBe('x.json?force=false');
       expect(JSON.stringify(logged)).not.toContain('secret-key');
     } finally {
       globalThis.fetch = realFetch;
