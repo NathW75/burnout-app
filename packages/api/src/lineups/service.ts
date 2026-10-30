@@ -12,6 +12,7 @@ import { audit } from '../auth/audit';
 import type { SessionInfo } from '../auth/sessions';
 import type { ApiContext } from '../context';
 import { conflict, HttpError, notFound } from '../errors';
+import { currentSeason } from '../season/views';
 import { availablePlayerIds } from '../players/pool';
 import { playerWindow } from '../players/roster';
 import type { SqlRunner } from '../sql';
@@ -197,6 +198,9 @@ export async function review(ctx: ApiContext, s: SessionInfo, season: string, we
   );
   if (!open.open) throw conflict('WEEK_CLOSED', 'Every game window this week has locked');
   await assertMayPlay(ctx.db, s.userId, season, week);
+  // The next week opens when this week's last game is final (Nath, 2026-10-30), not at its last lock.
+  const { currentWeek } = await currentSeason(ctx);
+  if (currentWeek !== null && week > currentWeek) throw conflict('WEEK_NOT_OPEN', `Week ${week} opens when Week ${currentWeek}'s last game is final`);
   const { merged, fixed, current } = await mergeAndValidate(ctx.db, s.userId, season, week, slots, now);
   // Leaving slots empty is the manager's call, but a lineup with nothing in it and nothing to remove confirms nothing.
   const hasOpenPick = [...current.values()].some((r) => r.void_reason === null && !frozen(r, now));

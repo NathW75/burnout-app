@@ -10,6 +10,7 @@ import {
   anthropicClassifier, buildClassifierRequest, classifyPending, cleanScreen, CLASSIFY_MAX_ATTEMPTS, FEEDBACK_RATE, parseTags, type Tags,
 } from '../feedback/service';
 import { createJobs } from '../jobs';
+import { pickCurrentWeek, WEEK_TURNOVER_GRACE_MS, type WeekSummary } from '../season/views';
 import { MailSendError } from '../mailer';
 import { account, buildWeek, Client, createWorld, LINEUP, PASSWORD, stepUp, submitLineup, WINDOWS, type Account, type World } from './harness';
 
@@ -17,6 +18,35 @@ const silent = () => {};
 const TAGS: Tags = { category: 'bug', severity: 'high', summary: 'The lock countdown froze.', screen_relevant: true };
 
 // ── units (no database) ─────────────────────────────────────────────────────
+
+describe('PRD-007 §8.2 current week rule (Nath, 2026-10-30)', () => {
+  const H = 3_600_000;
+  const mnf8 = new Date('2026-11-03T01:15:00Z'); // Monday 8:15 PM ET
+  const wk = (week: number, first: Date, last: Date, status: WeekSummary['status']): WeekSummary => ({ week, firstLock: first, lastLock: last, status });
+  const tnf9 = new Date(mnf8.getTime() + 71 * H);
+  const weeks = (s8: WeekSummary['status'], s9: WeekSummary['status'] = 'upcoming') => [
+    wk(7, new Date(mnf8.getTime() - 7 * 24 * H - 96 * H), new Date(mnf8.getTime() - 7 * 24 * H), 'complete'),
+    wk(8, new Date(mnf8.getTime() - 96 * H), mnf8, s8),
+    wk(9, tnf9, new Date(tnf9.getTime() + 96 * H), s9),
+  ];
+  it('the week stays current through Monday night until its last window is final', () => {
+    expect(pickCurrentWeek(weeks('live'), new Date(mnf8.getTime() - H))).toBe(8); // before MNF locks
+    expect(pickCurrentWeek(weeks('live'), new Date(mnf8.getTime() + 3 * H))).toBe(8); // MNF being played
+    expect(pickCurrentWeek(weeks('complete'), new Date(mnf8.getTime() + 4 * H))).toBe(9); // MNF Final
+  });
+  it('safety net: 24 hours after the last lock, or the next week\'s first lock, whichever comes first', () => {
+    expect(pickCurrentWeek(weeks('live'), new Date(mnf8.getTime() + WEEK_TURNOVER_GRACE_MS - 1))).toBe(8);
+    expect(pickCurrentWeek(weeks('live'), new Date(mnf8.getTime() + WEEK_TURNOVER_GRACE_MS))).toBe(9);
+    // A week whose next week locks sooner than the grace (an odd schedule): the lock wins.
+    const tight = [wk(8, new Date(mnf8.getTime() - 96 * H), mnf8, 'live'), wk(9, new Date(mnf8.getTime() + 6 * H), new Date(mnf8.getTime() + 99 * H), 'upcoming')];
+    expect(pickCurrentWeek(tight, new Date(mnf8.getTime() + 6 * H))).toBe(9);
+  });
+  it('before the season: Week 1; after it: the last week; no schedule: null', () => {
+    expect(pickCurrentWeek([wk(1, tnf9, new Date(tnf9.getTime() + 96 * H), 'upcoming')], mnf8)).toBe(1);
+    expect(pickCurrentWeek(weeks('complete', 'complete'), new Date(tnf9.getTime() + 30 * 24 * H))).toBe(9);
+    expect(pickCurrentWeek([], mnf8)).toBeNull();
+  });
+});
 
 describe('PRD-007 §8.4 / §10 units', () => {
   const fakeFetch = (respond: (url: string, init: RequestInit) => Response | Promise<Response>) => {
@@ -129,6 +159,44 @@ describeDbRedis('PRD-007 §8 web app API additions (HTTP, Postgres + Redis)', ()
     // After the last window locks there's nothing left to lock: still week 8 (the last week).
     await fireLocks(new Date(WINDOWS.mnf.getTime() + 30_000));
     expect((await a.client.get('/v1/seasons/current')).body.currentWeek).toBe(8);
+  });
+
+  it('§8.2 week turnover (Nath, 2026-10-30): a week stays current until its last game is final, then This Week, lineups and the Standings WEEK column move to the next week together', async () => {
+    const a = await account(w);
+    const tnf9 = new Date(WINDOWS.tnf.getTime() + 7 * 86_400_000);
+    await w.t.sql(`INSERT INTO game_windows (week, season, label, scheduled_et, status, msf_game_ids) VALUES (9, $1, 'tnf', $2, 'pending', $3)`, [SEASON, tnf9, ['990001']]);
+    const current = async () => (await a.client.get('/v1/seasons/current')).body.currentWeek;
+    const boardWeek = async () => {
+      await w.r.redis.flushdb(); // the field board is cached for 30 seconds
+      return (await a.client.get(`/v1/seasons/${SEASON}/leaderboard`)).body.week;
+    };
+    const review9 = () => a.client.post(`/v1/seasons/${SEASON}/weeks/9/lineup/review`, { slots: LINEUP });
+    expect(await current()).toBe(8);
+    expect(await boardWeek()).toBe(8); // before any lock too (it used to say 0, then lag a week behind)
+
+    // Monday night locks: every week-8 window is locked, the game is being played. Still week 8 (it used to flip here).
+    await fireLocks(new Date(WINDOWS.mnf.getTime() + 30_000));
+    expect(await current()).toBe(8);
+    expect(await boardWeek()).toBe(8);
+    const early = await review9();
+    expect(early.status).toBe(409);
+    expect(early.body.error).toBe('WEEK_NOT_OPEN');
+
+    // Monday night goes Final (the burn commit marks the window final): week 9 opens everywhere at once.
+    await w.t.sql(`UPDATE game_windows SET status = 'final' WHERE season = $1 AND week = 8`, [SEASON]);
+    expect(await current()).toBe(9);
+    expect(await boardWeek()).toBe(9);
+    expect((await review9()).body.error).not.toBe('WEEK_NOT_OPEN');
+  });
+
+  it('§8.2 week turnover safety net: a window stuck short of Final can\'t hold the season back (24 hours after the last lock)', async () => {
+    const a = await account(w);
+    await w.t.sql(`INSERT INTO game_windows (week, season, label, scheduled_et, status, msf_game_ids) VALUES (9, $1, 'tnf', $2, 'pending', $3)`, [SEASON, new Date(WINDOWS.tnf.getTime() + 7 * 86_400_000), ['990001']]);
+    await fireLocks(new Date(WINDOWS.mnf.getTime() + 30_000)); // MSF never reports the game Final
+    w.clock.set(new Date(WINDOWS.mnf.getTime() + WEEK_TURNOVER_GRACE_MS - 60_000));
+    expect((await a.client.get('/v1/seasons/current')).body.currentWeek).toBe(8);
+    w.clock.set(new Date(WINDOWS.mnf.getTime() + WEEK_TURNOVER_GRACE_MS));
+    expect((await a.client.get('/v1/seasons/current')).body.currentWeek).toBe(9);
   });
 
   it('§8.2 GET …/windows: every window in kickoff order with its label, scheduled time, status and games (away @ home)', async () => {

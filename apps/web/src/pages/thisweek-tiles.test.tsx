@@ -5,7 +5,7 @@ import type { ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { useRefreshOnNewNotices } from '../api/hooks';
 import type { GameWindow, LineupSlot } from '../api/types';
-import { SlotTile } from './ThisWeek';
+import { NextWeekNote, SlotTile } from './ThisWeek';
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -35,6 +35,17 @@ describe('lineup tiles', () => {
   });
 });
 
+describe('next week note (Nath, 2026-10-30)', () => {
+  it('while a locked game is still to go Final, it says when next week opens; not once everything is final, nor after Week 18', () => {
+    const { container, rerender } = render(<NextWeekNote week={8} windows={win('locked')} />);
+    expect(screen.getByRole('note')).toHaveTextContent('WEEK 9 LINEUPS OPEN ONCE THIS WEEK’S LAST GAME IS FINAL.');
+    rerender(<NextWeekNote week={8} windows={win('final')} />);
+    expect(container).toBeEmptyDOMElement();
+    rerender(<NextWeekNote week={18} windows={win('locked')} />);
+    expect(container).toBeEmptyDOMElement();
+  });
+});
+
 describe('live refresh', () => {
   it('a new notice (e.g. a burn) refreshes the lineup, windows, burns and boards; the first load and an unchanged poll don’t', async () => {
     let newest = 'n1';
@@ -51,6 +62,6 @@ describe('live refresh', () => {
 
     newest = 'n2'; // a burn notice arrives
     await qc.refetchQueries({ queryKey: ['notifications'] });
-    await waitFor(() => expect(spy.mock.calls.map((c) => (c[0] as { queryKey: string[] }).queryKey[0])).toEqual(['lineup', 'windows', 'pool', 'burns', 'fieldMe', 'fieldBoard', 'reveal']));
+    await waitFor(() => expect(spy.mock.calls.map((c) => (c[0] as { queryKey: string[] }).queryKey[0])).toEqual(['season', 'lineup', 'windows', 'pool', 'burns', 'fieldMe', 'fieldBoard', 'reveal']));
   });
 });

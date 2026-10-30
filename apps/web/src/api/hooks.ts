@@ -174,7 +174,7 @@ export function useRefreshOnNewNotices() {
   useEffect(() => {
     if (newest === undefined) return;
     if (seen.current !== undefined && seen.current !== newest) {
-      for (const key of ['lineup', 'windows', 'pool', 'burns', 'fieldMe', 'fieldBoard', 'reveal']) void qc.invalidateQueries({ queryKey: [key] });
+      for (const key of ['season', 'lineup', 'windows', 'pool', 'burns', 'fieldMe', 'fieldBoard', 'reveal']) void qc.invalidateQueries({ queryKey: [key] });
     }
     seen.current = newest;
   }, [newest, qc]);

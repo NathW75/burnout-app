@@ -22,8 +22,7 @@ export interface WeekSummary {
   status: 'upcoming' | 'live' | 'complete';
 }
 
-export async function currentSeason(ctx: ApiContext): Promise<{ season: string; currentWeek: number | null; weeks: WeekSummary[] }> {
-  const season = ctx.config.currentSeason;
+export async function currentSeason(ctx: ApiContext, season = ctx.config.currentSeason): Promise<{ season: string; currentWeek: number | null; weeks: WeekSummary[] }> {
   const now = ctx.now();
   const rows = await ctx.db.query<{ week: number; first_lock: Date; last_lock: Date; pending: number; done: number; total: number }>(
     `SELECT week, min(scheduled_et) AS first_lock, max(scheduled_et) AS last_lock,
@@ -40,13 +39,30 @@ export async function currentSeason(ctx: ApiContext): Promise<{ season: string; 
     lastLock: r.last_lock,
     status: r.done === r.total ? 'complete' : r.pending === r.total && new Date(r.first_lock) > now ? 'upcoming' : 'live',
   }));
-  // The current week: the earliest week that still has a window to lock; after the season, the last week.
-  const [next] = await ctx.db.query<{ week: number }>(
-    `SELECT week FROM game_windows WHERE season = $1 AND status = 'pending' AND scheduled_et > $2 AND cardinality(msf_game_ids) > 0
-      ORDER BY scheduled_et LIMIT 1`,
-    [season, now]
-  );
-  return { season, currentWeek: next?.week ?? weeks.at(-1)?.week ?? null, weeks };
+  return { season, currentWeek: pickCurrentWeek(weeks, now), weeks };
+}
+
+/** If MSF never reports a week's last game Final, the week still turns over this long after its last lock. */
+export const WEEK_TURNOVER_GRACE_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * The current week (Nath, 2026-10-30): a week stays current until every one of
+ * its windows is final (Monday night's game going Final opens the next week),
+ * so the lineup screens, This Week and the Standings WEEK column all move
+ * together. Safety net, so a stuck window can't hold the season back: a week
+ * also turns over once the next week's first window locks, or 24 hours after
+ * its own last lock, whichever comes first. After the season: the last week.
+ */
+export function pickCurrentWeek(weeks: WeekSummary[], now: Date): number | null {
+  for (let i = 0; i < weeks.length; i++) {
+    const w = weeks[i];
+    if (w.status === 'complete') continue;
+    const next = weeks[i + 1];
+    if (next && now >= new Date(next.firstLock)) continue;
+    if (now.getTime() >= new Date(w.lastLock).getTime() + WEEK_TURNOVER_GRACE_MS) continue;
+    return w.week;
+  }
+  return weeks.at(-1)?.week ?? null;
 }
 
 export async function weekWindows(ctx: ApiContext, season: string, week: number) {
@@ -88,13 +104,9 @@ interface Field { season: string; week: number; version: string; entries: FieldE
 /** Cache life for the computed board. Short: scoring runs every 15 minutes during games. */
 export const FIELD_CACHE_SECONDS = 30;
 
-/** The week shown as "this week": the latest week with a locked or final window. */
+/** The week the Standings WEEK column shows: the current week (same rule as This Week). 0 before the schedule exists. */
 async function boardWeek(ctx: ApiContext, season: string): Promise<number> {
-  const [r] = await ctx.db.query<{ week: number | null }>(
-    `SELECT max(week)::int AS week FROM game_windows WHERE season = $1 AND status IN ('locked', 'final')`,
-    [season]
-  );
-  return r?.week ?? 0;
+  return (await currentSeason(ctx, season)).currentWeek ?? 0;
 }
 
 async function computeField(ctx: ApiContext, season: string): Promise<Field> {

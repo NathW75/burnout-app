@@ -48,6 +48,20 @@ export class MsfBadResponseError extends MsfHttpError {
 }
 
 /**
+ * MSF answered 204 (or 304): nothing to give yet. On our non-live plan
+ * (CORE+STATS, post-game data), a feed for a game in progress answers 204
+ * until the post-game data posts (seen 2026-10-29: kickoff to about an hour
+ * after the final whistle). Expected, not a failure: no retry, a quiet log,
+ * and the next scheduled run asks again.
+ */
+export class MsfNotReadyError extends MsfHttpError {
+  constructor(status: number, path: string) {
+    super(status, path, `no data yet (HTTP ${status}; post-game data posts after the game)`);
+    this.name = 'MsfNotReadyError';
+  }
+}
+
+/**
  * Every MSF read asks for the full feed (force=true). Without it MSF may
  * withhold content it considers unchanged since this account's last read,
  * and two jobs read the same weekly feeds (stats at :05/:35, scoring every
@@ -63,6 +77,7 @@ export function msfFetcher(baseUrl: string, apiKey: string): MsfFetcher {
   return {
     async get(path) {
       const res = await fetch(`${baseUrl.replace(/\/$/, '')}/${withForce(path)}`, { headers: { authorization: auth, 'accept-encoding': 'gzip' } });
+      if (res.status === 204 || res.status === 304) throw new MsfNotReadyError(res.status, path);
       if (!res.ok) throw new MsfHttpError(res.status, path);
       const body = await res.text();
       try {
@@ -95,7 +110,7 @@ export interface JobsDeps {
   push?: { config: NotifyConfig; sender: PushSender };
 }
 
-/** MSF answers worth one more try: throttling shows up as 403 or 429, and a 5xx is on their side. */
+/** MSF answers worth one more try: throttling shows up as 403 or 429, and a 5xx is on their side. Never 204 (not posted yet). */
 export function msfRetryable(err: unknown): boolean {
   return err instanceof MsfHttpError && (err.status === 0 || err.status === 403 || err.status === 429 || err.status >= 500);
 }
@@ -163,9 +178,11 @@ export function createJobs(deps: JobsDeps) {
   /**
    * The season schedule (§11.6). Without the season-wide games feed (403),
    * falls back to the 18 weekly feeds; a week the feed doesn't have (404) is
-   * skipped.
+   * skipped. A week whose feed isn't ready (204, a game in progress on our
+   * post-game plan) stops the run: importing without that week's games would
+   * read them as removed, so the whole import waits for the next run.
    */
-  async function fetchSchedule(): Promise<{ source: string; games: GameStatus[] }> {
+  async function fetchSchedule(): Promise<{ source: string; games: GameStatus[]; notReadyWeek?: number }> {
     try {
       return { source: 'season', games: parseGames(await deps.msf.get(`${season}/games.json`)).games };
     } catch (err) {
@@ -176,6 +193,7 @@ export function createJobs(deps: JobsDeps) {
       try {
         games.push(...parseGames(await deps.msf.get(`${season}/week/${week}/games.json`)).games);
       } catch (err) {
+        if (err instanceof MsfNotReadyError) return { source: 'weekly', games: [], notReadyWeek: week };
         if (!(err instanceof MsfHttpError && err.status === 404)) throw err;
       }
     }
@@ -195,7 +213,7 @@ export function createJobs(deps: JobsDeps) {
     },
 
     async scoring() {
-      const out: Array<{ week: number; burns: number; windowsFinal: number } | { week: number; failed: string }> = [];
+      const out: Array<{ week: number; burns: number; windowsFinal: number } | { week: number; failed: string } | { week: number; waiting: string }> = [];
       // Newest week first, and one week's feed failing never holds up another week: a refused read
       // of last week's feed (MSF answers 403 when it throttles) must not delay tonight's burns.
       for (const week of [...(await activeWeeks())].reverse()) {
@@ -206,6 +224,11 @@ export function createJobs(deps: JobsDeps) {
           parsed = parseGamelogs(await msfGet(`${season}/week/${week}/player_gamelogs.json`));
         } catch (err) {
           if (!(err instanceof MsfHttpError)) throw err;
+          if (err instanceof MsfNotReadyError) {
+            log('info', 'scoring: MSF post-game data not posted yet, week waits for the next run', { job: 'scoring', week, status: err.status });
+            out.push({ week, waiting: 'MSF data not posted yet' });
+            continue;
+          }
           log('error', 'scoring: MSF feed refused, week skipped this run', { job: 'scoring', week, status: err.status, error: err.message });
           out.push({ week, failed: err.status === 0 ? 'MSF bad response' : `MSF HTTP ${err.status}` });
           continue;
@@ -271,7 +294,7 @@ export function createJobs(deps: JobsDeps) {
           fetched.push(week);
         } catch (err) {
           if (!(err instanceof MsfHttpError)) throw err;
-          log('warn', 'stats: MSF game logs refused, using the last copy', { job: 'stats', week, status: err.status, hadCopy: !!have });
+          log(err instanceof MsfNotReadyError ? 'info' : 'warn', err instanceof MsfNotReadyError ? 'stats: MSF game logs not posted yet, using the last copy' : 'stats: MSF game logs refused, using the last copy', { job: 'stats', week, status: err.status, hadCopy: !!have });
           if (have) lines.push(...have);
           failed.push(week);
         }
@@ -314,7 +337,8 @@ export function createJobs(deps: JobsDeps) {
     },
 
     async schedule() {
-      const { source, games } = await fetchSchedule();
+      const { source, games, notReadyWeek } = await fetchSchedule();
+      if (notReadyWeek !== undefined) return { source, skipped: 'MSF_NOT_READY', week: notReadyWeek }; // retried next run
       if (games.length === 0) return { source, skipped: 'EMPTY_FEED' }; // never act on an empty feed
       const r = await importSchedule(deps.apiContext, season, games);
       if (r.windowsCreated || r.windowsRemoved || r.windowsPostponed) await rebuildBoards();

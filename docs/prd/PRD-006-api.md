@@ -1,6 +1,6 @@
 # PRD-006 — API, Accounts and Lineup Submission
 **Burnout League · packages/api**
-Version 1.19 · 2026-10-30
+Version 1.20 · 2026-10-30
 Status: APPROVED 2026-10-27 — scope and auth decisions locked by Nath (§3); rules calls Q1, Q2, Q4 resolved in v1.1
 
 ---
@@ -289,6 +289,7 @@ On the 2026-10-27 feed this merges 24 pairs. Six involve a rostered player: Bran
 
 - **Free play:** anyone may submit lineups without paying. Free players can't win prizes.
 - **Cutoff:** once a season has published paid pools, free play ends at the paid-entry cutoff (the earliest pool `entry_closes_at`, set to the **Week 3 lock**). A user without an active paid entry may submit only weeks **before** the cutoff week, so free play is Weeks 1–2. After that, review and confirm return `403 PAID_ENTRY_REQUIRED`. Both gates check it.
+- **Next week not open yet (v1.20):** review for a week after the current week returns `409 WEEK_NOT_OPEN` ("Week N opens when Week N−1's last game is final"), checked after the paid-entry rule.
 - **Late payers:** paying before the cutoff unblocks play and prize eligibility, with prize standings from the week of payment (PRD-003 §3).
 - **No paid pools:** in a season without published paid pools (the 2026 test season), everyone plays free all season.
 - `GET …/lineup` returns `eligibility: { prizeEligible, freePlayThroughWeek }` so clients can show it.
@@ -394,9 +395,9 @@ The user can recompute it from their email.
 | Route | Notes |
 |-------|-------|
 | `GET /v1/time` | `{ serverTime }`. Public, `Cache-Control: no-store`: the official clock |
-| `GET /v1/seasons/current` | `{ season, currentWeek, weeks: [{ week, firstLock, lastLock, status }] }`. The current week is the next week with a window still to lock; status is `upcoming`, `live` or `complete` |
+| `GET /v1/seasons/current` | `{ season, currentWeek, weeks: [{ week, firstLock, lastLock, status }] }`. The current week (v1.20, Nath 2026-10-30) stays current until **every** one of its windows is final (Monday night going Final opens the next week), not just locked; safety net: it also turns over at the next week's first lock or 24 hours after its own last lock, whichever comes first; after the season, the last week. Status is `upcoming`, `live` or `complete` |
 | `GET /v1/seasons/:season/weeks/:week/windows` | `{ windows: [{ id, label, scheduledEt, status, games: [{ away, home }] }] }` in kickoff order |
-| `GET /v1/seasons/:season/leaderboard?offset&limit` | Season field board: everyone with a confirmed lineup, ranked on season centipoints with `RANK()` (ties share a rank, display order by handle), my row pinned as `me`. Handles only. Cached in Redis for 30 s; `ETag` / `304` |
+| `GET /v1/seasons/:season/leaderboard?offset&limit` | Season field board: everyone with a confirmed lineup, ranked on season centipoints with `RANK()` (ties share a rank, display order by handle), my row pinned as `me`. Its `week` (the WEEK column) is the current week, same rule as `/seasons/current` (v1.20; it used to be the latest week with a lock, a week behind on Tuesdays and Wednesdays). Handles only. Cached in Redis for 30 s; `ETag` / `304` |
 | `GET /v1/seasons/:season/leaderboard/me` | My field row (or `null`) and the field size |
 | `GET /v1/seasons/:season/weeks/:week/managers/:handle/lineup` | Post-lock reveal: another manager's **locked, non-voided** slots only, filtered in SQL; the rest come back `HIDDEN` with no player. My own lineup in full (`SUBMITTED`, `LOCKED`, `VOIDED`, `EMPTY`). `LOCKED` slots carry `burned` |
 | `GET /v1/me/burns?season=` | Every burned player: week, slot, name, position, team, points, window, burned time; and (v1.19) the ruleset and score `breakdown`: each stat recorded with the centipoints it earned, adding up to the points (`null` until stats are ingested) |
@@ -500,7 +501,7 @@ Each job:
 - logs a JSON line;
 - survives the failure of any other job.
 
-**Scoring and refused feeds (v1.8).** The scoring cycle works through the active weeks newest first. Each MSF read that is refused with 403, 429 or 5xx is retried once after 2 seconds (MSF throttling shows up as 403). If a week's feed is still refused, that week is skipped for this run: an error line names the week and the HTTP status, the result lists it as `failed`, and the other weeks go on to ingest and burn. Staging on 2026-10-28 showed why this matters: an intermittent 403 on an old week's feed stopped every scoring run for about three hours. **Bad bodies (v1.17):** a 200 whose body is empty or cut off (seen live during Thursday Night Football, 2026-10-29: `Unexpected end of JSON input` stopped the whole 8:30 PM run) is treated the same way: the fetcher reads the body as text and turns an unparseable one into `MsfBadResponseError` (status 0, "empty response" or "response cut off or not JSON (N bytes)"), which is retried once and then skips only that week (`failed: "MSF bad response"`). **Full feeds (v1.18):** every MSF read adds `force=true`. Two jobs read the same weekly feeds (stats at :05/:35, scoring every 15 minutes), and without it MSF may withhold content it considers unchanged since the account's last read, so scoring could miss a game going Final. A bad body's log line now names the HTTP status, content type and size.
+**Scoring and refused feeds (v1.8).** The scoring cycle works through the active weeks newest first. Each MSF read that is refused with 403, 429 or 5xx is retried once after 2 seconds (MSF throttling shows up as 403). If a week's feed is still refused, that week is skipped for this run: an error line names the week and the HTTP status, the result lists it as `failed`, and the other weeks go on to ingest and burn. Staging on 2026-10-28 showed why this matters: an intermittent 403 on an old week's feed stopped every scoring run for about three hours. **Bad bodies (v1.17):** a 200 whose body is empty or cut off (seen live during Thursday Night Football, 2026-10-29: `Unexpected end of JSON input` stopped the whole 8:30 PM run) is treated the same way: the fetcher reads the body as text and turns an unparseable one into `MsfBadResponseError` (status 0, "empty response" or "response cut off or not JSON (N bytes)"), which is retried once and then skips only that week (`failed: "MSF bad response"`). **Full feeds (v1.18):** every MSF read adds `force=true`. Two jobs read the same weekly feeds (stats at :05/:35, scoring every 15 minutes), and without it MSF may withhold content it considers unchanged since the account's last read, so scoring could miss a game going Final. A bad body's log line now names the HTTP status, content type and size. **Not posted yet (v1.20):** our MSF plan is CORE+STATS **non-live** (post-game data), so a feed covering a game in progress answers `204` until the post-game data posts (2026-10-29: kickoff until about an hour after the final whistle; MSF FAQ A5). The fetcher turns 204 (and 304) into `MsfNotReadyError`: no retry, an `info` log line, and the week is listed as `waiting` ("MSF data not posted yet") for the next run to pick up. The schedule import stops for that run instead of importing without that week's games (which would read them as removed).
 
 ### 11.6 Season schedule import
 
@@ -649,6 +650,7 @@ Every critical rule also gets a mutation check, as with PRD-001 to PRD-004.
 |---------|------|---------|
 | 1.7 | 2026-10-28 | §7.5: one person, one player. Duplicate MSF IDs for the same person become aliases of one kept ID; aliases can't be picked (DB-enforced); burns and stats follow the person; admin review and override. Roster sync also runs at worker startup. |
 | 1.8 | 2026-10-28 | §11: scoring works newest week first, retries a refused MSF read once, and skips only the week whose feed stays refused. |
+| 1.20 | 2026-10-30 | Week turnover at the last game Final (Nath), with a 24-hour / next-lock safety net; the field board's week follows it; `409 WEEK_NOT_OPEN`; §11: MSF 204 = post-game data not posted yet (no retry, no error, schedule import waits). |
 | 1.19 | 2026-10-30 | `/me/burns` adds each burn's ruleset and score breakdown; new `GET /v1/scoring/rules` from the engine (transparency, Nath). |
 | 1.18 | 2026-10-29 | §11: every MSF read asks for the full feed (`force=true`); bad-body log lines carry the HTTP status, content type and size. |
 | 1.17 | 2026-10-29 | §11: an empty or cut-off MSF body is retried once and then skips only that week, like a refused feed (it crashed a live scoring run on TNF). |

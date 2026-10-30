@@ -108,6 +108,7 @@ export function ThisWeekPage() {
           })}
         </ul>
         {open && !freePlayOver && <Link to="/lineup" className="btn-primary mt-2">EDIT LINEUP</Link>}
+        {!open && !freePlayOver && <NextWeekNote week={week} windows={windows.data} />}
         {(burns.data?.length ?? 0) > 0 && (
           <Link to="/burned" className="self-start text-[13px]">
             {burns.data!.length} burned this season · Burned roster
@@ -210,4 +211,14 @@ function InboxLine({ n, ctx }: { n: Notification; ctx: NoticeContext }) {
   ) : (
     <div className="flex items-start gap-[10px]">{body}</div>
   );
+}
+
+/**
+ * Every window locked, a game still to go Final: the next week isn't open yet
+ * (it opens when this week's last game is final, Nath 2026-10-30), so say so
+ * rather than leave the manager looking for an EDIT LINEUP button.
+ */
+export function NextWeekNote({ week, windows }: { week: number; windows: GameWindow[] }) {
+  if (week >= 18 || !windows.some((w) => w.status === 'locked')) return null;
+  return <p role="note" className="m-0 mt-2 font-mono text-[12px] tracking-[1px] text-muted">WEEK {week + 1} LINEUPS OPEN ONCE THIS WEEK’S LAST GAME IS FINAL.</p>;
 }

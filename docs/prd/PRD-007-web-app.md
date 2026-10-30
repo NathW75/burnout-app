@@ -1,6 +1,6 @@
 # PRD-007 — Web App (Player Portal)
 **Burnout League · apps/web**
-*Status: v1.18 — **APPROVED 2026-10-27** (Nath), decisions Q1–Q7 in §14; mockups approved on the landing-page design system (§11); API additions (§8) built; web app patch (a) built; patch (b) built 2026-10-28 in two parts (standings, burned roster, inbox; then account, feedback, light theme). Phase A screens complete. Push notifications (PRD-008 §9) built 2026-10-28. Patch (c) (tester feedback: position filter, bottom nav on every screen, player stat columns) specced and built 2026-10-28.*
+*Status: v1.19 — **APPROVED 2026-10-27** (Nath), decisions Q1–Q7 in §14; mockups approved on the landing-page design system (§11); API additions (§8) built; web app patch (a) built; patch (b) built 2026-10-28 in two parts (standings, burned roster, inbox; then account, feedback, light theme). Phase A screens complete. Push notifications (PRD-008 §9) built 2026-10-28. Patch (c) (tester feedback: position filter, bottom nav on every screen, player stat columns) specced and built 2026-10-28.*
 *Author: Build thread · 2026-10-27*
 
 ---
@@ -116,7 +116,7 @@ A user who stops partway resumes at the step they left on their next sign-in (th
 
 - **Header:** official clock, current week, my season rank and points (from the field board).
 - **Windows:** each window this week with its label ("Sunday Late · 4:25 PM ET"), a countdown, its status (open, locked, final), and how many of my slots sit in it.
-- **My lineup:** the nine slots in order (QB, RB1, RB2, WR1, WR2, WR3, TE, FLEX, K), each in one of the states in §6.3, with "Edit lineup" while any window is open.
+- **My lineup:** the nine slots in order (QB, RB1, RB2, WR1, WR2, WR3, TE, FLEX, K), each in one of the states in §6.3, with "Edit lineup" while any window is open. Once every window has locked but a game is still to go Final (Monday night), a note says "WEEK N LINEUPS OPEN ONCE THIS WEEK'S LAST GAME IS FINAL" (v1.19).
   - **Tile treatments (v1.16, Nath 2026-10-29):** a locked tile is amber (border plus 14% amber tint, "· LIVE"); a **burned** tile is red the same way (red border plus 14% red tint, "· BURNED", the name struck through, points underneath). Burned text uses `--color-burnt` (dark #FF5C66, light #9B0B22), which stays at 4.5:1 or better on the red tint; the light theme's usual red would fall to 4.0:1 there.
   - **Light mode goes halogen (v1.17, Nath: "a touch more neon"):** the tiles' edge and tint are tokens (`--tile-live-edge/-bg`, `--tile-burn-edge/-bg`). Dark is unchanged (amber #FFB81C and red #FF5C66 at 14%); light uses penalty-flag yellow #FFC400 at 30% and pure red #FF0033 at 18%. Text on them: LIVE label 4.89:1, burned 5.46:1. The builder's locked rows use the same amber tint.
 - **Since your last visit:** unread inbox items, e.g. "Saquon was voided: Out before his lock," "3 players burned."
@@ -276,7 +276,7 @@ Every burned player, grouped by week (newest week first; within a week, in the o
 
 ### 6.5 Standings
 
-- **Season field leaderboard (§8.1):** rank, handle, season points, this week's points. My row is pinned and paging is server-side. Ties share a rank, with display order by handle (PRD-003 §4).
+- **Season field leaderboard (§8.1):** rank, handle, season points, this week's points (the current week, same as This Week: v1.19). My row is pinned and paging is server-side. Ties share a rank, with display order by handle (PRD-003 §4).
 - **Reveal:** tapping a manager shows their **locked** players for a chosen week (a picker lists weeks with a lock), and nothing for windows that haven't locked. Locked players who have since burned show as burned. A manager's own lineup is shown in full, with picks not yet locked marked "hidden from others".
 - The board polls every 60 seconds while a window this week is locked and not yet Final, and shows when it last updated.
 - **Paid pool boards** (PRD-003) appear here in Phase B, when the user has entries.
@@ -341,7 +341,7 @@ These endpoints follow PRD-006 conventions (session auth, `/v1`, zod validation,
 ### 8.2 Season, week and windows
 
 - `GET /v1/time`: `{ serverTime }`. Unauthenticated and `no-store`, for the official clock.
-- `GET /v1/seasons/current`: `{ season, currentWeek, weeks: [{ week, firstLock, lastLock, status }] }`. The current week is the earliest week with a window still to lock (after the season, the last week); status is `upcoming`, `live` or `complete`.
+- `GET /v1/seasons/current`: `{ season, currentWeek, weeks: [{ week, firstLock, lastLock, status }] }`. The current week (v1.19, Nath 2026-10-30: "gate needs to be when MNF goes final to unlock the subsequent week") stays current until every one of its windows is final, then This Week, the lineup screens and the Standings WEEK column move to the next week together; safety net: it also turns over at the next week's first lock or 24 hours after its last lock. After the season, the last week. Status is `upcoming`, `live` or `complete`.
 - `GET /v1/seasons/:season/weeks/:week/windows`: `{ windows: [{ id, label, scheduledEt, status, games: [{ away, home }] }] }` in kickoff order.
 
 ### 8.3 Burns, inbox, receipts
@@ -436,7 +436,7 @@ Per-game averages (season totals ÷ `gamesPlayed`) are computed server-side and 
   - **Burns arrive without a reload (v1.16):** burns land whenever a game goes Final, so there's no time to schedule. The inbox bell already checks for notices every minute; when a new notice arrives (a burn, lock, voided or re-pointed pick), the app refetches the lineup, windows, pool, burned roster, boards and reveals, so This Week turns red within about a minute. Locks were already live (refetch at each lock time and a minute after). Instant server push (a live connection per tab) isn't needed at this cadence.
   - The leaderboard polls every 60 seconds while visible during live windows and sends `If-None-Match` with the board's `ETag` (`304` when unchanged).
 - **Offline or flaky network:** read screens show the last data with a "last updated" time. Nothing is submitted offline, and Gate 3 needs a live response.
-- **Errors:** API error codes map to plain messages. `WEEK_CLOSED`, `PAID_ENTRY_REQUIRED`, `PLAYER_INACTIVE`, `TURNSTILE_FAILED` and stale confirmations each get a specific explanation and next step.
+- **Errors:** API error codes map to plain messages. `WEEK_CLOSED`, `WEEK_NOT_OPEN`, `PAID_ENTRY_REQUIRED`, `PLAYER_INACTIVE`, `TURNSTILE_FAILED` and stale confirmations each get a specific explanation and next step.
 - **Step-up:** actions the API marks as needing a fresh second factor prompt for a code in place, then retry once.
 - **Accessibility:** WCAG 2.2 AA. Full keyboard use, visible focus, and screen-reader labels on slot states and countdowns. Reduced motion is respected, and color is never the only signal (states carry text tags).
 - **Responsive:** mobile-first from 360px; the lineup is usable one-handed.
@@ -602,6 +602,7 @@ Depends on: PRD-001, PRD-003, PRD-004 (Phase B), PRD-006, `SPEC-feedback-system.
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.19 | 2026-10-30 | §8.2: the week turns over when its last game is final (Nath), not at its last lock, with a safety net; Standings' WEEK column follows. This Week says "WEEK N LINEUPS OPEN ONCE THIS WEEK'S LAST GAME IS FINAL" while a locked game is still to go Final; a new notice also refreshes the current week, so the switch shows without a reload. |
 | 1.18 | 2026-10-30 | §6.4: burned players show their stat line and how it adds up (exact points). §6.8: SCORING section from the engine's rules. Transparency (Nath). |
 | 1.17 | 2026-10-29 | §6.2: light-mode tiles go vivid (Nath): penalty-flag yellow #FFC400 30% for locked, pure red #FF0033 18% for burned; dark unchanged; tile colors are tokens. |
 | 1.16 | 2026-10-29 | §6.2: burned lineup tiles red-tinted like locked tiles are amber (new `--color-burnt` text token for contrast). §9: a new notice refreshes lineup, windows, burns and boards, so burns appear within about a minute without a reload. |

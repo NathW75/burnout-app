@@ -7,7 +7,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createPostgresBurnStore, evaluateAndFireLocks } from '@burnout/burn-engine';
 import { describeDbRedis, SEASON } from '@burnout/test-support';
-import { createJobs, MsfHttpError, msfFetcher, withForce, type MsfFetcher } from '../jobs';
+import { createJobs, MsfHttpError, MsfNotReadyError, msfFetcher, msfRetryable, withForce, type MsfFetcher } from '../jobs';
 import { lineupChecksum } from '../lineups/service';
 import { reresolveSubmissions, syncInjuries, syncPlayers } from '../players/roster';
 import { account, buildWeek, createWorld, LINEUP, PLAYERS, relogin, stepUp, submitLineup, WINDOWS, type Account, type World } from './harness';
@@ -617,6 +617,42 @@ describeDbRedis('PRD-006 lineups, players, payments routes (HTTP, Postgres + Red
     } finally {
       globalThis.fetch = realFetch;
     }
+  });
+
+  it('§11: 204 = post-game data not posted yet (our non-live plan, a game in progress): no retry, no error, the week waits; the schedule import waits too', async () => {
+    const fx = (name: string) => readFileSync(join(__dirname, '../../../scoring-engine/src/__tests__/fixtures', name), 'utf8');
+    const gamesText = fx('msf-2026-w7-games.json');
+    const gamelogsText = fx('msf-2026-w7-gamelogs.sample.json');
+    await w.t.sql(`INSERT INTO game_windows (week, season, label, scheduled_et, status, msf_game_ids) VALUES (7, $1, 'Sunday Late', '2026-10-25T20:05:00Z', 'locked', $2)`, [SEASON, ['163650']]);
+    await w.t.sql(`INSERT INTO game_windows (week, season, label, scheduled_et, status, msf_game_ids) VALUES (8, $1, 'Thursday Night', '2026-10-30T00:15:00Z', 'locked', '{}')`, [SEASON]);
+    const calls: string[] = [];
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = (async (url: string) => {
+      calls.push(String(url));
+      if (String(url).includes('/week/8/')) return new Response(null, { status: 204 });
+      if (/regular\/games\.json/.test(String(url))) return new Response('', { status: 403 }); // no season-wide feed: weekly fallback
+      if (String(url).includes('/games.json')) return new Response(gamesText, { status: 200 });
+      return new Response(gamelogsText, { status: 200 });
+    }) as typeof fetch;
+    try {
+      const logged: Array<[string, string, Record<string, unknown> | undefined]> = [];
+      const log = (level: string, msg: string, extra?: Record<string, unknown>) => { logged.push([level, msg, extra]); };
+      const jobs = createJobs({ db: w.t.db, payments: w.payments, msf: msfFetcher('https://msf.test/v2.1/pull/nfl', 'secret-key'), season: SEASON, now: w.clock.get, log: log as never, apiContext: w.ctx, msfRetryDelayMs: 0 });
+      w.clock.set(new Date('2026-10-30T02:00:00Z'));
+      const out = (await jobs.run('scoring')) as { weeks: unknown[] };
+      expect(out.weeks[0]).toEqual({ week: 8, waiting: 'MSF data not posted yet' });
+      expect(calls.filter((c) => c.includes('/week/8/games.json'))).toHaveLength(1); // no retry
+      expect(logged.some(([lvl, , x]) => lvl === 'error' && x?.week === 8)).toBe(false);
+      expect(logged.find(([, , x]) => x?.week === 8)?.[0]).toBe('info');
+
+      const windowsBefore = await w.t.sql(`SELECT id, status, msf_game_ids FROM game_windows ORDER BY id`);
+      expect(await jobs.run('schedule')).toMatchObject({ skipped: 'MSF_NOT_READY', week: 8 });
+      expect(await w.t.sql(`SELECT id, status, msf_game_ids FROM game_windows ORDER BY id`)).toEqual(windowsBefore); // nothing read as removed
+      expect(JSON.stringify(logged)).not.toContain('secret-key');
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+    expect(msfRetryable(new MsfNotReadyError(204, 'x'))).toBe(false);
   });
 
   it('§11: a refused feed for one week never holds up another week, and a refusal gets one retry', async () => {
