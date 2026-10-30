@@ -197,10 +197,21 @@ test('after a lock and a burn: burned roster, inbox with read state, standings, 
   await expect(page.getByRole('heading', { name: 'Burned' })).toBeVisible();
   const week7 = page.getByRole('list', { name: 'Burned in Week 7' });
   await expect(week7.getByRole('listitem')).toHaveCount(3);
-  await expect(week7.getByText('Quinn Kay')).toBeVisible();
+  await expect(week7.getByText('Quinn Kay', { exact: true })).toBeVisible();
   await expect(week7.getByText('QB · KC · Sunday Early · 1:00 PM')).toBeVisible();
+  // Transparency (Nath, 2026-10-30): each burned player's stat line, adding up to his points, from the real scoring run.
+  const quinn = page.getByRole('table', { name: /^How Quinn Kay's -?\d+\.\d{2} points add up$/ });
+  await expect(quinn).toBeVisible();
+  const quinnTotal = Number(/(-?\d+\.\d{2}) points/.exec((await quinn.locator('caption').textContent()) ?? '')![1]);
+  const lineSum = (await quinn.locator('tbody tr:not(:last-child) td:last-child').allTextContents()).reduce((t, x) => t + Number(x.replace('−', '-')), 0);
+  expect(Math.round(lineSum * 100)).toBe(Math.round(quinnTotal * 100));
   await noPlayerImages(page);
   await noSeriousA11yIssues(page, 'burned roster');
+  // Rules: the scoring table, from the engine.
+  await page.goto('/help#scoring');
+  await expect(page.locator('#scoring')).toContainText('1 point per 25 yards');
+  await expect(page.locator('#scoring')).toContainText('yahoo-half-ppr-v1');
+  await noSeriousA11yIssues(page, 'rules with scoring');
 
   // Inbox (§6.6): lock and burn notices name the players; read state per item and for all.
   await expect(page.getByRole('link', { name: /^Inbox, \d+ unread$/ })).toBeVisible();

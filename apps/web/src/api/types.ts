@@ -147,6 +147,16 @@ export interface Burn {
   pointsX100: number;
   burnedAt: string;
   windowLabel: string;
+  /** The ruleset that scored him (the rules page shows it). */
+  rulesVersion?: string | null;
+  /** Each stat he recorded with the points it earned; the lines add up to pointsX100. Null until the stats feed has his game. */
+  breakdown?: Array<{ stat: string; label: string; value: number; pointsX100: number }> | null;
+}
+
+export interface ScoringRules {
+  version: string;
+  stats: Array<{ stat: string; label: string; group: 'Passing' | 'Rushing' | 'Receiving' | 'Kicking' | 'Other'; centipoints: number }>;
+  correctionsWindowHours: number;
 }
 
 export interface Notification {

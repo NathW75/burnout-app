@@ -136,8 +136,26 @@ describe('Burned roster (§6.4)', () => {
     mockApi({ '/seasons/current': season, '/me/burns': () => ({ season: SEASON, burns: [burn(7, 'Wes Kay', '2026-10-25T20:00:00Z', 1850), burn(8, 'Ray Dent', '2026-10-30T03:00:00Z', 420)] }) });
     renderAt('/burned', [['/burned', <BurnedPage />]]);
     expect(await screen.findByText('Wes Kay')).toHaveClass('line-through');
-    expect(screen.getByText('22.7')).toBeInTheDocument(); // 18.5 + 4.2
+    expect(screen.getByText('22.70')).toBeInTheDocument(); // 18.50 + 4.20, exact to the hundredth
     expect(screen.getByRole('list', { name: 'Burned in Week 8' })).toBeInTheDocument();
+  });
+
+  it('each burned player shows his stat line and how it adds up to his points (transparency, Nath 2026-10-30)', async () => {
+    const ray: Burn = { ...burn(8, 'Ray Dent', '2026-10-30T03:00:00Z', 1310), rulesVersion: 'yahoo-half-ppr-v1', breakdown: [
+      { stat: 'rushYds', label: 'Rushing yards', value: 54, pointsX100: 540 },
+      { stat: 'rushTd', label: 'Rushing TD', value: 1, pointsX100: 600 },
+      { stat: 'receptions', label: 'Reception', value: 3, pointsX100: 150 },
+      { stat: 'recYds', label: 'Receiving yards', value: 22, pointsX100: 220 },
+      { stat: 'fumblesLost', label: 'Fumble lost', value: 1, pointsX100: -200 },
+    ] };
+    const pending: Burn = { ...burn(8, 'Wes Kay', '2026-10-30T04:00:00Z', 0), breakdown: null };
+    mockApi({ '/seasons/current': season, '/me/burns': () => ({ season: SEASON, burns: [ray, pending] }) });
+    renderAt('/burned', [['/burned', <BurnedPage />]]);
+    const table = await screen.findByRole('table', { name: "How Ray Dent's 13.10 points add up" });
+    const rows = within(table).getAllByRole('row').slice(1).map((r) => r.textContent);
+    expect(rows).toEqual(['Rushing yards54+5.40', 'Rushing TD1+6.00', 'Reception3+1.50', 'Receiving yards22+2.20', 'Fumble lost1−2.00', 'TOTAL · scoring rules13.10']);
+    expect(within(table).getByRole('link', { name: 'scoring rules' })).toHaveAttribute('href', '/help#scoring');
+    expect(screen.getByText('Stat line on its way from the stats feed.')).toBeInTheDocument();
   });
 
   it('says so when nothing has burned yet', async () => {
@@ -188,5 +206,18 @@ describe('Inbox (§6.6)', () => {
     expect(await screen.findByText('Week 7 lineup confirmed.')).toBeInTheDocument();
     expect(calls.some((c) => c.path.includes('before=2026-10-30T00%3A16%3A00.000Z%7C2222'))).toBe(true);
     expect(screen.queryByRole('button', { name: 'OLDER NOTICES' })).toBeNull();
+  });
+});
+
+describe('Rules: scoring (§6.8)', () => {
+  it('describes each stat in plain words from the engine’s values', async () => {
+    const { describeStat } = await import('./Help');
+    const r = (label: string, centipoints: number) => ({ stat: 'x', label, group: 'Passing' as const, centipoints });
+    expect(describeStat(r('Passing yards', 4))).toBe('1 point per 25 yards');
+    expect(describeStat(r('Rushing yards', 10))).toBe('1 point per 10 yards');
+    expect(describeStat(r('Reception', 50))).toBe('+0.5 each');
+    expect(describeStat(r('Receiving TD', 600))).toBe('+6 each');
+    expect(describeStat(r('Fumble lost', -200))).toBe('−2 each');
+    expect(describeStat(r('Field goal missed', 0))).toBe('0');
   });
 });

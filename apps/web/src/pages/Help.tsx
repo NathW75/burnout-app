@@ -1,7 +1,10 @@
 /** The rules in plain language (PRD-007 §6.8). */
 import { useEffect, type ReactNode } from 'react';
 import { useLocation } from 'react-router';
-import { SectionTitle, TabPage, useScreen } from '../components/layout';
+import { useScoringRules } from '../api/hooks';
+import type { ScoringRules } from '../api/types';
+import { ErrorNote, Loading, SectionTitle, TabPage, useScreen } from '../components/layout';
+import { errorText } from '../lib/errors';
 
 function Rule({ id, title, children }: { id: string; title: string; children: ReactNode }) {
   return (
@@ -47,6 +50,9 @@ export function HelpPage() {
       <Rule id="disruptions" title="CANCELED OR POSTPONED GAMES">
         <p>A canceled game’s picks are voided and nobody is burned. If a game is postponed after it locked, Burnout League follows the published disruption rules; you’ll get a notice about any slot that reopens.</p>
       </Rule>
+      <Rule id="scoring" title="SCORING">
+        <Scoring />
+      </Rule>
       <Rule id="gates" title="CONFIRMING A LINEUP">
         <p>Every lineup goes through three steps: review it, tick the three acknowledgments, then press and hold to confirm. Our server timestamps each step, and you get a receipt.</p>
         <p id="terms">The acknowledgments summarize the Terms. The Terms are the final word.</p>
@@ -61,5 +67,55 @@ export function HelpPage() {
         <p>Slots go in the order qb, rb1, rb2, wr1, wr2, wr3, te, flex, k, with the values shown on the receipt. The hash, written in lowercase hex, matches the receipt’s checksum.</p>
       </Rule>
     </TabPage>
+  );
+}
+
+type StatRule = ScoringRules['stats'][number];
+const GROUP_ORDER: StatRule['group'][] = ['Passing', 'Rushing', 'Receiving', 'Kicking', 'Other'];
+
+/** "1 point per 25 yards", "+6 each", "−2 each", "0". */
+export function describeStat(r: StatRule): string {
+  if (r.centipoints === 0) return '0';
+  if (/yards$/i.test(r.label)) {
+    const per = 100 / r.centipoints;
+    return Number.isInteger(per) ? `1 point per ${per} yards` : `${(r.centipoints / 100).toFixed(2)} per yard`;
+  }
+  const v = r.centipoints / 100;
+  return `${v < 0 ? '−' : '+'}${Number.isInteger(Math.abs(v)) ? Math.abs(v) : Math.abs(v).toFixed(1)} each`;
+}
+
+/**
+ * The scoring table, read from the engine's own rules through the API, so it
+ * always matches how points are actually computed (transparency: Nath,
+ * 2026-10-30). Burned players show the same breakdown on the burned roster.
+ */
+function Scoring() {
+  const rules = useScoringRules();
+  if (rules.isPending) return <Loading label="Loading scoring" />;
+  if (rules.isError) return <ErrorNote>{errorText(rules.error)}</ErrorNote>;
+  const r = rules.data;
+  return (
+    <>
+      <p>Half-PPR scoring, the same for every manager all season. Yards count to the tenth: 54 rushing yards is 5.4 points, not 5. Points can go negative (a fumble lost or an interception thrown takes points away). Totals are exact to the hundredth.</p>
+      {GROUP_ORDER.map((g) => {
+        const rows = r.stats.filter((x) => x.group === g);
+        if (!rows.length) return null;
+        return (
+          <table key={g} className="w-full border-collapse text-[14px]">
+            <caption className="pb-1 text-left font-mono text-[11px] tracking-[1px] text-muted">{g.toUpperCase()}</caption>
+            <tbody>
+              {rows.map((x) => (
+                <tr key={x.stat} className="border-t border-rule">
+                  <th scope="row" className="py-[6px] pr-3 text-left font-normal">{x.label}</th>
+                  <td className="tnum py-[6px] text-right font-mono">{describeStat(x)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        );
+      })}
+      <p>Stats are the official game stats from our data provider. If the league corrects a stat, your score updates until {r.correctionsWindowHours} hours after the week’s last game goes Final; then the week is frozen for good, and you get a notice about any correction that changes your points.</p>
+      <p>Every burned player on your Burned roster shows his stat line and exactly how it adds up. Ruleset: <span className="font-mono text-[13px]">{r.version}</span>.</p>
+    </>
   );
 }

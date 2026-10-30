@@ -1,6 +1,6 @@
 # PRD-006 — API, Accounts and Lineup Submission
 **Burnout League · packages/api**
-Version 1.18 · 2026-10-29
+Version 1.19 · 2026-10-30
 Status: APPROVED 2026-10-27 — scope and auth decisions locked by Nath (§3); rules calls Q1, Q2, Q4 resolved in v1.1
 
 ---
@@ -399,7 +399,8 @@ The user can recompute it from their email.
 | `GET /v1/seasons/:season/leaderboard?offset&limit` | Season field board: everyone with a confirmed lineup, ranked on season centipoints with `RANK()` (ties share a rank, display order by handle), my row pinned as `me`. Handles only. Cached in Redis for 30 s; `ETag` / `304` |
 | `GET /v1/seasons/:season/leaderboard/me` | My field row (or `null`) and the field size |
 | `GET /v1/seasons/:season/weeks/:week/managers/:handle/lineup` | Post-lock reveal: another manager's **locked, non-voided** slots only, filtered in SQL; the rest come back `HIDDEN` with no player. My own lineup in full (`SUBMITTED`, `LOCKED`, `VOIDED`, `EMPTY`). `LOCKED` slots carry `burned` |
-| `GET /v1/me/burns?season=` | Every burned player: week, slot, name, position, team, points, window, burned time |
+| `GET /v1/me/burns?season=` | Every burned player: week, slot, name, position, team, points, window, burned time; and (v1.19) the ruleset and score `breakdown`: each stat recorded with the centipoints it earned, adding up to the points (`null` until stats are ingested) |
+| `GET /v1/scoring/rules` | Signed in (v1.19): `{ version, stats: [{ stat, label, group, centipoints }], correctionsWindowHours }`, straight from the scoring engine's current rules |
 | `GET /v1/me/notifications?before&limit` | Inbox, newest first, with `unread`, `players` (`{ [playerId]: { name, position, team } }` for players the notices name) and `nextBefore` (an opaque time-and-id cursor; a bare timestamp is also accepted) |
 | `POST /v1/me/notifications/read` | `{ ids }` or `{ all: true }`; my items only. Read state (`read_at`) is separate from delivery (`dispatched_at`) |
 | `GET /v1/me/notification-preferences` | PRD-008 §6, §9: `{ emailNotifications, email: { locks_burns, lineup_changes, receipts }, push: { …same groups } }` (emailNotifications is on or off and doesn't affect push); no stored choice = the default (on) |
@@ -648,6 +649,7 @@ Every critical rule also gets a mutation check, as with PRD-001 to PRD-004.
 |---------|------|---------|
 | 1.7 | 2026-10-28 | §7.5: one person, one player. Duplicate MSF IDs for the same person become aliases of one kept ID; aliases can't be picked (DB-enforced); burns and stats follow the person; admin review and override. Roster sync also runs at worker startup. |
 | 1.8 | 2026-10-28 | §11: scoring works newest week first, retries a refused MSF read once, and skips only the week whose feed stays refused. |
+| 1.19 | 2026-10-30 | `/me/burns` adds each burn's ruleset and score breakdown; new `GET /v1/scoring/rules` from the engine (transparency, Nath). |
 | 1.18 | 2026-10-29 | §11: every MSF read asks for the full feed (`force=true`); bad-body log lines carry the HTTP status, content type and size. |
 | 1.17 | 2026-10-29 | §11: an empty or cut-off MSF body is retried once and then skips only that week, like a refused feed (it crashed a live scoring run on TNF). |
 | 1.16 | 2026-10-29 | §9.1: open slots may be left empty (Nath: the manager's call, with a warning); `null` empties a slot and removes an open pick, an omitted slot keeps its pick, `LINEUP_EMPTY` for a lineup with nothing in it. |

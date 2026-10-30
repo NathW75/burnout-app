@@ -175,6 +175,12 @@ export function buildRouter(ctx: ApiContext): Router {
     res.json({ handle: req.body.handle });
   }));
 
+  // The scoring table, straight from the engine's rules (PRD-007 §6.8 SCORING). Signed in, like every rules screen.
+  r.get('/scoring/rules', ah(async (req, res) => {
+    session(req);
+    res.set('Cache-Control', 'private, max-age=3600').json(views.scoringRules());
+  }));
+
   r.get('/me/burns', ah(async (req, res) => {
     const season = seasonSchema.default(ctx.config.currentSeason).parse(req.query.season);
     res.json({ season, burns: await views.myBurns(ctx, session(req).userId, season) });

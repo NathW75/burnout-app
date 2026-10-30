@@ -269,6 +269,53 @@ describeDbRedis('PRD-007 §8 web app API additions (HTTP, Postgres + Redis)', ()
     expect(bobs).toEqual(['wrKC']); // bob's rb1 (rbSF) plays later; amy's burns are not his
   });
 
+  it('§8.3 GET /me/burns shows the stat line behind each burned player’s points, adding up to the total (transparency, Nath 2026-10-30)', async () => {
+    const amy = await account(w);
+    await confirmed(amy);
+    await fireLocks(new Date(WINDOWS.tnf.getTime() + 30_000));
+    await w.t.sql(`UPDATE nfl_games SET is_final = true, played_status = 'COMPLETED' WHERE msf_game_id = 'g-tnf'`);
+    w.clock.set(new Date(WINDOWS.tnf.getTime() + 4 * 3600_000));
+    await evaluateAndCommitBurns({ gameWindowId: win.tnf, finalMsfGameIds: ['g-tnf'] }, burnDeps());
+    await w.t.sql(`INSERT INTO season_rules (season, rules_version, pinned_at) VALUES ($1, 'yahoo-half-ppr-v1', now()) ON CONFLICT DO NOTHING`, [SEASON]);
+    // Ray Dent's game: 54 rushing yards and a TD, 3 catches for 22 yards, one fumble lost.
+    const [{ id: statsId }] = await w.t.sql<{ id: string }>(
+      `INSERT INTO player_game_stats (season, week, msf_game_id, player_id, game_window_id, rush_yds, rush_td, receptions, rec_yds, fumbles_lost, stat_hash, source_updated_at, ingested_at)
+       VALUES ($1, 8, 'g-tnf', 'rbDEN', $2, 54, 1, 3, 22, 1, repeat('a', 64), now(), now()) RETURNING id::text AS id`,
+      [SEASON, win.tnf]
+    );
+    await w.t.sql(
+      `INSERT INTO player_game_scores (stats_id, season, week, msf_game_id, player_id, game_window_id, points_x100, status, rules_version, computed_at)
+       VALUES ($1, $2, 8, 'g-tnf', 'rbDEN', $3, 1310, 'final', 'yahoo-half-ppr-v1', now())`,
+      [statsId, SEASON, win.tnf]
+    );
+    const burns = (await amy.client.get('/v1/me/burns')).body.burns as Array<{ playerId: string; pointsX100: number; rulesVersion: string | null; breakdown: Array<{ stat: string; label: string; value: number; pointsX100: number }> | null }>;
+    const ray = burns.find((b) => b.playerId === 'rbDEN')!;
+    expect(ray.pointsX100).toBe(1310);
+    expect(ray.rulesVersion).toBe('yahoo-half-ppr-v1');
+    expect(ray.breakdown).toEqual([
+      { stat: 'rushYds', label: 'Rushing yards', value: 54, pointsX100: 540 },
+      { stat: 'rushTd', label: 'Rushing TD', value: 1, pointsX100: 600 },
+      { stat: 'receptions', label: 'Reception', value: 3, pointsX100: 150 },
+      { stat: 'recYds', label: 'Receiving yards', value: 22, pointsX100: 220 },
+      { stat: 'fumblesLost', label: 'Fumble lost', value: 1, pointsX100: -200 },
+    ]);
+    expect(ray.breakdown!.reduce((t, l) => t + l.pointsX100, 0)).toBe(ray.pointsX100); // the lines add up
+    // A burn with no stats ingested yet says so (null), rather than showing an empty breakdown.
+    expect(burns.find((b) => b.playerId === 'wrKC')!.breakdown).toBeNull();
+  });
+
+  it('GET /scoring/rules: the engine’s own table (signed in), every stat with its value', async () => {
+    const amy = await account(w);
+    expect((await new Client(w).get('/v1/scoring/rules')).status).toBe(401);
+    const res = await amy.client.get('/v1/scoring/rules');
+    expect(res.status).toBe(200);
+    expect(res.body.version).toBe('yahoo-half-ppr-v1');
+    expect(res.body.correctionsWindowHours).toBe(48);
+    const by = Object.fromEntries(res.body.stats.map((x: { stat: string; centipoints: number }) => [x.stat, x.centipoints]));
+    expect(by).toMatchObject({ passYds: 4, passTd: 400, passInt: -100, rushYds: 10, rushTd: 600, receptions: 50, recYds: 10, recTd: 600, fumblesLost: -200, xpMade: 100, fgMade50Plus: 500 });
+    expect(res.body.stats).toHaveLength(18);
+  });
+
   it('§8.3 inbox: newest first with unread count, paging, mark some or all read; another user\'s ids are untouched', async () => {
     const amy = await account(w);
     const bob = await account(w);

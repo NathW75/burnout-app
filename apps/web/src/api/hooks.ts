@@ -6,7 +6,7 @@ import { keepPreviousData, QueryCache, QueryClient, useInfiniteQuery, useMutatio
 import { useEffect, useRef } from 'react';
 import { serverClock } from '../lib/clock';
 import { api, ApiError } from './client';
-import type { Burn, FieldBoard, FieldMe, GameWindow, Lineup, Me, Notifications, Pool, Receipt, Reveal, SeasonCurrent } from './types';
+import type { Burn, FieldBoard, FieldMe, GameWindow, Lineup, Me, Notifications, Pool, Receipt, Reveal, ScoringRules, SeasonCurrent } from './types';
 
 export const qk = {
   me: ['me'] as const,
@@ -21,7 +21,13 @@ export const qk = {
   notifications: ['notifications'] as const,
   inbox: ['notifications', 'inbox'] as const,
   receipt: (id: string) => ['receipt', id] as const,
+  scoringRules: ['scoringRules'] as const,
 };
+
+/** The scoring table, from the engine's rules (the rules page's SCORING section). Fixed for the season. */
+export function useScoringRules() {
+  return useQuery({ queryKey: qk.scoringRules, queryFn: () => api<ScoringRules>('/scoring/rules'), staleTime: Infinity });
+}
 
 /** Sign-up and session state live in GET /me; these codes mean it changed under us. */
 const ACCOUNT_STATE_CODES = new Set(['MFA_ENROLLMENT_REQUIRED', 'EMAIL_UNVERIFIED', 'UNAUTHENTICATED']);

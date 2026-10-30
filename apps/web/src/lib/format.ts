@@ -42,6 +42,10 @@ export function countdown(msLeft: number, target: Date | string): string {
 
 /** Centipoints to "18.4"; one decimal, as the app shows points. */
 export const points = (x100: number) => (x100 / 100).toFixed(1);
+/** Exact, as the engine scores (hundredths): for breakdowns, where lines must visibly add up. */
+export const pointsExact = (x100: number) => (x100 / 100).toFixed(2);
+/** Signed and exact: +5.40, −2.00 (a real minus sign). */
+export const pointsSigned = (x100: number) => `${x100 < 0 ? '−' : '+'}${(Math.abs(x100) / 100).toFixed(2)}`;
 
 /** "C. Ellery" from "Cole Ellery": compact names for tight rows. */
 export function shortName(name: string | null): string {

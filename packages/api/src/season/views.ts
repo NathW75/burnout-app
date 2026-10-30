@@ -6,6 +6,7 @@
  * another manager's unlocked pick never leaves Postgres (PRD-003 §6).
  */
 import { createHash } from 'node:crypto';
+import { CURRENT_RULES, RULES_BY_VERSION, scoreBreakdown, STAT_FIELDS, STAT_GROUPS, STAT_LABELS, type StatLine } from '@burnout/scoring-engine';
 import type { ApiContext } from '../context';
 import { HttpError, notFound } from '../errors';
 
@@ -191,26 +192,58 @@ export async function fieldReveal(ctx: ApiContext, viewer: string, season: strin
 
 // ── §8.3 burns, inbox, receipts ─────────────────────────────────────────────
 
+type StatRow = Record<(typeof STAT_COLUMNS)[number][1], number | null>;
+/** player_game_stats column → StatLine field. */
+const STAT_COLUMNS = [
+  ['passYds', 'pass_yds'], ['passTd', 'pass_td'], ['passInt', 'pass_int'], ['rushYds', 'rush_yds'], ['rushTd', 'rush_td'],
+  ['receptions', 'receptions'], ['recYds', 'rec_yds'], ['recTd', 'rec_td'], ['returnTd', 'return_td'], ['fumbleRecTd', 'fumble_rec_td'],
+  ['fumblesLost', 'fumbles_lost'], ['twoPt', 'two_pt'], ['fgMade0to39', 'fg_made_0_39'], ['fgMade40to49', 'fg_made_40_49'],
+  ['fgMade50Plus', 'fg_made_50_plus'], ['fgMissed', 'fg_missed'], ['xpMade', 'xp_made'], ['xpMissed', 'xp_missed'],
+] as const;
+
+/**
+ * Burned players with the points they scored and, for transparency (Nath,
+ * 2026-10-30), the stat line behind those points: each stat with what it
+ * earned under the ruleset that scored it. The lines add up to the total.
+ */
 export async function myBurns(ctx: ApiContext, userId: string, season: string) {
   const rows = await ctx.db.query<{
     week: number; slot_key: string | null; player_id: string; name: string | null; position: string | null; team: string | null;
-    points_x100: number | null; burned_at: Date; window_label: string;
-  }>(
+    points_x100: number | null; rules_version: string | null; has_stats: boolean; burned_at: Date; window_label: string;
+  } & StatRow>(
     `SELECT b.week, s.slot_key, b.player_id, p.first_name || ' ' || p.last_name AS name, p.position, p.team,
-            sc.points_x100, b.burned_at, w.label AS window_label
+            sc.points_x100, sc.rules_version, st.id IS NOT NULL AS has_stats, b.burned_at, w.label AS window_label,
+            ${STAT_COLUMNS.map(([, c]) => `st.${c}`).join(', ')}
        FROM burn_records b
        JOIN game_windows w ON w.id = b.game_window_id
        LEFT JOIN season_submissions s ON s.id = b.submission_id
        LEFT JOIN nfl_players p ON p.msf_player_id = b.player_id
        LEFT JOIN player_game_scores sc ON sc.season = b.season AND sc.player_id = b.player_id AND sc.game_window_id = b.game_window_id
+       LEFT JOIN player_game_stats st ON st.id = sc.stats_id
       WHERE b.user_id = $1::uuid AND b.season = $2
       ORDER BY b.burned_at, b.week`,
     [userId, season]
   );
-  return rows.map((r) => ({
-    week: r.week, slot: r.slot_key, playerId: r.player_id, name: r.name, position: r.position, team: r.team,
-    pointsX100: r.points_x100 ?? 0, burnedAt: r.burned_at, windowLabel: r.window_label,
-  }));
+  return rows.map((r) => {
+    const rules = (r.rules_version && RULES_BY_VERSION[r.rules_version]) || CURRENT_RULES;
+    const line = Object.fromEntries(STAT_COLUMNS.map(([f, c]) => [f, Number(r[c] ?? 0)])) as unknown as StatLine;
+    return {
+      week: r.week, slot: r.slot_key, playerId: r.player_id, name: r.name, position: r.position, team: r.team,
+      pointsX100: r.points_x100 ?? 0, burnedAt: r.burned_at, windowLabel: r.window_label,
+      rulesVersion: r.rules_version ?? null,
+      breakdown: r.has_stats ? scoreBreakdown(line, rules) : null,
+    };
+  });
+}
+
+/** The scoring rules as the engine applies them, for the rules page (never a hand-copied table). */
+export function scoringRules() {
+  const rules = CURRENT_RULES;
+  return {
+    version: rules.version,
+    stats: STAT_FIELDS.map((f) => ({ stat: f, label: STAT_LABELS[f], group: STAT_GROUPS[f], centipoints: rules.centipointsPer[f] })),
+    correctionsWindowHours: 48,
+  };
 }
 
 /** Player ids a notice names: `playerId`, or each of `players[].playerId` (LOCK, BURN). */

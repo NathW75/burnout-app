@@ -1,6 +1,6 @@
 # PRD-007 — Web App (Player Portal)
 **Burnout League · apps/web**
-*Status: v1.17 — **APPROVED 2026-10-27** (Nath), decisions Q1–Q7 in §14; mockups approved on the landing-page design system (§11); API additions (§8) built; web app patch (a) built; patch (b) built 2026-10-28 in two parts (standings, burned roster, inbox; then account, feedback, light theme). Phase A screens complete. Push notifications (PRD-008 §9) built 2026-10-28. Patch (c) (tester feedback: position filter, bottom nav on every screen, player stat columns) specced and built 2026-10-28.*
+*Status: v1.18 — **APPROVED 2026-10-27** (Nath), decisions Q1–Q7 in §14; mockups approved on the landing-page design system (§11); API additions (§8) built; web app patch (a) built; patch (b) built 2026-10-28 in two parts (standings, burned roster, inbox; then account, feedback, light theme). Phase A screens complete. Push notifications (PRD-008 §9) built 2026-10-28. Patch (c) (tester feedback: position filter, bottom nav on every screen, player stat columns) specced and built 2026-10-28.*
 *Author: Build thread · 2026-10-27*
 
 ---
@@ -270,7 +270,9 @@ Both modes use the same column set. The toggle label shows the active mode and u
 
 ### 6.4 Burned roster
 
-Every burned player, grouped by week (newest week first; within a week, in the order they burned): slot, name, position and team, the window he burned in, and his points. A summary shows how many have burned and the points they scored. It's read-only reflection. Charts are Phase B.
+Every burned player, grouped by week (newest week first; within a week, in the order they burned): slot, name, position and team, the window he burned in, and his points.
+
+**Score breakdown (v1.18, Nath 2026-10-30: "maximum transparency to tackle disputes before they become disputes"):** under each burned player, his stat line and what each stat earned, adding up to his total (e.g. Rushing yards 54 +5.40 · Rushing TD 1 +6.00 · Fumble lost 1 −2.00 = 9.40), with a link to the SCORING rules. Points on this screen are exact to the hundredth, as the engine scores them, so the lines visibly add up. Until the stats feed has his game: "Stat line on its way from the stats feed." A summary shows how many have burned and the points they scored. It's read-only reflection. Charts are Phase B.
 
 ### 6.5 Standings
 
@@ -302,6 +304,7 @@ In-app notices from the same events that queue emails, newest first, 30 at a tim
 
 The rules page explains the burn, lock at scheduled kickoff, empty slots, Out/IR, team changes mid-week, cancellations and postponements, free play, and the Week 3 cutoff. It's linked from every screen that mentions a rule.
 
+- **SCORING (v1.18):** the full table (passing, rushing, receiving, kicking, other) in plain words ("1 point per 25 yards", "+6 each", "−2 each"), read from the engine's rules through `GET /v1/scoring/rules`, never hand-copied, so it can't drift; fractional yards, negative points, exact to the hundredth; stat corrections until 48 hours after the week's last game goes Final, then frozen; the ruleset name.
 - **It's never too late (v1.14, Nath 2026-10-29):** a lineup can be set or changed any time a game hasn't started, including after Thursday night; any slot takes any eligible player whose game hasn't locked. The later you are, the fewer games are left (by Monday, only Monday night's players). Tested in the API (a new manager confirms a full lineup after the Thursday lock) and on the page. (Free play and the Week 3 cutoff are off the page while testing, §5.8.)
 
 ---
@@ -343,7 +346,7 @@ These endpoints follow PRD-006 conventions (session auth, `/v1`, zod validation,
 
 ### 8.3 Burns, inbox, receipts
 
-- `GET /v1/me/burns`: `[{ week, slot, playerId, name, position, team, pointsX100, burnedAt, windowLabel }]`.
+- `GET /v1/me/burns`: `[{ week, slot, playerId, name, position, team, pointsX100, burnedAt, windowLabel, rulesVersion, breakdown }]` (`breakdown` v1.18: the stat line with each stat's points, adding up to `pointsX100`; `null` until ingested). `GET /v1/scoring/rules` serves the engine's table for the rules page.
 - `GET /v1/me/notifications?before&limit` (with `unread`, `players` and `nextBefore`) and `POST /v1/me/notifications/read` (`{ ids }` or `{ all: true }`, the caller's items only). A new `read_at` column on `notification_queue`; delivery state (`dispatched_at`) stays separate from read state.
   - `players` (v1.5): `{ [playerId]: { name, position, team } }` for every player the returned notices name, so the inbox can say who locked or burned.
   - `nextBefore` (v1.5) is an opaque cursor (time and id). Several notices can share a timestamp, so a time-only cursor could skip one at a page edge. A bare timestamp is still accepted.
@@ -599,6 +602,7 @@ Depends on: PRD-001, PRD-003, PRD-004 (Phase B), PRD-006, `SPEC-feedback-system.
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.18 | 2026-10-30 | §6.4: burned players show their stat line and how it adds up (exact points). §6.8: SCORING section from the engine's rules. Transparency (Nath). |
 | 1.17 | 2026-10-29 | §6.2: light-mode tiles go vivid (Nath): penalty-flag yellow #FFC400 30% for locked, pure red #FF0033 18% for burned; dark unchanged; tile colors are tokens. |
 | 1.16 | 2026-10-29 | §6.2: burned lineup tiles red-tinted like locked tiles are amber (new `--color-burnt` text token for contrast). §9: a new notice refreshes lineup, windows, burns and boards, so burns appear within about a minute without a reload. |
 | 1.15 | 2026-10-29 | §6.3: open slots may be left empty (Nath); the builder warns instead of blocking, Gate 1 shows an empty-slot warning, rules page updated (PRD-006 §9.1 v1.16). |
