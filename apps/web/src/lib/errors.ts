@@ -23,6 +23,8 @@ const MESSAGES: Record<string, string> = {
   MFA_ENROLLMENT_REQUIRED: 'Set up your authenticator to continue.',
   STEP_UP_REQUIRED: 'Confirm with a code from your authenticator.',
   WEEK_CLOSED: 'Every game window this week has locked. The next week opens once this week’s last game is final.',
+  NO_ACCOUNT: 'No account with that email yet. They need to finish signing up first.',
+  ALREADY_ADMIN: 'That account is an admin: it can already make codes.',
   WEEK_NOT_OPEN: 'That week isn’t open yet. It opens once this week’s last game is final.',
   PAID_ENTRY_REQUIRED: 'Lineups are closed for the rest of this season.',
   LINEUP_EMPTY: 'Pick at least one player to confirm a lineup.',

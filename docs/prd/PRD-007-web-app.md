@@ -1,6 +1,6 @@
 # PRD-007 — Web App (Player Portal)
 **Burnout League · apps/web**
-*Status: v1.19 — **APPROVED 2026-10-27** (Nath), decisions Q1–Q7 in §14; mockups approved on the landing-page design system (§11); API additions (§8) built; web app patch (a) built; patch (b) built 2026-10-28 in two parts (standings, burned roster, inbox; then account, feedback, light theme). Phase A screens complete. Push notifications (PRD-008 §9) built 2026-10-28. Patch (c) (tester feedback: position filter, bottom nav on every screen, player stat columns) specced and built 2026-10-28.*
+*Status: v1.20 — **APPROVED 2026-10-27** (Nath), decisions Q1–Q7 in §14; mockups approved on the landing-page design system (§11); API additions (§8) built; web app patch (a) built; patch (b) built 2026-10-28 in two parts (standings, burned roster, inbox; then account, feedback, light theme). Phase A screens complete. Push notifications (PRD-008 §9) built 2026-10-28. Patch (c) (tester feedback: position filter, bottom nav on every screen, player stat columns) specced and built 2026-10-28.*
 *Author: Build thread · 2026-10-27*
 
 ---
@@ -92,7 +92,7 @@ The server is the authority for every rule. The web app never decides a lock, a 
 
 ### 6.1 Sign up, verify, sign in
 
-- **Sign up:** email, password (PRD-006 length rules), handle. It always shows "check your email" (the API answers 202 either way). Cloudflare Turnstile is on the form (Q6). While sign-up is invite-only (PRD-006 §6.10), the form also asks for the invite code, filled in from the invite link; admins make codes under Account → Admin → Invites.
+- **Sign up:** email, password (PRD-006 length rules), handle. It always shows "check your email" (the API answers 202 either way). Cloudflare Turnstile is on the form (Q6). While sign-up is invite-only (PRD-006 §6.10), the form also asks for the invite code, filled in from the invite link; admins make codes under Account → Admin → Invites. **Invite helpers (v1.20, Nath 2026-10-30):** an admin adds helpers by account email in an INVITE HELPERS section on that page (they must have signed up). A helper sees Account → Testers → Invites only (no Feedback), with just the codes they made; the admin's list shows "by <handle>" on codes a helper made.
 - **Verify:** the link opens `/verify?token=…`, which calls the API and then signs in.
 - **Sign in:** password, then a code (TOTP or backup code). Every account has a factor (§6.1.1). A "remember this device" option is out of scope.
 - **Reset password:** request, email link, set new password. Afterward, other sessions are signed out (the API does this).
@@ -602,6 +602,7 @@ Depends on: PRD-001, PRD-003, PRD-004 (Phase B), PRD-006, `SPEC-feedback-system.
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.20 | 2026-10-30 | Invite helpers: Account → Testers → Invites for a helper (no Feedback, their own codes only); INVITE HELPERS section for the admin to add and remove them; "by <handle>" on helper-made codes. |
 | 1.19 | 2026-10-30 | §8.2: the week turns over when its last game is final (Nath), not at its last lock, with a safety net; Standings' WEEK column follows. This Week says "WEEK N LINEUPS OPEN ONCE THIS WEEK'S LAST GAME IS FINAL" while a locked game is still to go Final; a new notice also refreshes the current week, so the switch shows without a reload. |
 | 1.18 | 2026-10-30 | §6.4: burned players show their stat line and how it adds up (exact points). §6.8: SCORING section from the engine's rules. Transparency (Nath). |
 | 1.17 | 2026-10-29 | §6.2: light-mode tiles go vivid (Nath): penalty-flag yellow #FFC400 30% for locked, pure red #FF0033 18% for burned; dark unchanged; tile colors are tokens. |

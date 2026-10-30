@@ -186,6 +186,15 @@ export function adminSession(ctx: ApiContext, req: Request): SessionInfo {
   return s;
 }
 
+/** Sign-up codes (PRD-006 §6.10): an admin, or an invite helper (recruiter, Nath 2026-10-30). Same factor and step-up rules. */
+export function inviterSession(ctx: ApiContext, req: Request): SessionInfo {
+  const s = session(req);
+  if (s.role !== 'admin' && s.role !== 'recruiter') throw forbidden();
+  if (!s.hasFactor) throw forbidden('MFA_ENROLLMENT_REQUIRED', 'Set up two-factor authentication first');
+  if (!hasFreshStepUp(ctx, s)) throw forbidden('STEP_UP_REQUIRED', 'Confirm with your second factor');
+  return s;
+}
+
 export function body<T extends ZodTypeAny>(schema: T, req: Request): z.infer<T> {
   return schema.parse(req.body ?? {});
 }

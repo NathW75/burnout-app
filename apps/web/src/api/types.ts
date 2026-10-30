@@ -7,7 +7,8 @@ export interface Me {
   id: string;
   email: string;
   handle: string | null;
-  role: 'user' | 'admin';
+  /** recruiter: an invite helper, who makes sign-up codes and nothing else admin. */
+  role: 'user' | 'admin' | 'recruiter';
   emailVerified: boolean;
   mfaEnrolled: boolean;
   stepUpUntil: string | null;

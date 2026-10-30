@@ -115,6 +115,59 @@ describeDbRedis('PRD-006 §6.10 invite-only sign-up (HTTP, Postgres + Redis)', (
     expect(n).toBe(1);
   });
 
+  it('invite helpers (Nath, 2026-10-30): an admin lets a signed-up tester make codes; they see and revoke only their own, and nothing else admin', async () => {
+    // Not signed up yet: nothing to grant.
+    expect((await admin.client.post('/v1/admin/helpers', { email: 'mike@example.com' })).body.error).toBe('NO_ACCOUNT');
+    const inv = await invite({ email: 'mike@example.com' });
+    expect((await signup('mike@example.com', 'mike', inv.code)).status).toBe(202);
+    w.ctx.config.signupInviteOnly = false;
+    const mike = await account(w, { handle: 'mike2' }); // a signed-in account to act as the helper (TOTP enrolled)
+    const pat = await account(w, { handle: 'pat' });
+    w.ctx.config.signupInviteOnly = true;
+    expect((await mike.client.post('/v1/admin/invites', {})).status).toBe(403); // not a helper yet
+
+    const added = await admin.client.post('/v1/admin/helpers', { email: 'Mike2@Example.com' });
+    expect(added.status).toBe(201);
+    expect(added.body).toMatchObject({ id: mike.userId, handle: 'mike2' });
+    expect((await admin.client.get('/v1/admin/helpers')).body.helpers.map((h: { handle: string }) => h.handle)).toEqual(['mike2']);
+    expect((await admin.client.post('/v1/admin/helpers', { email: admin.email })).body.error).toBe('ALREADY_ADMIN');
+    expect((await pat.client.post('/v1/admin/helpers', { email: pat.email })).status).toBe(403); // only an admin chooses helpers
+
+    // The helper needs a fresh code like an admin; the role applies at once (no waiting out the session cache).
+    expect((await mike.client.post('/v1/admin/invites', {})).body.error).toBe('STEP_UP_REQUIRED');
+    await stepUp(w, mike);
+    const mine = await mike.client.post('/v1/admin/invites', { email: 'friend@example.com', note: 'my league', send: true });
+    expect(mine.status).toBe(201);
+    expect(mine.body.emailed).toBe(true);
+    const seen = (await mike.client.get('/v1/admin/invites')).body.invites;
+    expect(seen.map((i: { id: string }) => i.id)).toEqual([mine.body.id]); // only theirs: not the admin's codes or notes
+    expect(seen[0].madeBy).toBeNull();
+    const adminCode = await invite({ note: 'boss only' });
+    expect((await mike.client.post(`/v1/admin/invites/${adminCode.id}/revoke`)).status).toBe(404); // can't touch the admin's
+    // Everything else admin stays closed: feedback, helpers, users, pools.
+    expect((await mike.client.get('/v1/admin/feedback')).status).toBe(403);
+    expect((await mike.client.get('/v1/admin/helpers')).status).toBe(403);
+    expect((await mike.client.post('/v1/admin/helpers', { email: pat.email })).status).toBe(403);
+    expect((await mike.client.post(`/v1/admin/users/${pat.userId}/suspend`, { reason: 'test' })).status).toBe(403);
+    expect((await mike.client.get('/v1/admin/integrity')).status).toBe(403);
+
+    // The admin sees every code, with who made it.
+    const all = (await admin.client.get('/v1/admin/invites')).body.invites as Array<{ id: string; madeBy: string | null }>;
+    expect(all.find((i) => i.id === mine.body.id)?.madeBy).toBe('mike2');
+    expect(all.find((i) => i.id === adminCode.id)?.madeBy).toBeNull();
+    // The friend signs up with the helper's code.
+    expect((await signup('friend@example.com', 'friend', mine.body.code)).status).toBe(202);
+
+    // Removed: access ends on the next request; codes already sent keep working.
+    const another = await mike.client.post('/v1/admin/invites', {});
+    expect((await admin.client.post(`/v1/admin/helpers/${mike.userId}/remove`)).body).toEqual({ removed: true });
+    expect((await mike.client.get('/v1/admin/invites')).status).toBe(403);
+    expect((await admin.client.post(`/v1/admin/helpers/${mike.userId}/remove`)).status).toBe(404);
+    expect((await signup('later@example.com', 'later', another.body.code)).status).toBe(202);
+    const actions = (await w.t.sql<{ a: string }>(`SELECT metadata->>'action' AS a FROM security_audit_log WHERE user_id = $1 AND metadata->>'action' LIKE 'INVITE_HELPER%' ORDER BY performed_at`, [mike.userId])).map((r) => r.a);
+    expect(actions).toEqual(['INVITE_HELPER_ADDED', 'INVITE_HELPER_REMOVED']);
+  });
+
   it('send: emails the code and its sign-up link to their address, once; the emailed code signs them up', async () => {
     const res = await admin.client.post('/v1/admin/invites', { email: 'Sam@Example.com', note: 'Sam', send: true });
     expect(res.status).toBe(201);

@@ -18,7 +18,7 @@ import * as devices from '../notify/devices';
 import * as notifyPrefs from '../notify/preferences';
 import { notifyStats } from '../notify/dispatcher';
 import { verifyUnsubscribeToken } from '../notify/unsubscribe';
-import { adminSession, ah, body, enrollmentGate, enrollmentSession, financialSession, ipRateLimit, pendingSession, session } from './middleware';
+import { adminSession, ah, body, enrollmentGate, enrollmentSession, financialSession, inviterSession, ipRateLimit, pendingSession, session } from './middleware';
 
 const email = z.string().trim().email().max(254);
 const uuid = z.string().uuid();
@@ -495,7 +495,7 @@ export function buildRouter(ctx: ApiContext): Router {
 
   // ── invites (PRD-006 §6.10) ────────────────────────────────────────────
   r.post('/admin/invites', ah(async (req, res) => {
-    const s = adminSession(ctx, req);
+    const s = inviterSession(ctx, req);
     const b = body(z.object({
       email: email.nullable().optional(),
       note: z.string().trim().max(200).nullable().optional(),
@@ -507,14 +507,32 @@ export function buildRouter(ctx: ApiContext): Router {
   }));
 
   r.get('/admin/invites', ah(async (req, res) => {
-    adminSession(ctx, req);
-    res.json({ inviteOnly: ctx.config.signupInviteOnly, invites: await invites.listInvites(ctx) });
+    const s = inviterSession(ctx, req);
+    res.json({ inviteOnly: ctx.config.signupInviteOnly, invites: await invites.listInvites(ctx, s) });
   }));
 
   r.post('/admin/invites/:id/revoke', ah(async (req, res) => {
-    const s = adminSession(ctx, req);
+    const s = inviterSession(ctx, req);
     if (!(await invites.revokeInvite(ctx, s, uuid.parse(req.params.id)))) throw notFound('No active invite with that id');
     res.json({ revoked: true });
+  }));
+
+  // Invite helpers (v1.21): admin only.
+  r.get('/admin/helpers', ah(async (req, res) => {
+    adminSession(ctx, req);
+    res.json({ helpers: await invites.listHelpers(ctx) });
+  }));
+
+  r.post('/admin/helpers', ah(async (req, res) => {
+    const s = adminSession(ctx, req);
+    const b = body(z.object({ email }).strict(), req);
+    res.status(201).json(await invites.addHelper(ctx, s, b.email));
+  }));
+
+  r.post('/admin/helpers/:id/remove', ah(async (req, res) => {
+    const s = adminSession(ctx, req);
+    if (!(await invites.removeHelper(ctx, s, uuid.parse(req.params.id)))) throw notFound('No invite helper with that id');
+    res.json({ removed: true });
   }));
 
   r.get('/admin/notifications/stats', ah(async (req, res) => {

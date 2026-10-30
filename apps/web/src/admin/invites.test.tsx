@@ -74,6 +74,7 @@ describe('admin invites', () => {
     let invites: Array<Record<string, unknown>> = [{ id: 'i1', email: null, note: 'old', createdAt: '2026-10-27T12:00:00Z', expiresAt: null, usedAt: '2026-10-28T13:53:00Z', usedBy: 'Watty18', status: 'used' }];
     const calls = mockApi({
       'GET /me': { body: me() },
+      'GET /admin/helpers': { body: { helpers: [] } },
       'GET /admin/invites': () => ({ body: { inviteOnly: true, invites } }),
       'POST /admin/invites': (init) => {
         const b = JSON.parse(String(init!.body));
@@ -101,6 +102,7 @@ describe('admin invites', () => {
     let emailed = true;
     const calls = mockApi({
       'GET /me': { body: me() },
+      'GET /admin/helpers': { body: { helpers: [] } },
       'GET /admin/invites': { body: { inviteOnly: true, invites: [] } },
       'POST /admin/invites': (init) => {
         const b = JSON.parse(String(init!.body));
@@ -133,6 +135,51 @@ describe('admin invites', () => {
     vi.unstubAllGlobals();
     mockApi({ 'GET /me': { body: me('user') } });
     renderAt('/admin/invites', <InvitesPage />);
-    expect(await screen.findByText('Only an admin can manage invites.')).toBeInTheDocument();
+    expect(await screen.findByText('Only an admin or an invite helper can make sign-up codes.')).toBeInTheDocument();
+  });
+
+  it('an invite helper (Nath, 2026-10-30) makes codes and sees their own; no helpers section, nothing else admin', async () => {
+    const calls = mockApi({
+      'GET /me': { body: me('recruiter') },
+      'GET /admin/invites': { body: { inviteOnly: true, invites: [{ id: 'm1', email: 'pal@example.com', note: 'league', createdAt: '2026-10-30T19:00:00Z', expiresAt: null, usedAt: null, usedBy: null, status: 'active', madeBy: null }] } },
+    });
+    renderAt('/admin/invites', <InvitesPage />);
+    expect(await screen.findByText(/You see the codes you made\./)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /YOUR INVITES/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'MAKE CODE' })).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Invite helpers' })).toBeNull();
+    expect(screen.queryByText(/INVITE HELPERS/)).toBeNull();
+    expect(calls.some((c) => c.path === '/admin/helpers')).toBe(false);
+  });
+
+  it('the admin chooses invite helpers (signed-up accounts only), removes them, and sees who made each code', async () => {
+    let helpers: Array<{ id: string; email: string; handle: string | null }> = [];
+    const calls = mockApi({
+      'GET /me': { body: me() },
+      'GET /admin/invites': { body: { inviteOnly: true, invites: [{ id: 'm1', email: null, note: null, createdAt: '2026-10-30T19:00:00Z', expiresAt: null, usedAt: null, usedBy: null, status: 'active', madeBy: 'michael' }] } },
+      'GET /admin/helpers': () => ({ body: { helpers } }),
+      'POST /admin/helpers': (init) => {
+        const b = JSON.parse(String(init!.body));
+        if (b.email !== 'michael@example.com') return { status: 404, body: { error: 'NO_ACCOUNT', message: 'x' } };
+        helpers = [{ id: 'h1', email: b.email, handle: 'michael' }];
+        return { status: 201, body: helpers[0] };
+      },
+      'POST /admin/helpers/h1/remove': () => ((helpers = []), { body: { removed: true } }),
+    });
+    renderAt('/admin/invites', <InvitesPage />);
+    const user = userEvent.setup();
+    expect(await screen.findByText(/by michael/)).toBeInTheDocument();
+    const section = screen.getByRole('region', { name: 'Invite helpers' });
+    await user.type(within(section).getByLabelText('THEIR ACCOUNT EMAIL'), 'nobody@example.com');
+    await user.click(within(section).getByRole('button', { name: 'ADD HELPER' }));
+    expect(await within(section).findByText(/No account with that email yet/)).toBeInTheDocument();
+    await user.clear(within(section).getByLabelText('THEIR ACCOUNT EMAIL'));
+    await user.type(within(section).getByLabelText('THEIR ACCOUNT EMAIL'), 'michael@example.com');
+    await user.click(within(section).getByRole('button', { name: 'ADD HELPER' }));
+    const list = await within(section).findByRole('list', { name: 'Current invite helpers' });
+    expect(within(list).getByText('michael')).toBeInTheDocument();
+    await user.click(within(list).getByRole('button', { name: 'Remove michael as an invite helper' }));
+    await waitFor(() => expect(within(section).queryByRole('list', { name: 'Current invite helpers' })).toBeNull());
+    expect(calls.filter((c) => c.method === 'POST' && c.path.startsWith('/admin/helpers')).map((c) => c.path)).toEqual(['/admin/helpers', '/admin/helpers', '/admin/helpers/h1/remove']);
   });
 });

@@ -25,7 +25,7 @@ model User {
   // PRD-006 §6
   status            String    @default("active") @db.VarChar(12)   // active | suspended
   emailNotifications String   @default("on") @map("email_notifications") @db.VarChar(3)   // on | off (PRD-008 unsubscribe)
-  role              String    @default("user") @db.VarChar(12)     // user | admin
+  role              String    @default("user") @db.VarChar(12)     // user | admin | recruiter (makes sign-up codes only)
   emailVerifiedAt   DateTime? @map("email_verified_at") @db.Timestamptz
   passwordChangedAt DateTime? @map("password_changed_at") @db.Timestamptz
   lastLoginAt       DateTime? @map("last_login_at") @db.Timestamptz

@@ -1,6 +1,6 @@
 # PRD-006 — API, Accounts and Lineup Submission
 **Burnout League · packages/api**
-Version 1.20 · 2026-10-30
+Version 1.21 · 2026-10-30
 Status: APPROVED 2026-10-27 — scope and auth decisions locked by Nath (§3); rules calls Q1, Q2, Q4 resolved in v1.1
 
 ---
@@ -198,6 +198,7 @@ While testing, sign-up can require a per-person, single-use invite code (Nath: "
 - **Rules:** a code works once; it can be tied to one email (case-insensitive); it can expire (default 14 days, 1–90, or none) and be revoked while unused. A bad, used, expired, revoked or wrong-email code is `400 INVITE_INVALID`, decided before anything about the email, so it reveals nothing about accounts. An email that already has an account gets the usual "you already have an account" email and the code is **not** spent. The code is spent in the same transaction that creates the account; two sign-ups racing for one code create one account.
 - **Admin:** `POST /v1/admin/invites { email?, note?, expiresInDays? }` → `{ id, code, link, email, expiresAt }` (the link is `/signup?invite=CODE`); `GET /v1/admin/invites` (no codes; status active, used, revoked or expired, and who used it); `POST /v1/admin/invites/:id/revoke`. Admin + step-up; creation and revocation are audited (`ADMIN_ACTION`).
 - **Send by email (v1.15, Nath 2026-10-29):** `POST /v1/admin/invites` also takes `send: true` (requires `email`). The code is emailed to that address at creation, the only moment it exists in plain text (codes are stored hashed), through the secret-carrying mailer (`invite` template: sign-up link with the code filled in, the code, its expiry ET; no click tracking; nothing financial). The response adds `emailed: true|false`. A failed send keeps the invite, so the admin can copy the link instead. Audited as `INVITE_EMAILED` or `INVITE_EMAIL_FAILED`. Resending means a new invite.
+- **Invite helpers (v1.21, Nath 2026-10-30: a tester who recruits more testers, without the admin's inbox or feedback):** role `recruiter` (`users.role` is now `user | admin | recruiter`). A helper may use the three invite routes above (same factor and step-up rules) and nothing else admin. `GET /v1/admin/invites` shows a helper only the codes they made; an admin sees all, each with `madeBy` (the maker's handle, `null` for their own). A helper can revoke only their own codes (others are a 404). Admin only, step-up: `GET /v1/admin/helpers` → `{ helpers: [{ id, email, handle }] }`; `POST /v1/admin/helpers { email }` makes a signed-up, active `user` a helper (`404 NO_ACCOUNT` before they sign up, `409 ALREADY_ADMIN`, `409 ACCOUNT_SUSPENDED`; adding an existing helper is a no-op); `POST /v1/admin/helpers/:id/remove` makes them a `user` again. Codes a removed helper already made stay valid. Both changes are audited (`INVITE_HELPER_ADDED`, `INVITE_HELPER_REMOVED`) and drop the user's session cache, so they apply on the next request. Feedback alerts still go to admins only.
 - **Web:** the sign-up form shows an "Invite code" field when invite-only and fills it from the link; Account → Admin → Invites (admins only). With an email entered, "Email the invite to them" is ticked by default and the button reads SEND INVITE; the result says SENT or shows the code to pass on.
 
 ## 7. NFL Players and Roster Sync
@@ -650,6 +651,7 @@ Every critical rule also gets a mutation check, as with PRD-001 to PRD-004.
 |---------|------|---------|
 | 1.7 | 2026-10-28 | §7.5: one person, one player. Duplicate MSF IDs for the same person become aliases of one kept ID; aliases can't be picked (DB-enforced); burns and stats follow the person; admin review and override. Roster sync also runs at worker startup. |
 | 1.8 | 2026-10-28 | §11: scoring works newest week first, retries a refused MSF read once, and skips only the week whose feed stays refused. |
+| 1.21 | 2026-10-30 | §6.10: invite helpers (role `recruiter`): make, list and revoke their own codes, nothing else admin; admin routes to add and remove them; the admin's invite list shows who made each code. |
 | 1.20 | 2026-10-30 | Week turnover at the last game Final (Nath), with a 24-hour / next-lock safety net; the field board's week follows it; `409 WEEK_NOT_OPEN`; §11: MSF 204 = post-game data not posted yet (no retry, no error, schedule import waits). |
 | 1.19 | 2026-10-30 | `/me/burns` adds each burn's ruleset and score breakdown; new `GET /v1/scoring/rules` from the engine (transparency, Nath). |
 | 1.18 | 2026-10-29 | §11: every MSF read asks for the full feed (`force=true`); bad-body log lines carry the HTTP status, content type and size. |

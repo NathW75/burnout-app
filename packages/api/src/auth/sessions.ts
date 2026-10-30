@@ -10,6 +10,9 @@ import type { ApiContext } from '../context';
 import type { SqlRunner } from '../sql';
 import { randomToken, sha256Hex } from './crypto';
 
+/** recruiter (v1.21): makes, lists and revokes their own sign-up codes; nothing else an admin can do. */
+export type Role = 'user' | 'admin' | 'recruiter';
+
 export interface SessionInfo {
   id: string;
   userId: string;
@@ -21,7 +24,7 @@ export interface SessionInfo {
   expiresAt: Date;
   email: string;
   handle: string | null;
-  role: 'user' | 'admin';
+  role: Role;
   emailVerified: boolean;
   hasFactor: boolean;
 }
@@ -29,7 +32,7 @@ export interface SessionInfo {
 interface Row {
   id: string; user_id: string; client: 'web' | 'mobile'; mfa_pending: boolean; step_up_at: Date | null;
   last_seen_at: Date; created_at: Date; expires_at: Date; revoked_at: Date | null;
-  email: string; handle: string | null; role: 'user' | 'admin'; status: string; email_verified_at: Date | null; has_factor: boolean;
+  email: string; handle: string | null; role: Role; status: string; email_verified_at: Date | null; has_factor: boolean;
 }
 
 const cacheKey = (ctx: ApiContext, tokenHash: string) => `${ctx.ns}sess:${tokenHash}`;

@@ -10,7 +10,7 @@ import type { ApiContext } from '../context';
 import { HttpError } from '../errors';
 import type { SqlRunner } from '../sql';
 import { audit } from './audit';
-import type { SessionInfo } from './sessions';
+import { invalidateUserSessions, type SessionInfo } from './sessions';
 
 /** Crockford base32 without I, L, O, U: no letters that read as digits. */
 const ALPHABET = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
@@ -92,22 +92,73 @@ export async function createInvite(ctx: ApiContext, admin: SessionInfo, opts: { 
   return { ...created, emailed };
 }
 
-export async function listInvites(ctx: ApiContext) {
-  const rows = await ctx.db.query<{ id: string; email: string | null; note: string | null; created_at: Date; expires_at: Date | null; used_at: Date | null; revoked_at: Date | null; used_by_handle: string | null }>(
-    `SELECT i.id::text AS id, i.email, i.note, i.created_at, i.expires_at, i.used_at, i.revoked_at, u.handle AS used_by_handle
-       FROM invite_codes i LEFT JOIN users u ON u.id = i.used_by ORDER BY i.created_at DESC LIMIT 200`
+/** An admin sees every invite and who made it; an invite helper sees only their own (their notes, their testers). */
+export async function listInvites(ctx: ApiContext, viewer: SessionInfo) {
+  const own = viewer.role !== 'admin';
+  const rows = await ctx.db.query<{ id: string; email: string | null; note: string | null; created_at: Date; expires_at: Date | null; used_at: Date | null; revoked_at: Date | null; used_by_handle: string | null; made_by: string | null; mine: boolean }>(
+    `SELECT i.id::text AS id, i.email, i.note, i.created_at, i.expires_at, i.used_at, i.revoked_at, u.handle AS used_by_handle,
+            c.handle AS made_by, i.created_by = $1::uuid AS mine
+       FROM invite_codes i LEFT JOIN users u ON u.id = i.used_by JOIN users c ON c.id = i.created_by
+      WHERE NOT $2::boolean OR i.created_by = $1::uuid
+      ORDER BY i.created_at DESC LIMIT 200`,
+    [viewer.userId, own]
   );
   const now = ctx.now();
   return rows.map((r) => ({
     id: r.id, email: r.email, note: r.note, createdAt: r.created_at, expiresAt: r.expires_at, usedAt: r.used_at, usedBy: r.used_by_handle,
     status: r.used_at ? 'used' : r.revoked_at ? 'revoked' : r.expires_at && r.expires_at <= now ? 'expired' : 'active',
+    madeBy: r.mine ? null : r.made_by, // only shown to an admin, for codes someone else made
   }));
 }
 
 export async function revokeInvite(ctx: ApiContext, admin: SessionInfo, id: string): Promise<boolean> {
   return ctx.db.transaction(async (tx) => {
-    const rows = await tx.query(`UPDATE invite_codes SET revoked_at = $2 WHERE id = $1::uuid AND used_at IS NULL AND revoked_at IS NULL RETURNING 1`, [id, ctx.now()]);
+    const rows = await tx.query(
+      `UPDATE invite_codes SET revoked_at = $2 WHERE id = $1::uuid AND used_at IS NULL AND revoked_at IS NULL AND ($3::boolean OR created_by = $4::uuid) RETURNING 1`,
+      [id, ctx.now(), admin.role === 'admin', admin.userId]
+    );
     if (rows.length) await audit(tx, { event: 'ADMIN_ACTION', userId: admin.userId, at: ctx.now(), metadata: { action: 'INVITE_REVOKED', inviteId: id } });
     return rows.length > 0;
+  });
+}
+
+// ── invite helpers (v1.21, Nath 2026-10-30) ──────────────────────────────────
+// An admin lets a signed-up tester make sign-up codes too (role 'recruiter'),
+// so new testers don't all come through the admin's inbox. A helper can make,
+// list and revoke only their own codes; feedback and every other admin tool stay
+// admin-only. The role is read with the session, so a change applies at once.
+
+export interface Helper { id: string; email: string; handle: string | null }
+
+export async function listHelpers(ctx: ApiContext): Promise<Helper[]> {
+  return ctx.db.query<Helper>(`SELECT id::text AS id, email, handle FROM users WHERE role = 'recruiter' ORDER BY lower(coalesce(handle, email))`);
+}
+
+export async function addHelper(ctx: ApiContext, admin: SessionInfo, rawEmail: string): Promise<Helper> {
+  const email = rawEmail.trim().toLowerCase();
+  return ctx.db.transaction(async (tx) => {
+    const [u] = await tx.query<Helper & { role: string; status: string }>(
+      `SELECT id::text AS id, email, handle, role, status FROM users WHERE email = $1 FOR UPDATE`, [email]
+    );
+    if (!u) throw new HttpError(404, 'NO_ACCOUNT', 'No account with that email yet. They need to finish signing up first.');
+    if (u.status !== 'active') throw new HttpError(409, 'ACCOUNT_SUSPENDED', 'That account is suspended');
+    if (u.role === 'admin') throw new HttpError(409, 'ALREADY_ADMIN', 'That account is an admin: it can already make codes');
+    if (u.role === 'user') {
+      await tx.query(`UPDATE users SET role = 'recruiter', updated_at = $2 WHERE id = $1::uuid`, [u.id, ctx.now()]);
+      await audit(tx, { event: 'ADMIN_ACTION', userId: u.id, performedBy: admin.userId, at: ctx.now(), metadata: { action: 'INVITE_HELPER_ADDED' } });
+      await invalidateUserSessions(ctx, tx, u.id);
+    }
+    return { id: u.id, email: u.email, handle: u.handle };
+  });
+}
+
+/** Their codes already sent stay valid: the people holding them did nothing wrong. Revoke them one by one if needed. */
+export async function removeHelper(ctx: ApiContext, admin: SessionInfo, userId: string): Promise<boolean> {
+  return ctx.db.transaction(async (tx) => {
+    const rows = await tx.query(`UPDATE users SET role = 'user', updated_at = $2 WHERE id = $1::uuid AND role = 'recruiter' RETURNING 1`, [userId, ctx.now()]);
+    if (!rows.length) return false;
+    await audit(tx, { event: 'ADMIN_ACTION', userId, performedBy: admin.userId, at: ctx.now(), metadata: { action: 'INVITE_HELPER_REMOVED' } });
+    await invalidateUserSessions(ctx, tx, userId);
+    return true;
   });
 }
