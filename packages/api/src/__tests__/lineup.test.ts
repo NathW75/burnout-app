@@ -7,7 +7,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createPostgresBurnStore, evaluateAndFireLocks } from '@burnout/burn-engine';
 import { describeDbRedis, SEASON } from '@burnout/test-support';
-import { createJobs, MsfHttpError, type MsfFetcher } from '../jobs';
+import { createJobs, MsfHttpError, msfFetcher, type MsfFetcher } from '../jobs';
 import { lineupChecksum } from '../lineups/service';
 import { reresolveSubmissions, syncInjuries, syncPlayers } from '../players/roster';
 import { account, buildWeek, createWorld, LINEUP, PLAYERS, relogin, stepUp, submitLineup, WINDOWS, type Account, type World } from './harness';
@@ -568,6 +568,51 @@ describeDbRedis('PRD-006 lineups, players, payments routes (HTTP, Postgres + Red
     expect(teams).toBe(ids.length); // PRD-002 ingest now stores teams (§7.2)
     const [{ n }] = await w.t.sql<{ n: number }>(`SELECT count(*)::int AS n FROM user_week_scores WHERE user_id = $1 AND week = 7`, [a.userId]);
     expect(n).toBe(1);
+  });
+
+  it('§11: an empty or cut-off MSF response (seen live 2026-10-29) is retried once, then skips only that week; the job keeps going', async () => {
+    const fx = (name: string) => readFileSync(join(__dirname, '../../../scoring-engine/src/__tests__/fixtures', name), 'utf8');
+    const gamesText = fx('msf-2026-w7-games.json');
+    const gamelogsText = fx('msf-2026-w7-gamelogs.sample.json');
+    const gamelogs = JSON.parse(gamelogsText);
+    const [{ id: w7 }] = await w.t.sql<{ id: string }>(
+      `INSERT INTO game_windows (week, season, label, scheduled_et, status, msf_game_ids) VALUES (7, $1, 'Sunday Late', '2026-10-25T20:05:00Z', 'locked', $2) RETURNING id::text AS id`,
+      [SEASON, ['163650']]
+    );
+    await w.t.sql(`INSERT INTO game_windows (week, season, label, scheduled_et, status, msf_game_ids) VALUES (8, $1, 'Thursday Night', '2026-10-30T00:15:00Z', 'locked', '{}')`, [SEASON]);
+    const a = await account(w);
+    const playerId = String(gamelogs.gamelogs[0].player.id);
+    await w.t.sql(`INSERT INTO pool_entries (user_id, player_id, season) VALUES ($1, $2, $3)`, [a.userId, playerId, SEASON]);
+    await w.t.sql(
+      `INSERT INTO season_submissions (user_id, week, season, slot_key, player_id, game_window_id, locked_at) VALUES ($1, 7, $2, 'te', $3, $4, '2026-10-23T00:15:30Z')`,
+      [a.userId, SEASON, playerId, w7]
+    );
+    // The real fetcher, over a fake network: week 8 always answers 200 with an empty body; week 7's
+    // first games read is cut off mid-JSON, then served whole.
+    const calls: string[] = [];
+    let w7Cut = 1;
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = (async (url: string) => {
+      calls.push(String(url));
+      if (String(url).includes('/week/8/')) return new Response('', { status: 200 });
+      if (String(url).includes('/week/7/games.json')) return new Response(w7Cut-- > 0 ? gamesText.slice(0, 200) : gamesText, { status: 200 });
+      return new Response(gamelogsText, { status: 200 });
+    }) as typeof fetch;
+    try {
+      const logged: Array<[string, string, Record<string, unknown> | undefined]> = [];
+      const log = (level: string, msg: string, extra?: Record<string, unknown>) => { logged.push([level, msg, extra]); };
+      const jobs = createJobs({ db: w.t.db, payments: w.payments, msf: msfFetcher('https://msf.test/v2.1/pull/nfl', 'secret-key'), season: SEASON, now: w.clock.get, log: log as never, apiContext: w.ctx, msfRetryDelayMs: 0 });
+      w.clock.set(new Date('2026-10-30T12:00:00Z'));
+      const out = (await jobs.run('scoring')) as { weeks: unknown[] };
+      expect(out.weeks).toEqual([{ week: 8, failed: 'MSF bad response' }, { week: 7, burns: 1, windowsFinal: 1 }]);
+      expect(calls.filter((c) => c.includes('/week/8/games.json'))).toHaveLength(2); // one retry, then skipped
+      expect(calls.filter((c) => c.includes('/week/7/games.json'))).toHaveLength(2); // cut off once, served on retry
+      const err = logged.find(([lvl, , x]) => lvl === 'error' && x?.week === 8);
+      expect(err?.[2]).toMatchObject({ status: 0, error: expect.stringContaining('empty response') });
+      expect(JSON.stringify(logged)).not.toContain('secret-key');
+    } finally {
+      globalThis.fetch = realFetch;
+    }
   });
 
   it('§11: a refused feed for one week never holds up another week, and a refusal gets one retry', async () => {

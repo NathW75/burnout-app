@@ -27,9 +27,22 @@ export interface MsfFetcher {
 }
 
 export class MsfHttpError extends Error {
-  constructor(readonly status: number, path: string) {
-    super(`MSF ${path.split('?')[0]}: HTTP ${status}`); // never include the key
+  constructor(readonly status: number, path: string, detail?: string) {
+    super(`MSF ${path.split('?')[0]}: ${detail ?? `HTTP ${status}`}`); // never include the key
     this.name = 'MsfHttpError';
+  }
+}
+
+/**
+ * MSF answered 200 but the body was empty or cut off (seen live on
+ * 2026-10-29 during Thursday Night Football: "Unexpected end of JSON input").
+ * Treated like a temporary refusal: retried once, then that week is skipped
+ * for the run instead of the whole job failing. Status 0 = no usable body.
+ */
+export class MsfBadResponseError extends MsfHttpError {
+  constructor(path: string, bytes: number) {
+    super(0, path, bytes === 0 ? 'empty response' : `response cut off or not JSON (${bytes} bytes)`);
+    this.name = 'MsfBadResponseError';
   }
 }
 
@@ -39,7 +52,12 @@ export function msfFetcher(baseUrl: string, apiKey: string): MsfFetcher {
     async get(path) {
       const res = await fetch(`${baseUrl.replace(/\/$/, '')}/${path}`, { headers: { authorization: auth, 'accept-encoding': 'gzip' } });
       if (!res.ok) throw new MsfHttpError(res.status, path);
-      return res.json();
+      const body = await res.text();
+      try {
+        return JSON.parse(body) as unknown;
+      } catch {
+        throw new MsfBadResponseError(path, body.length);
+      }
     },
   };
 }
@@ -67,7 +85,7 @@ export interface JobsDeps {
 
 /** MSF answers worth one more try: throttling shows up as 403 or 429, and a 5xx is on their side. */
 export function msfRetryable(err: unknown): boolean {
-  return err instanceof MsfHttpError && (err.status === 403 || err.status === 429 || err.status >= 500);
+  return err instanceof MsfHttpError && (err.status === 0 || err.status === 403 || err.status === 429 || err.status >= 500);
 }
 
 export type JobName = 'locks' | 'payments' | 'scoring' | 'roster' | 'injuries' | 'schedule' | 'feedback' | 'notify' | 'push' | 'stats';
@@ -177,7 +195,7 @@ export function createJobs(deps: JobsDeps) {
         } catch (err) {
           if (!(err instanceof MsfHttpError)) throw err;
           log('error', 'scoring: MSF feed refused, week skipped this run', { job: 'scoring', week, status: err.status, error: err.message });
-          out.push({ week, failed: `MSF HTTP ${err.status}` });
+          out.push({ week, failed: err.status === 0 ? 'MSF bad response' : `MSF HTTP ${err.status}` });
           continue;
         }
         // Stats posted under another MSF ID for the same person are scored under the kept ID (PRD-006 §7.5).

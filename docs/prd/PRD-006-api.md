@@ -1,6 +1,6 @@
 # PRD-006 — API, Accounts and Lineup Submission
 **Burnout League · packages/api**
-Version 1.16 · 2026-10-29
+Version 1.17 · 2026-10-29
 Status: APPROVED 2026-10-27 — scope and auth decisions locked by Nath (§3); rules calls Q1, Q2, Q4 resolved in v1.1
 
 ---
@@ -499,7 +499,7 @@ Each job:
 - logs a JSON line;
 - survives the failure of any other job.
 
-**Scoring and refused feeds (v1.8).** The scoring cycle works through the active weeks newest first. Each MSF read that is refused with 403, 429 or 5xx is retried once after 2 seconds (MSF throttling shows up as 403). If a week's feed is still refused, that week is skipped for this run: an error line names the week and the HTTP status, the result lists it as `failed`, and the other weeks go on to ingest and burn. Staging on 2026-10-28 showed why this matters: an intermittent 403 on an old week's feed stopped every scoring run for about three hours.
+**Scoring and refused feeds (v1.8).** The scoring cycle works through the active weeks newest first. Each MSF read that is refused with 403, 429 or 5xx is retried once after 2 seconds (MSF throttling shows up as 403). If a week's feed is still refused, that week is skipped for this run: an error line names the week and the HTTP status, the result lists it as `failed`, and the other weeks go on to ingest and burn. Staging on 2026-10-28 showed why this matters: an intermittent 403 on an old week's feed stopped every scoring run for about three hours. **Bad bodies (v1.17):** a 200 whose body is empty or cut off (seen live during Thursday Night Football, 2026-10-29: `Unexpected end of JSON input` stopped the whole 8:30 PM run) is treated the same way: the fetcher reads the body as text and turns an unparseable one into `MsfBadResponseError` (status 0, "empty response" or "response cut off or not JSON (N bytes)"), which is retried once and then skips only that week (`failed: "MSF bad response"`).
 
 ### 11.6 Season schedule import
 
@@ -648,6 +648,7 @@ Every critical rule also gets a mutation check, as with PRD-001 to PRD-004.
 |---------|------|---------|
 | 1.7 | 2026-10-28 | §7.5: one person, one player. Duplicate MSF IDs for the same person become aliases of one kept ID; aliases can't be picked (DB-enforced); burns and stats follow the person; admin review and override. Roster sync also runs at worker startup. |
 | 1.8 | 2026-10-28 | §11: scoring works newest week first, retries a refused MSF read once, and skips only the week whose feed stays refused. |
+| 1.17 | 2026-10-29 | §11: an empty or cut-off MSF body is retried once and then skips only that week, like a refused feed (it crashed a live scoring run on TNF). |
 | 1.16 | 2026-10-29 | §9.1: open slots may be left empty (Nath: the manager's call, with a warning); `null` empties a slot and removes an open pick, an omitted slot keeps its pick, `LINEUP_EMPTY` for a lineup with nothing in it. |
 | 1.15 | 2026-10-29 | §6.10: send an invite by email from the admin screen (`send: true`; `invite` email template; `emailed` in the response; failed sends keep the invite; audited). |
 | 1.14 | 2026-10-28 | PRD-011 part 1: connector token routes (`/v1/me/mcp`), the `/mcp` endpoint and its credential boundary; revoking sessions user-wide also revokes connector tokens; `MCP_TOKEN_CREATED` / `MCP_TOKEN_REVOKED` audit events. |
